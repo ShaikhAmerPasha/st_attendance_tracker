@@ -1,0 +1,21 @@
+{
+ "actions": [],
+ "creation": "2024-01-01 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": ["full_name","email","role_label"],
+ "fields": [
+  {"fieldname":"full_name","fieldtype":"Data","in_list_view":1,"label":"Full Name","reqd":1},
+  {"fieldname":"email","fieldtype":"Data","in_list_view":1,"label":"Email","options":"Email","reqd":1},
+  {"fieldname":"role_label","fieldtype":"Select","in_list_view":1,"label":"Role","options":"Team Lead\nManagement\nHR"}
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2024-01-01 00:00:00",
+ "modified_by": "Administrator",
+ "module": "ST Attendance Tracker",
+ "name": "Report Recipient",
+ "owner": "Administrator",
+ "permissions": []
+}

@@ -1,7 +1,40 @@
+# .DS_Store
+# *.pyc
+# *.egg-info
+# *.swp
+# tags
+# node_modules
+# __pycache__
+
+# System files
 .DS_Store
-*.pyc
-*.egg-info
 *.swp
-tags
-node_modules
-__pycache__
+*.bak
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Node modules
+node_modules/
+
+# Frappe/ERPNext local files
+sites/*/private/files/
+sites/*/public/files/
+sites/*/logs/
+sites/*/env/
+sites/*/local/
+sites/*/apps.txt
+sites/*/site_config.json
+
+# Python packaging
+*.egg-info
+dist/
+build/
+*.egg
+
+# Editor configs
+.idea/
+.vscode/
+*.code-workspace

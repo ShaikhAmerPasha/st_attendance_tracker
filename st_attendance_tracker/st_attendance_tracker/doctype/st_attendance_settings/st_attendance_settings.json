@@ -1,0 +1,25 @@
+{
+ "actions": [],
+ "creation": "2024-01-01 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["section_recipients","report_recipients","section_info","morning_report_note","eod_report_note"],
+ "fields": [
+  {"fieldname":"section_recipients","fieldtype":"Section Break","label":"Report Recipients"},
+  {"fieldname":"report_recipients","fieldtype":"Table","label":"Report Recipients","options":"Report Recipient"},
+  {"fieldname":"section_info","fieldtype":"Section Break","label":"Schedule Info"},
+  {"default":"Sent automatically at 11:30 AM IST, Monday-Saturday","fieldname":"morning_report_note","fieldtype":"Data","label":"Morning Report Schedule","read_only":1},
+  {"default":"Sent automatically at 10:00 PM IST, Monday-Saturday","fieldname":"eod_report_note","fieldtype":"Data","label":"EOD Report Schedule","read_only":1}
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2024-01-01 00:00:00",
+ "modified_by": "Administrator",
+ "module": "ST Attendance Tracker",
+ "name": "ST Attendance Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"delete":0,"read":1,"role":"HR Manager","write":1},
+  {"create":1,"delete":0,"read":1,"role":"System Manager","write":1}
+ ]
+}

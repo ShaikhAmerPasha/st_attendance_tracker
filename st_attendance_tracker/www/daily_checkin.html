@@ -1,0 +1,210 @@
+{% extends "templates/web.html" %}
+{% block title %}Daily Check-In — {{ employee.employee_name }}{% endblock %}
+{% block head_include %}
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#f4f5f7;font-family:'Inter','Segoe UI',Arial,sans-serif}
+.st-page{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:16px}
+.st-card{background:#fff;border-radius:12px;box-shadow:0 2px 16px rgba(0,0,0,0.08);width:100%;max-width:600px;overflow:hidden}
+.st-header{padding:20px 24px 16px;color:#fff}
+.st-header.morning{background:linear-gradient(135deg,#EE1C29 0%,#c0111d 100%)}
+.st-header.eod{background:linear-gradient(135deg,#131419 0%,#2d2f38 100%)}
+.st-header.done{background:linear-gradient(135deg,#1a7f4b 0%,#145c36 100%)}
+.st-header h1{font-size:20px;font-weight:700;margin-bottom:2px}
+.st-header .subtitle{font-size:13px;opacity:.85}
+.st-header .emp-badge{display:inline-block;background:rgba(255,255,255,0.18);border-radius:20px;padding:3px 12px;font-size:12px;margin-top:8px}
+.st-body{padding:20px 24px}
+.section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#888;margin-bottom:10px}
+.carried-notice{background:#fff8e1;border-left:3px solid #f59e0b;border-radius:4px;padding:10px 14px;font-size:13px;color:#92670a;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.task-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.task-row{display:flex;align-items:flex-start;gap:8px;background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;position:relative}
+.task-row.carried{border-left:3px solid #f59e0b}
+.task-row textarea{flex:1;border:none;background:transparent;font-size:14px;color:#1a1a1a;outline:none;resize:none;line-height:1.5;font-family:inherit;min-height:40px}
+.task-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+.badge-carried{background:#fef3c7;color:#92670a}
+.badge-new{background:#dbeafe;color:#1d4ed8}
+.badge-adhoc{background:#f3e8ff;color:#7e22ce}
+.btn-remove-task{background:none;border:none;cursor:pointer;color:#ccc;font-size:18px;line-height:1;padding:0 4px;flex-shrink:0;transition:color .2s}
+.btn-remove-task:hover{color:#EE1C29}
+.eod-task-row{background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:8px;position:relative}
+.eod-task-row.carried{border-left:3px solid #f59e0b}
+.eod-task-row.adhoc-new{border-left:3px solid #a855f7}
+.eod-task-desc{font-size:14px;color:#1a1a1a;margin-bottom:8px;font-weight:500;line-height:1.5}
+.eod-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.status-select{border:1px solid #d1d5db;border-radius:6px;padding:5px 10px;font-size:13px;background:#fff;cursor:pointer;color:#374151;outline:none;flex-shrink:0}
+.status-select:focus{border-color:#EE1C29}
+.task-remarks-input{flex:1;border:1px solid #d1d5db;border-radius:6px;padding:5px 10px;font-size:13px;min-width:100px;outline:none;font-family:inherit;color:#374151}
+.task-remarks-input:focus{border-color:#EE1C29}
+.btn-add{display:flex;align-items:center;gap:6px;background:none;border:1px dashed #d1d5db;border-radius:8px;padding:8px 14px;font-size:13px;color:#6b7280;cursor:pointer;width:100%;transition:all .2s;margin-bottom:16px;font-family:inherit}
+.btn-add:hover{border-color:#EE1C29;color:#EE1C29;background:#fff5f5}
+.time-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+@media(max-width:400px){.time-grid{grid-template-columns:1fr}}
+.time-field label{display:block;font-size:12px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.time-field input[type="time"]{width:100%;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;font-size:15px;outline:none;font-family:inherit;color:#1a1a1a}
+.time-field input[type="time"]:focus{border-color:#EE1C29}
+.btn-primary{width:100%;padding:14px;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.3px}
+.btn-checkin{background:#EE1C29;color:#fff}
+.btn-checkin:hover:not(:disabled){background:#c9111e}
+.btn-checkout{background:#131419;color:#fff}
+.btn-checkout:hover:not(:disabled){background:#2d2f38}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed}
+.btn-primary .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.st-divider{border:none;border-top:1px solid #f0f0f0;margin:18px 0}
+.done-body{padding:32px 24px;text-align:center}
+.done-icon{font-size:48px;margin-bottom:12px}
+.done-title{font-size:20px;font-weight:700;color:#1a7f4b;margin-bottom:6px}
+.done-sub{font-size:14px;color:#666}
+#st-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#131419;color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,0.25);z-index:9999;transition:transform .3s ease;max-width:320px;text-align:center}
+#st-toast.show{transform:translateX(-50%) translateY(0)}
+#st-toast.error{background:#EE1C29}
+#st-toast.success{background:#1a7f4b}
+</style>
+{% endblock %}
+{% block page_content %}
+<div class="st-page">
+  <div class="st-card">
+    {% if eod_done %}
+    <div class="st-header done">
+      <h1>✅ Day Complete</h1>
+      <div class="subtitle">{{ date }}</div>
+      <div class="emp-badge">{{ employee.employee_name }} · {{ employee.department or 'No Dept' }}</div>
+    </div>
+    <div class="done-body">
+      <div class="done-icon">🎉</div>
+      <div class="done-title">Great work today!</div>
+      <div class="done-sub">Your End-of-Day report has been submitted.<br>Pending tasks have been automatically moved to tomorrow.</div>
+    </div>
+    {% elif is_checked_in %}
+    <div class="st-header eod">
+      <h1>🌆 End of Day</h1>
+      <div class="subtitle">{{ date }}</div>
+      <div class="emp-badge">{{ employee.employee_name }} · {{ employee.department or 'No Dept' }}</div>
+    </div>
+    <div class="st-body">
+      <div class="section-label">Work Hours</div>
+      <div class="time-grid">
+        <div class="time-field"><label>Lunch From</label><input type="time" id="lunch_from"></div>
+        <div class="time-field"><label>Lunch To</label><input type="time" id="lunch_to"></div>
+
+        <div class="time-field"><label>Logout Time *</label><input type="time" id="logout_time" value="{{ current_time }}"></div>
+      </div>
+      <hr class="st-divider">
+      <div class="section-label">Update Task Status</div>
+      <div id="eod-task-list">
+        {% for task in tasks %}
+        <div class="eod-task-row {% if task.is_carried %}carried{% endif %}" data-id="{{ task.name }}">
+          <div class="eod-task-desc">
+            {% if task.is_carried %}<span class="task-badge badge-carried">↩ Carried</span>&nbsp;{% elif task.task_type == 'Ad-hoc' %}<span class="task-badge badge-adhoc">Ad-hoc</span>&nbsp;{% endif %}
+            {{ task.description }}
+          </div>
+          <div class="eod-controls">
+            <select class="status-select" data-id="{{ task.name }}">
+              <option value="Done" {% if task.status == 'Done' %}selected{% endif %}>✅ Done</option>
+              <option value="In Progress" {% if task.status == 'In Progress' %}selected{% endif %}>🔄 In Progress</option>
+              <option value="Pending" {% if task.status == 'Pending' %}selected{% endif %}>⏳ Pending</option>
+            </select>
+            <input type="text" class="task-remarks-input" data-id="{{ task.name }}" placeholder="Remarks (optional)" value="{{ task.remarks or '' }}">
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <hr class="st-divider">
+      <div class="section-label">Mid-Day Tasks (Ad-hoc)</div>
+      <div id="adhoc-task-list"></div>
+      <button class="btn-add" onclick="addAdhocRow()">+ Add Ad-hoc Task</button>
+      <button class="btn-primary btn-checkout" id="btn-checkout" onclick="submitEOD()">🔴 Check Out &amp; Submit</button>
+    </div>
+    {% else %}
+    <div class="st-header morning">
+      <h1>🌅 Good Morning</h1>
+      <div class="subtitle">{{ date }}</div>
+      <div class="emp-badge">{{ employee.employee_name }} · {{ employee.department or 'No Dept' }}</div>
+    </div>
+    <div class="st-body">
+      {% if carried_count > 0 %}
+      <div class="carried-notice">📌 <strong>{{ carried_count }} task(s)</strong> carried forward from yesterday</div>
+      {% endif %}
+      <div class="section-label">Today's Planned Tasks</div>
+      <div id="morning-task-list" class="task-list">
+        {% for task in tasks %}
+        <div class="task-row carried" data-id="{{ task.name }}">
+          <span class="task-badge badge-carried">↩ Carried</span>
+          <textarea class="task-desc-input" data-id="{{ task.name }}" rows="1">{{ task.description }}</textarea>
+        </div>
+        {% endfor %}
+      </div>
+      <div id="new-task-list" class="task-list"></div>
+      <button class="btn-add" onclick="addMorningTaskRow()">+ Add Task</button>
+      <button class="btn-primary btn-checkin" id="btn-checkin" onclick="submitMorning()">✅ Check In &amp; Start Day</button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+<div id="st-toast"></div>
+<script>
+function showToast(msg,type,duration){duration=duration||3500;var t=document.getElementById('st-toast');t.textContent=msg;t.className='show '+(type||'');setTimeout(function(){t.className='';},duration);}
+function setLoading(btnId,loading,label){var btn=document.getElementById(btnId);if(!btn)return;btn.disabled=loading;btn.innerHTML=loading?'<span class="spinner"></span> '+label:label;}
+var newTaskCounter=0;
+function addMorningTaskRow(value){newTaskCounter++;var id='new_'+newTaskCounter;var div=document.createElement('div');div.className='task-row';div.dataset.newId=id;div.innerHTML='<span class="task-badge badge-new">New</span><textarea class="task-desc-input" data-new-id="'+id+'" placeholder="Describe the task…" rows="1">'+(value||'')+'</textarea><button class="btn-remove-task" onclick="this.closest(\'.task-row\').remove()">×</button>';var ta=div.querySelector('textarea');ta.addEventListener('input',function(){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';});document.getElementById('new-task-list').appendChild(div);ta.focus();}
+function collectMorningTasks(){var tasks=[];document.querySelectorAll('#new-task-list .task-desc-input').forEach(function(el){var desc=el.value.trim();if(desc)tasks.push({description:desc});});return tasks;}
+async function submitMorning(){var tasks=collectMorningTasks();var carriedCount=document.querySelectorAll('#morning-task-list .task-row').length;if(!tasks.length&&carriedCount===0){showToast('Please add at least one planned task.','error');return;}setLoading('btn-checkin',true,'Checking In…');try{var r=await frappe.call({method:'st_attendance_tracker.api.submit_morning_log',args:{new_tasks:JSON.stringify(tasks)}});if(r.message&&r.message.success){showToast('✅ Checked in! Have a productive day.','success',2000);setTimeout(function(){location.reload();},1800);}}catch(e){setLoading('btn-checkin',false,'✅ Check In & Start Day');showToast(e.message||'Something went wrong. Please try again.','error');}}
+var adhocCounter=0;
+function addAdhocRow(){adhocCounter++;var id='adhoc_'+adhocCounter;var div=document.createElement('div');div.className='eod-task-row adhoc-new';div.dataset.adhocId=id;div.style.position='relative';div.innerHTML='<div class="eod-task-desc"><span class="task-badge badge-adhoc">Ad-hoc</span><input type="text" class="adhoc-desc" data-adhoc-id="'+id+'" placeholder="Describe the ad-hoc task…" style="border:none;background:transparent;font-size:14px;width:calc(100% - 80px);outline:none;margin-left:6px;"><button class="btn-remove-task" onclick="this.closest(\'.eod-task-row\').remove()" style="position:absolute;right:12px;top:12px;">×</button></div><div class="eod-controls" style="margin-top:8px;"><select class="status-select" data-adhoc-id="'+id+'"><option value="Done">✅ Done</option><option value="In Progress">🔄 In Progress</option><option value="Pending">⏳ Pending</option></select><input type="text" class="task-remarks-input" data-adhoc-id="'+id+'" placeholder="Remarks (optional)"></div>';document.getElementById('adhoc-task-list').appendChild(div);div.querySelector('.adhoc-desc').focus();}
+function collectEODData(){var task_updates=[];document.querySelectorAll('.eod-task-row[data-id]').forEach(function(row){var id=row.dataset.id;var status=row.querySelector('.status-select[data-id="'+id+'"]');var remarks=row.querySelector('.task-remarks-input[data-id="'+id+'"]');if(id&&status)task_updates.push({name:id,status:status.value,remarks:remarks?remarks.value:''});});var adhoc_tasks=[];document.querySelectorAll('.eod-task-row[data-adhoc-id]').forEach(function(row){var id=row.dataset.adhocId;var desc=(row.querySelector('.adhoc-desc[data-adhoc-id="'+id+'"]')||{}).value||'';var status=row.querySelector('.status-select[data-adhoc-id="'+id+'"]');var remarks=row.querySelector('.task-remarks-input[data-adhoc-id="'+id+'"]');if(desc.trim())adhoc_tasks.push({description:desc.trim(),status:status?status.value:'Done',remarks:remarks?remarks.value:''});});return{task_updates:task_updates,adhoc_tasks:adhoc_tasks};}
+async function submitEOD(){
+    var logout_time = document.getElementById('logout_time').value;
+    var lunch_from = document.getElementById('lunch_from').value;
+    var lunch_to = document.getElementById('lunch_to').value;
+
+    if(!logout_time){
+        showToast('Please enter your logout time.', 'error');
+        document.getElementById('logout_time').focus();
+        return;
+    }
+
+    if(lunch_from && lunch_to && lunch_from >= lunch_to){
+        showToast('Lunch end time must be after lunch start time.', 'error');
+        document.getElementById('lunch_to').focus();
+        return;
+    }
+
+    var d = collectEODData();
+    setLoading('btn-checkout', true, 'Submitting…');
+
+    try {
+        var r = await frappe.call({
+            method: 'st_attendance_tracker.api.submit_eod_log',
+            args: {
+                lunch_from: lunch_from || '',
+                lunch_to: lunch_to || '',
+                logout_time: logout_time,
+                task_updates: JSON.stringify(d.task_updates),
+                adhoc_tasks: JSON.stringify(d.adhoc_tasks)
+            }
+        });
+
+        if(r.message && r.message.success){
+            var p = r.message.pending_count;
+            var lunch_duration = '';
+            if(lunch_from && lunch_to){
+                var from_parts = lunch_from.split(':');
+                var to_parts = lunch_to.split(':');
+                var mins = (parseInt(to_parts[0]) * 60 + parseInt(to_parts[1])) 
+                         - (parseInt(from_parts[0]) * 60 + parseInt(from_parts[1]));
+                lunch_duration = ' Lunch: ' + mins + ' mins.';
+            }
+            var msg = p > 0
+                ? '✅ Checked out!' + lunch_duration + ' ' + p + ' pending task(s) moved to tomorrow.'
+                : '✅ Checked out!' + lunch_duration + ' Great work today.';
+            showToast(msg, 'success', 3000);
+            setTimeout(function(){ location.reload(); }, 2500);
+        }
+    } catch(e) {
+        setLoading('btn-checkout', false, '🔴 Check Out & Submit');
+        showToast(e.message || 'Something went wrong. Please try again.', 'error');
+    }
+}
+</script>
+{% endblock %}
