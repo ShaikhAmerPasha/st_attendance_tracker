@@ -1,0 +1,335 @@
+{% extends "templates/web.html" %}
+{% block title %}Management Dashboard{% endblock %}
+{% block head_include %}
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#111827;font-size:14px}
+.tnav{height:48px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;padding:0 20px;gap:14px;position:sticky;top:0;z-index:100}
+.tnav-logo{font-size:13px;font-weight:600;color:#EE1C29}
+.tnav-sep{width:1px;height:16px;background:#e5e7eb}
+.tnav-bc{font-size:13px;color:#6b7280}
+.tnav-r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tnav-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;color:#374151;background:#fff;text-decoration:none;cursor:pointer;font-family:inherit}
+.tnav-btn:hover{background:#f9fafb}
+.tnav-btn i{font-size:13px}
+.tnav-av{width:30px;height:30px;border-radius:50%;background:#EE1C29;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
+/* wrap */
+.wrap{max-width:1200px;margin:0 auto;padding:24px 20px 60px}
+/* hero */
+.hero{background:#0f172a;border-radius:14px;padding:24px 28px;margin-bottom:20px}
+.hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.hero-info .eye{font-size:10px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:6px}
+.hero-info .title{font-size:22px;font-weight:600;color:#fff;letter-spacing:-.4px}
+.hero-info .sub{font-size:13px;color:rgba(255,255,255,.35);margin-top:3px}
+.hero-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ctrl-btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border:1px solid rgba(255,255,255,.15);border-radius:7px;font-size:12px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.07);cursor:pointer;font-family:inherit;transition:all .15s}
+.ctrl-btn:hover{background:rgba(255,255,255,.12)}
+.ctrl-btn i{font-size:13px}
+.date-inp{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:7px;padding:7px 12px;font-size:13px;color:#fff;font-family:inherit;outline:none;cursor:pointer}
+.date-inp:focus{border-color:rgba(255,255,255,.35)}
+.date-inp::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.5}
+/* global stats */
+.gstats{display:grid;grid-template-columns:repeat(5,1fr);background:rgba(255,255,255,.05);border-radius:10px;overflow:hidden}
+.gs{padding:14px 16px;text-align:center;border-right:1px solid rgba(255,255,255,.05)}
+.gs:last-child{border-right:none}
+.gs-n{font-size:26px;font-weight:600;color:#fff;line-height:1;letter-spacing:-.5px}
+.gs-n.g{color:#4ade80}.gs-n.r{color:#f87171}.gs-n.a{color:#fbbf24}.gs-n.b{color:#60a5fa}
+.gs-l{font-size:10px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.5px;margin-top:5px}
+.gs-bar{height:2px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;margin-top:8px}
+.gs-fill{height:100%;border-radius:2px}
+/* main grid */
+.mgrid{display:grid;grid-template-columns:1fr 380px;gap:16px;align-items:start}
+/* filter */
+.filter-bar{display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.fc{font-size:11px;font-weight:500;padding:5px 13px;border-radius:20px;border:1px solid #e5e7eb;color:#6b7280;background:#fff;cursor:pointer;transition:all .15s}
+.fc:hover{background:#f9fafb}
+.fc.on{background:#EE1C29;color:#fff;border-color:#EE1C29}
+/* dept card */
+.dept-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:10px;overflow:hidden}
+.dept-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f3f4f6}
+.dept-ico{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.di0{background:#eff6ff;color:#2563eb}.di1{background:#faf5ff;color:#7c3aed}
+.di2{background:#f0fdf4;color:#15803d}.di3{background:#fffbeb;color:#d97706}
+.di4{background:#fef2f2;color:#dc2626}.di5{background:#f0fdfa;color:#0f766e}
+.dept-ico i{font-size:16px}
+.dept-name{font-size:14px;font-weight:600;color:#111;flex:1}
+.dept-meta{font-size:11px;color:#9ca3af}
+.dept-prog{display:flex;align-items:center;gap:8px;margin-left:auto}
+.dp-trk{width:64px;height:4px;background:#f3f4f6;border-radius:4px;overflow:hidden}
+.dp-fill{height:100%;background:#15803d;border-radius:4px}
+.dp-lbl{font-size:11px;color:#9ca3af;white-space:nowrap}
+/* emp grid */
+.emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px;background:#f3f4f6}
+.ec{background:#fff;padding:11px 13px;cursor:pointer;transition:background .1s;border-left:2px solid transparent}
+.ec:hover{background:#f9fafb}
+.ec.sel{background:#fff5f5;border-left-color:#EE1C29}
+.ec-top{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.ec-av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0}
+.av-g{background:#dcfce7;color:#15803d}.av-b{background:#dbeafe;color:#1e40af}
+.av-a{background:#fef9c3;color:#854d0e}.av-r{background:#fee2e2;color:#991b1b}
+.av-p{background:#faf5ff;color:#7c3aed}
+.ec-name{font-size:12px;font-weight:600;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ec-status{display:flex;align-items:center;gap:4px;font-size:10px;margin-bottom:3px}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dot-g{background:#16a34a}.dot-a{background:#d97706}.dot-r{background:#ef4444}.dot-x{background:#d1d5db}
+.ec-time{font-size:10px;color:#9ca3af;margin-bottom:4px}
+.ec-prog{display:flex;align-items:center;gap:4px}
+.ecp-t{flex:1;height:3px;background:#f3f4f6;border-radius:4px;overflow:hidden}
+.ecp-f{height:100%;border-radius:4px;background:#15803d}
+.ecp-l{font-size:10px;color:#9ca3af;white-space:nowrap}
+/* detail panel */
+.dp{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;position:sticky;top:72px}
+.dp-hero{background:#0f172a;padding:16px 18px}
+.dp-hero-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.dp-av{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.1);color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dp-name{font-size:15px;font-weight:600;color:#fff}
+.dp-dept{font-size:11px;color:rgba(255,255,255,.4);margin-top:1px}
+.dp-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.dps{background:rgba(255,255,255,.07);border-radius:8px;padding:8px 10px;text-align:center}
+.dps-n{font-size:16px;font-weight:600;color:#fff}
+.dps-n.g{color:#4ade80}.dps-n.a{color:#fbbf24}
+.dps-l{font-size:10px;color:rgba(255,255,255,.3);margin-top:1px}
+.dp-body{padding:14px 16px;max-height:420px;overflow-y:auto}
+.dp-sec{margin-bottom:14px}
+.dp-sec:last-child{margin-bottom:0}
+.dp-lbl{font-size:10px;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.tg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tc{background:#f9fafb;border-radius:7px;padding:8px 10px}
+.tc-l{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px}
+.tc-v{font-size:13px;font-weight:500;color:#111}
+.tc-v.g{color:#15803d}
+.task-row{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid #f9fafb}
+.task-row:last-child{border-bottom:none}
+.task-ico{font-size:14px;flex-shrink:0;margin-top:1px}
+.ico-g{color:#16a34a}.ico-a{color:#94a3b8}.ico-b{color:#3b82f6}
+.task-body{flex:1;min-width:0}
+.task-desc{font-size:12px;color:#374151;line-height:1.45}
+.task-desc.dn{text-decoration:line-through;color:#9ca3af}
+.task-pills{display:flex;gap:4px;margin-top:3px;flex-wrap:wrap}
+.tp{font-size:10px;background:#f3f4f6;border-radius:20px;padding:1px 6px;color:#6b7280;display:flex;align-items:center;gap:2px}
+.tp i{font-size:10px}
+.stag{font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;flex-shrink:0}
+.st-dn{background:#dcfce7;color:#15803d}
+.st-ip{background:#dbeafe;color:#1e40af}
+.st-pe{background:#fef9c3;color:#854d0e}
+.empty-dp{text-align:center;padding:40px 20px;color:#9ca3af}
+.empty-dp i{font-size:28px;display:block;margin-bottom:8px}
+.empty-dp p{font-size:13px}
+#loading{text-align:center;padding:48px;color:#9ca3af;font-size:13px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Hide Frappe default footer */
+footer.web-footer,.web-footer,footer[class*="footer"],.footer,.subscribe-section,
+form.row.mt-2,.mt-2.row:has(input[placeholder="Your email address..."]){display:none!important}
+</style>
+{% endblock %}
+{% block page_content %}
+<nav class="tnav">
+  <span class="tnav-logo">ST Tracker</span>
+  <span class="tnav-sep"></span>
+  <span class="tnav-bc">Management</span>
+  <div class="tnav-r">
+    <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-user" aria-hidden="true"></i>My check-in</a>
+    <div class="tnav-av">A</div>
+  </div>
+</nav>
+<div class="wrap">
+  <div class="hero">
+    <div class="hero-top">
+      <div class="hero-info">
+        <div class="eye">Management Dashboard</div>
+        <div class="title">Company Attendance Overview</div>
+        <div class="sub">StandardTouch e-Solutions</div>
+      </div>
+      <div class="hero-controls">
+        <input type="date" class="date-inp" id="sel-date" value="{{ date }}" onchange="loadAll(this.value)">
+        <button class="ctrl-btn" onclick="loadAll(document.getElementById('sel-date').value)"><i class="ti ti-refresh" aria-hidden="true"></i>Refresh</button>
+      </div>
+    </div>
+    <div class="gstats">
+      <div class="gs"><div class="gs-n" id="g-total">—</div><div class="gs-l">Total</div><div class="gs-bar"><div class="gs-fill" style="background:#EE1C29;width:100%"></div></div></div>
+      <div class="gs"><div class="gs-n g" id="g-in">—</div><div class="gs-l">Checked in</div><div class="gs-bar"><div class="gs-fill" id="gb-in" style="background:#4ade80"></div></div></div>
+      <div class="gs"><div class="gs-n b" id="g-eod">—</div><div class="gs-l">EOD done</div><div class="gs-bar"><div class="gs-fill" id="gb-eod" style="background:#60a5fa"></div></div></div>
+      <div class="gs"><div class="gs-n r" id="g-miss">—</div><div class="gs-l">Missing</div><div class="gs-bar"><div class="gs-fill" id="gb-miss" style="background:#f87171"></div></div></div>
+      <div class="gs"><div class="gs-n a" id="g-leave">—</div><div class="gs-l">On leave</div><div class="gs-bar"><div class="gs-fill" id="gb-leave" style="background:#fbbf24"></div></div></div>
+    </div>
+  </div>
+  <div class="mgrid">
+    <div>
+      <div class="filter-bar">
+        <span class="fc on" data-f="all">All</span>
+        <span class="fc" data-f="missing">Missing</span>
+        <span class="fc" data-f="late">Late</span>
+        <span class="fc" data-f="leave">On leave</span>
+        <span class="fc" data-f="eod_done">EOD done</span>
+      </div>
+      <div id="dept-list"><div id="loading"><i class="ti ti-loader" style="font-size:22px;animation:spin .7s linear infinite" aria-hidden="true"></i><br><br>Loading...</div></div>
+    </div>
+    <div>
+      <div class="dp" id="detail-panel">
+        <div class="dp-body">
+          <div class="empty-dp"><i class="ti ti-user-search" aria-hidden="true"></i><p>Click any employee to view their tasks and time details</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+var ALL_DEPTS = [];
+var CUR_FILTER = 'all';
+var SEL_EMP = null;
+
+function getInitials(n){ var p=(n||'').split(' ').filter(Boolean); return p.length>=2?(p[0][0]+p[1][0]).toUpperCase():n.slice(0,2).toUpperCase(); }
+function getAv(n){ var cls=['av-g','av-b','av-a','av-p','av-r'], s=0; for(var i=0;i<n.length;i++) s+=n.charCodeAt(i); return cls[s%cls.length]; }
+function getDot(status){ var m={checked_in:'dot-g',late:'dot-a',missing:'dot-r',leave:'dot-x',eod_done:'dot-g'}; return m[status]||'dot-x'; }
+function getDotLabel(status){ var m={checked_in:'Checked in',late:'Late',missing:'Missing',leave:'On leave',eod_done:'EOD done'}; return m[status]||status; }
+function getTaskIcon(s){ if(s==='Done') return 'ti-circle-check ico-g'; if(s==='In Progress') return 'ti-circle-half ico-b'; return 'ti-circle ico-a'; }
+function getStag(s){ if(s==='Done') return 'st-dn'; if(s==='In Progress') return 'st-ip'; return 'st-pe'; }
+var DEPT_ICONS = ['ti-code','ti-users','ti-speakerphone','ti-tools','ti-truck','ti-building-factory'];
+
+function renderDepts(){
+  var list = document.getElementById('dept-list');
+  var depts = ALL_DEPTS;
+  if(!depts.length){ list.innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af;font-size:13px">No departments found.</div>'; return; }
+
+  list.innerHTML = depts.map(function(dept, idx){
+    var emps = dept.employees||[];
+    var filtered = CUR_FILTER==='all' ? emps : emps.filter(function(e){ return e.status===CUR_FILTER || (CUR_FILTER==='leave'&&e.status==='leave'); });
+    var checkedIn = emps.filter(function(e){ return ['checked_in','late','eod_done'].includes(e.status); }).length;
+    var pct = emps.length>0?Math.round(checkedIn/emps.length*100):0;
+    var iconCls = ['di0','di1','di2','di3','di4','di5'][idx%6];
+    var icon = DEPT_ICONS[idx%DEPT_ICONS.length];
+
+    var empCells = filtered.map(function(emp){
+      var selCls = SEL_EMP===emp.name?' sel':'';
+      var timeStr = emp.login_time ? emp.login_time : (emp.status==='leave'?'On leave':'Not in');
+      var done=emp.done_tasks||0, tot=emp.total_tasks||0, ep=tot>0?Math.round(done/tot*100):0;
+      return '<div class="ec'+selCls+'" data-emp="'+emp.name+'" onclick="selectEmp(this,\''+emp.name+'\')">'+
+        '<div class="ec-top"><div class="ec-av '+getAv(emp.employee_name)+'">'+getInitials(emp.employee_name)+'</div>'+
+        '<span class="ec-name">'+emp.employee_name+'</span></div>'+
+        '<div class="ec-status"><span class="dot '+getDot(emp.status)+'"></span><span style="color:#374151">'+getDotLabel(emp.status)+'</span></div>'+
+        '<div class="ec-time">'+timeStr+'</div>'+
+        (tot>0?'<div class="ec-prog"><div class="ecp-t"><div class="ecp-f" style="width:'+ep+'%"></div></div><span class="ecp-l">'+done+'/'+tot+'</span></div>':'')+
+      '</div>';
+    }).join('');
+
+    return '<div class="dept-card">'+
+      '<div class="dept-head">'+
+        '<div class="dept-ico '+iconCls+'"><i class="ti '+icon+'" aria-hidden="true"></i></div>'+
+        '<div><div class="dept-name">'+dept.department+'</div><div class="dept-meta">'+emps.length+' employees</div></div>'+
+        '<div class="dept-prog"><div class="dp-trk"><div class="dp-fill" style="width:'+pct+'%"></div></div><span class="dp-lbl">'+checkedIn+'/'+emps.length+'</span></div>'+
+      '</div>'+
+      (filtered.length?'<div class="emp-grid">'+empCells+'</div>':'<div style="padding:12px 16px;font-size:12px;color:#9ca3af;font-style:italic">No employees match this filter.</div>')+
+    '</div>';
+  }).join('');
+}
+
+function selectEmp(cell, empName){
+  document.querySelectorAll('.ec').forEach(function(c){ c.classList.remove('sel'); });
+  cell.classList.add('sel');
+  SEL_EMP = empName;
+
+  var panel = document.getElementById('detail-panel');
+  panel.innerHTML='<div class="dp-body"><div style="text-align:center;padding:32px;color:#9ca3af;font-size:13px"><i class="ti ti-loader" style="font-size:18px;animation:spin .7s linear infinite" aria-hidden="true"></i></div></div>';
+
+  frappe.call({
+    method:'st_attendance_tracker.api.get_employee_task_detail',
+    args:{ employee_name:empName, date:document.getElementById('sel-date').value },
+    callback:function(r){ if(r.message) renderDetail(r.message); }
+  });
+}
+
+function renderDetail(data){
+  var emp=data.employee||{}, ml=data.morning_log||{}, el=data.eod_log||{}, tasks=data.tasks||[];
+  var done=tasks.filter(function(t){ return t.status==='Done'; }).length;
+  var pend=tasks.filter(function(t){ return t.status!=='Done'; }).length;
+
+  var taskRows='';
+  if(!tasks.length) taskRows='<div style="font-size:12px;color:#9ca3af;font-style:italic;padding:8px 0">No tasks recorded for this date.</div>';
+  else taskRows=tasks.map(function(t){
+    var pills='';
+    if(t.estimated_time) pills+='<span class="tp"><i class="ti ti-clock" aria-hidden="true"></i>'+t.estimated_time+'</span>';
+    if(t.actual_time) pills+='<span class="tp"><i class="ti ti-check" aria-hidden="true"></i>'+t.actual_time+'</span>';
+    if(t.is_carried) pills+='<span class="tp"><i class="ti ti-history" aria-hidden="true"></i>Carried</span>';
+    return '<div class="task-row">'+
+      '<i class="ti '+getTaskIcon(t.status)+' task-ico" aria-hidden="true"></i>'+
+      '<div class="task-body">'+
+        '<div class="task-desc'+(t.status==='Done'?' dn':'')+'">'+(t.description||'')+'</div>'+
+        (pills?'<div class="task-pills">'+pills+'</div>':'')+
+      '</div>'+
+      '<span class="stag '+getStag(t.status)+'">'+t.status+'</span>'+
+    '</div>';
+  }).join('');
+
+  document.getElementById('detail-panel').innerHTML=
+    '<div class="dp-hero">'+
+      '<div class="dp-hero-row">'+
+        '<div class="dp-av">'+getInitials(emp.employee_name||'')+'</div>'+
+        '<div><div class="dp-name">'+(emp.employee_name||'')+'</div>'+
+        '<div class="dp-dept">'+(emp.department||'')+(emp.designation?' · '+emp.designation:'')+'</div></div>'+
+      '</div>'+
+      '<div class="dp-stats">'+
+        '<div class="dps"><div class="dps-n g">'+done+'</div><div class="dps-l">Done</div></div>'+
+        '<div class="dps"><div class="dps-n a">'+pend+'</div><div class="dps-l">Pending</div></div>'+
+        '<div class="dps"><div class="dps-n">'+tasks.length+'</div><div class="dps-l">Total</div></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="dp-body">'+
+      '<div class="dp-sec">'+
+        '<div class="dp-lbl">Time</div>'+
+        '<div class="tg">'+
+          '<div class="tc"><div class="tc-l">Login</div><div class="tc-v">'+(ml.login_time?String(ml.login_time).slice(0,5):'—')+(ml.is_late?' <span style="color:#d97706;font-size:10px">Late</span>':'')+'</div></div>'+
+          '<div class="tc"><div class="tc-l">Logout</div><div class="tc-v">'+(el.logout_time?String(el.logout_time).slice(0,5):'—')+'</div></div>'+
+          '<div class="tc"><div class="tc-l">Lunch</div><div class="tc-v" style="font-size:12px">'+(el.lunch_from?String(el.lunch_from).slice(0,5)+'–'+String(el.lunch_to||'').slice(0,5):'—')+'</div></div>'+
+          '<div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g">'+(el.net_hours||'—')+'</div></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="dp-sec">'+
+        '<div class="dp-lbl">Tasks ('+tasks.length+')</div>'+
+        taskRows+
+      '</div>'+
+    '</div>';
+}
+
+function updateGlobal(summary){
+  var s=summary||{}, tot=Math.max(s.total||1,1);
+  document.getElementById('g-total').textContent=s.total||0;
+  document.getElementById('g-in').textContent=s.checked_in||0;
+  document.getElementById('g-eod').textContent=s.eod_done||0;
+  document.getElementById('g-miss').textContent=s.missing||0;
+  document.getElementById('g-leave').textContent=s.on_leave||0;
+  document.getElementById('gb-in').style.width=Math.round((s.checked_in||0)/tot*100)+'%';
+  document.getElementById('gb-eod').style.width=Math.round((s.eod_done||0)/tot*100)+'%';
+  document.getElementById('gb-miss').style.width=Math.round((s.missing||0)/tot*100)+'%';
+  document.getElementById('gb-leave').style.width=Math.round((s.on_leave||0)/tot*100)+'%';
+}
+
+document.querySelectorAll('.fc').forEach(function(chip){
+  chip.addEventListener('click',function(){
+    document.querySelectorAll('.fc').forEach(function(c){ c.classList.remove('on'); });
+    chip.classList.add('on');
+    CUR_FILTER=chip.dataset.f;
+    renderDepts();
+  });
+});
+
+function loadAll(date){
+  document.getElementById('dept-list').innerHTML='<div id="loading" style="text-align:center;padding:48px;color:#9ca3af;font-size:13px"><i class="ti ti-loader" style="font-size:22px;animation:spin .7s linear infinite" aria-hidden="true"></i><br><br>Loading...</div>';
+  frappe.call({
+    method:'st_attendance_tracker.api.get_management_dashboard',
+    args:{ date: date || document.getElementById('sel-date').value },
+    callback:function(r){
+      if(!r.message) return;
+      ALL_DEPTS = r.message.departments||[];
+      updateGlobal(r.message.summary);
+      renderDepts();
+    }
+  });
+}
+
+loadAll('{{ date }}');
+</script>
+{% endblock %}

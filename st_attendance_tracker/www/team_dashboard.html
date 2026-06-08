@@ -1,0 +1,339 @@
+{% extends "templates/web.html" %}
+{% block title %}Team Dashboard · {{ employee.employee_name }}{% endblock %}
+{% block head_include %}
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#111827;font-size:14px}
+/* topnav */
+.tnav{height:48px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;padding:0 20px;gap:14px;position:sticky;top:0;z-index:100}
+.tnav-logo{font-size:13px;font-weight:600;color:#EE1C29}
+.tnav-sep{width:1px;height:16px;background:#e5e7eb}
+.tnav-bc{font-size:13px;color:#6b7280}
+.tnav-r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tnav-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;color:#374151;background:#fff;text-decoration:none;cursor:pointer;font-family:inherit}
+.tnav-btn:hover{background:#f9fafb}
+.tnav-btn i{font-size:13px}
+.tnav-av{width:30px;height:30px;border-radius:50%;background:#1e1b4b;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
+/* layout */
+.wrap{max-width:1100px;margin:0 auto;padding:24px 20px 60px}
+/* hero */
+.hero{background:linear-gradient(135deg,#1e1b4b 0%,#312e81 100%);border-radius:14px;padding:24px 28px;margin-bottom:20px}
+.hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.hero-eye{font-size:10px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:5px}
+.hero-title{font-size:22px;font-weight:600;color:#fff;letter-spacing:-.4px;margin-bottom:3px}
+.hero-sub{font-size:13px;color:rgba(255,255,255,.45)}
+.hero-date{display:flex;align-items:center;gap:8px}
+.date-lbl{font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px}
+.date-inp{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:7px;padding:7px 12px;font-size:13px;color:#fff;font-family:inherit;outline:none;cursor:pointer}
+.date-inp:focus{border-color:rgba(255,255,255,.4)}
+.date-inp::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6}
+.stat-strip{display:grid;grid-template-columns:repeat(5,1fr);background:rgba(255,255,255,.06);border-radius:10px;overflow:hidden}
+.stat-cell{padding:12px 16px;text-align:center;border-right:1px solid rgba(255,255,255,.06)}
+.stat-cell:last-child{border-right:none}
+.stat-n{font-size:24px;font-weight:600;color:#fff;line-height:1;letter-spacing:-.5px}
+.stat-n.g{color:#4ade80}.stat-n.r{color:#f87171}.stat-n.a{color:#fbbf24}.stat-n.b{color:#60a5fa}
+.stat-l{font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+/* main grid */
+.grid{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start}
+/* filter bar */
+.filter-bar{display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.fc{font-size:11px;font-weight:500;padding:5px 13px;border-radius:20px;border:1px solid #e5e7eb;color:#6b7280;background:#fff;cursor:pointer;transition:all .15s}
+.fc:hover{background:#f9fafb}
+.fc.on{background:#EE1C29;color:#fff;border-color:#EE1C29}
+/* member card */
+.member-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:8px;overflow:hidden;cursor:pointer;transition:border-color .15s}
+.member-card:hover{border-color:#cbd5e1}
+.mc-head{display:flex;align-items:center;gap:12px;padding:14px 16px}
+.mc-av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0}
+.av-g{background:#dcfce7;color:#15803d}.av-b{background:#dbeafe;color:#1e40af}
+.av-a{background:#fef9c3;color:#854d0e}.av-r{background:#fee2e2;color:#991b1b}
+.av-p{background:#faf5ff;color:#7c3aed}
+.mc-info{flex:1;min-width:0}
+.mc-name{font-size:14px;font-weight:600;color:#111;margin-bottom:2px}
+.mc-meta{font-size:11px;color:#6b7280;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mc-meta i{font-size:11px}
+.mc-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.mc-badge{font-size:11px;font-weight:500;padding:4px 10px;border-radius:20px;white-space:nowrap}
+.mb-in{background:#dcfce7;color:#15803d}
+.mb-la{background:#fef9c3;color:#854d0e}
+.mb-ou{background:#fee2e2;color:#991b1b}
+.mb-lv{background:#f3f4f6;color:#6b7280}
+.mb-eo{background:#dbeafe;color:#1e40af}
+.mc-chev{font-size:16px;color:#d1d5db;transition:transform .2s}
+.member-card.open .mc-chev{transform:rotate(180deg)}
+/* progress */
+.prog-row{display:flex;align-items:center;gap:10px;padding:0 16px 12px}
+.prog-t{flex:1;height:4px;background:#f3f4f6;border-radius:4px;overflow:hidden}
+.prog-f{height:100%;background:#15803d;border-radius:4px}
+.prog-l{font-size:11px;color:#6b7280;white-space:nowrap;font-weight:500}
+/* task detail */
+.task-detail{display:none;border-top:1px solid #f3f4f6;padding:12px 16px}
+.member-card.open .task-detail{display:block}
+.td-time-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.td-cell{background:#f9fafb;border-radius:7px;padding:8px 10px}
+.td-l{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px}
+.td-v{font-size:13px;font-weight:500;color:#111}
+.td-v.g{color:#15803d}
+.td-tasks-lbl{font-size:10px;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.td-task-row{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid #f9fafb}
+.td-task-row:last-child{border-bottom:none}
+.td-ico{font-size:14px;flex-shrink:0;margin-top:1px}
+.ico-g{color:#16a34a}.ico-a{color:#94a3b8}.ico-b{color:#3b82f6}
+.td-body{flex:1;min-width:0}
+.td-desc{font-size:12px;color:#374151;line-height:1.45}
+.td-desc.dn{text-decoration:line-through;color:#94a3b8}
+.td-pills{display:flex;gap:5px;margin-top:3px;flex-wrap:wrap}
+.td-pill{font-size:10px;background:#f3f4f6;border-radius:20px;padding:1px 7px;color:#6b7280;display:flex;align-items:center;gap:3px}
+.td-pill i{font-size:10px}
+.td-stag{font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;flex-shrink:0}
+.st-dn{background:#dcfce7;color:#15803d}
+.st-ip{background:#dbeafe;color:#1e40af}
+.st-pe{background:#fef9c3;color:#854d0e}
+.no-tasks{font-size:12px;color:#9ca3af;font-style:italic;padding:6px 0}
+/* right panel */
+.rp{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;position:sticky;top:72px}
+.rp-head{background:#0f172a;padding:14px 16px}
+.rp-head-t{font-size:13px;font-weight:600;color:#fff;margin-bottom:2px}
+.rp-head-s{font-size:11px;color:rgba(255,255,255,.4)}
+.rp-body{padding:14px 16px}
+.rp-sec{margin-bottom:16px}
+.rp-sec:last-child{margin-bottom:0}
+.rp-lbl{font-size:10px;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.sc{background:#f9fafb;border-radius:8px;padding:10px 12px}
+.sc-n{font-size:20px;font-weight:600;color:#111;line-height:1;letter-spacing:-.5px}
+.sc-n.g{color:#15803d}.sc-n.r{color:#EE1C29}.sc-n.a{color:#d97706}
+.sc-l{font-size:11px;color:#9ca3af;margin-top:3px}
+.late-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f9fafb}
+.late-row:last-child{border-bottom:none}
+.late-av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0}
+.late-name{font-size:12px;font-weight:500;color:#111;flex:1}
+.late-time{font-size:11px;color:#d97706;font-weight:500}
+.empty-rp{font-size:12px;color:#9ca3af;padding:8px 0}
+#loading{text-align:center;padding:48px;color:#9ca3af;font-size:13px}
+
+/* Hide Frappe default footer */
+footer.web-footer,.web-footer,footer[class*="footer"],.footer,.subscribe-section,
+form.row.mt-2,.mt-2.row:has(input[placeholder="Your email address..."]){display:none!important}
+</style>
+{% endblock %}
+{% block page_content %}
+<nav class="tnav">
+  <span class="tnav-logo">ST Tracker</span>
+  <span class="tnav-sep"></span>
+  <span class="tnav-bc">Team Dashboard</span>
+  <div class="tnav-r">
+    <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-check" aria-hidden="true"></i>My check-in</a>
+    <a href="/my-history" class="tnav-btn"><i class="ti ti-history" aria-hidden="true"></i>History</a>
+    <div class="tnav-av">{{ employee.employee_name[:2].upper() }}</div>
+  </div>
+</nav>
+<div class="wrap">
+  <div class="hero">
+    <div class="hero-top">
+      <div>
+        <div class="hero-eye">Team dashboard</div>
+        <div class="hero-title">{{ employee.employee_name }}</div>
+        <div class="hero-sub">{{ employee.department or 'No department' }} &nbsp;·&nbsp; Team Leader</div>
+      </div>
+      <div class="hero-date">
+        <span class="date-lbl">Date</span>
+        <input type="date" class="date-inp" id="sel-date" value="{{ date }}" onchange="loadTeam(this.value)">
+      </div>
+    </div>
+    <div class="stat-strip">
+      <div class="stat-cell"><div class="stat-n" id="s-total">—</div><div class="stat-l">Total</div></div>
+      <div class="stat-cell"><div class="stat-n g" id="s-in">—</div><div class="stat-l">Checked in</div></div>
+      <div class="stat-cell"><div class="stat-n b" id="s-eod">—</div><div class="stat-l">EOD done</div></div>
+      <div class="stat-cell"><div class="stat-n r" id="s-miss">—</div><div class="stat-l">Missing</div></div>
+      <div class="stat-cell"><div class="stat-n a" id="s-late">—</div><div class="stat-l">Late</div></div>
+    </div>
+  </div>
+  <div class="grid">
+    <div>
+      <div class="filter-bar">
+        <span class="fc on" data-f="all">All</span>
+        <span class="fc" data-f="checked_in">Checked in</span>
+        <span class="fc" data-f="late">Late</span>
+        <span class="fc" data-f="missing">Missing</span>
+        <span class="fc" data-f="on_leave">On leave</span>
+        <span class="fc" data-f="eod_done">EOD done</span>
+      </div>
+      <div id="member-list"><div id="loading"><i class="ti ti-loader" style="font-size:22px;animation:spin .7s linear infinite" aria-hidden="true"></i><br><br>Loading team data...</div></div>
+    </div>
+    <div>
+      <div class="rp">
+        <div class="rp-head">
+          <div class="rp-head-t" id="rp-name">Select an employee</div>
+          <div class="rp-head-s" id="rp-dept">Click a card to view details</div>
+        </div>
+        <div class="rp-body" id="rp-body">
+          <div style="text-align:center;padding:32px;color:#9ca3af;font-size:13px">
+            <i class="ti ti-user-search" style="font-size:28px;display:block;margin-bottom:8px" aria-hidden="true"></i>
+            Click any employee to see their tasks and time details
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+<script>
+var ALL_EMPS = [];
+var CUR_FILTER = 'all';
+var CUR_OPEN = null;
+
+function getInitials(n){ var p=(n||'').split(' ').filter(Boolean); return p.length>=2?(p[0][0]+p[1][0]).toUpperCase():n.slice(0,2).toUpperCase(); }
+function getAv(n){ var cls=['av-g','av-b','av-a','av-p','av-r'], s=0; for(var i=0;i<n.length;i++) s+=n.charCodeAt(i); return cls[s%cls.length]; }
+function getBadge(status){
+  var map={checked_in:'mb-in Checked in',late:'mb-la Late',missing:'mb-ou Missing',leave:'mb-lv On leave',eod_done:'mb-eo EOD done'};
+  var v=map[status]||'mb-lv Unknown'; var parts=v.split(' '); var cls=parts.shift();
+  return '<span class="mc-badge '+cls+'">'+parts.join(' ')+'</span>';
+}
+function getTaskIcon(s){ if(s==='Done') return 'ti-circle-check ico-g'; if(s==='In Progress') return 'ti-circle-half ico-b'; return 'ti-circle ico-a'; }
+function getStag(s){ if(s==='Done') return 'st-dn'; if(s==='In Progress') return 'st-ip'; return 'st-pe'; }
+
+function renderTeam(){
+  var list = document.getElementById('member-list');
+  var emps = CUR_FILTER==='all' ? ALL_EMPS : ALL_EMPS.filter(function(e){ return e.status===CUR_FILTER || (CUR_FILTER==='on_leave'&&e.status==='leave'); });
+  if(!emps.length){ list.innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af;font-size:13px">No employees match this filter.</div>'; return; }
+
+  list.innerHTML = emps.map(function(emp){
+    var tasks=emp.tasks||[], done=tasks.filter(function(t){ return t.status==='Done'; }).length;
+    var pct=tasks.length>0?Math.round(done/tasks.length*100):0;
+    var timeInfo='';
+    if(emp.status==='leave') timeInfo='<i class="ti ti-beach" aria-hidden="true"></i>Approved leave';
+    else if(emp.login_time) timeInfo='<i class="ti ti-login" aria-hidden="true"></i>In: '+emp.login_time+(emp.logout_time?' &nbsp;·&nbsp; <i class="ti ti-logout" aria-hidden="true"></i>Out: '+emp.logout_time:'');
+    else timeInfo='<i class="ti ti-clock" aria-hidden="true"></i>Not checked in';
+
+    // Task rows
+    var taskRows='';
+    if(!tasks.length){ taskRows='<div class="no-tasks">No tasks submitted for this date.</div>'; }
+    else {
+      taskRows=tasks.map(function(t){
+        var pills='';
+        if(t.estimated_time) pills+='<span class="td-pill"><i class="ti ti-clock" aria-hidden="true"></i>'+t.estimated_time+'</span>';
+        if(t.actual_time)    pills+='<span class="td-pill"><i class="ti ti-check" aria-hidden="true"></i>'+t.actual_time+'</span>';
+        if(t.project_name)   pills+='<span class="td-pill"><i class="ti ti-folder" aria-hidden="true"></i>'+t.project_name+'</span>';
+        return '<div class="td-task-row">'+
+          '<i class="ti '+getTaskIcon(t.status)+' td-ico" aria-hidden="true"></i>'+
+          '<div class="td-body">'+
+            '<div class="td-desc'+(t.status==='Done'?' dn':'')+'">'+(t.description||'')+'</div>'+
+            (pills?'<div class="td-pills">'+pills+'</div>':'')+
+          '</div>'+
+          '<span class="td-stag '+getStag(t.status)+'">'+t.status+'</span>'+
+        '</div>';
+      }).join('');
+    }
+
+    var mlTime=emp.login_time||'—', loTime=emp.logout_time||'—', netH=emp.net_hours||'—';
+
+    return '<div class="member-card" data-emp="'+emp.name+'" onclick="toggleCard(this,\''+emp.name+'\')" id="mc-'+emp.name+'">'+
+      '<div class="mc-head">'+
+        '<div class="mc-av '+getAv(emp.employee_name)+'">'+getInitials(emp.employee_name)+'</div>'+
+        '<div class="mc-info">'+
+          '<div class="mc-name">'+emp.employee_name+'</div>'+
+          '<div class="mc-meta">'+timeInfo+(emp.net_hours?' &nbsp;·&nbsp; <i class="ti ti-clock" aria-hidden="true"></i>'+emp.net_hours:'')+'</div>'+
+        '</div>'+
+        '<div class="mc-right">'+getBadge(emp.status)+'<i class="ti ti-chevron-down mc-chev" aria-hidden="true"></i></div>'+
+      '</div>'+
+      (tasks.length>0?'<div class="prog-row"><div class="prog-t"><div class="prog-f" style="width:'+pct+'%"></div></div><span class="prog-l">'+done+'/'+tasks.length+'</span></div>':'')+
+      '<div class="task-detail">'+
+        '<div class="td-time-row">'+
+          '<div class="td-cell"><div class="td-l">Login</div><div class="td-v">'+mlTime+'</div></div>'+
+          '<div class="td-cell"><div class="td-l">Logout</div><div class="td-v">'+loTime+'</div></div>'+
+          '<div class="td-cell"><div class="td-l">Net hours</div><div class="td-v g">'+netH+'</div></div>'+
+        '</div>'+
+        '<div class="td-tasks-lbl">Tasks ('+tasks.length+')</div>'+
+        taskRows+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function toggleCard(card, empName){
+  var wasOpen = card.classList.contains('open');
+  document.querySelectorAll('.member-card.open').forEach(function(c){ c.classList.remove('open'); });
+  if(!wasOpen){
+    card.classList.add('open');
+    updateRightPanel(empName);
+  } else {
+    resetRightPanel();
+  }
+}
+
+function updateRightPanel(empName){
+  var emp = ALL_EMPS.find(function(e){ return e.name===empName; });
+  if(!emp) return;
+  document.getElementById('rp-name').textContent = emp.employee_name;
+  document.getElementById('rp-dept').textContent = (emp.department||'') + (emp.designation?' · '+emp.designation:'');
+  var tasks=emp.tasks||[], done=tasks.filter(function(t){ return t.status==='Done'; }).length;
+  var late = ALL_EMPS.filter(function(e){ return e.status==='late'; });
+  document.getElementById('rp-body').innerHTML =
+    '<div class="rp-sec">'+
+      '<div class="rp-lbl">Task summary</div>'+
+      '<div class="sg">'+
+        '<div class="sc"><div class="sc-n g">'+done+'</div><div class="sc-l">Done</div></div>'+
+        '<div class="sc"><div class="sc-n a">'+(tasks.length-done)+'</div><div class="sc-l">Pending</div></div>'+
+        '<div class="sc"><div class="sc-n">'+tasks.length+'</div><div class="sc-l">Total</div></div>'+
+        '<div class="sc"><div class="sc-n">'+(emp.net_hours||'—')+'</div><div class="sc-l">Net hrs</div></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="rp-sec">'+
+      '<div class="rp-lbl">Time</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'+
+        '<div class="sc"><div class="sc-n" style="font-size:15px">'+(emp.login_time||'—')+'</div><div class="sc-l">Login</div></div>'+
+        '<div class="sc"><div class="sc-n" style="font-size:15px">'+(emp.logout_time||'—')+'</div><div class="sc-l">Logout</div></div>'+
+      '</div>'+
+    '</div>'+
+    (late.length ? '<div class="rp-sec"><div class="rp-lbl">Late arrivals</div>'+
+      late.map(function(e){ return '<div class="late-row"><div class="late-av '+getAv(e.employee_name)+'">'+getInitials(e.employee_name)+'</div><span class="late-name">'+e.employee_name+'</span><span class="late-time">'+e.login_time+'</span></div>'; }).join('')+
+    '</div>' : '');
+}
+
+function resetRightPanel(){
+  document.getElementById('rp-name').textContent='Select an employee';
+  document.getElementById('rp-dept').textContent='Click a card to view details';
+  document.getElementById('rp-body').innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af;font-size:13px"><i class="ti ti-user-search" style="font-size:28px;display:block;margin-bottom:8px" aria-hidden="true"></i>Click any employee to see their tasks and time details</div>';
+}
+
+function updateStats(summary){
+  var s=summary||{};
+  document.getElementById('s-total').textContent=s.total||0;
+  document.getElementById('s-in').textContent=s.checked_in||0;
+  document.getElementById('s-eod').textContent=s.eod_done||0;
+  document.getElementById('s-miss').textContent=s.missing||0;
+  document.getElementById('s-late').textContent=s.late||0;
+}
+
+function loadTeam(date){
+  var list=document.getElementById('member-list');
+  list.innerHTML='<div id="loading" style="text-align:center;padding:48px;color:#9ca3af;font-size:13px"><i class="ti ti-loader" style="font-size:22px;animation:spin .7s linear infinite" aria-hidden="true"></i><br><br>Loading...</div>';
+  resetRightPanel();
+  frappe.call({
+    method:'st_attendance_tracker.api.get_team_dashboard',
+    args:{ date: date || document.getElementById('sel-date').value },
+    callback:function(r){
+      if(!r.message) return;
+      ALL_EMPS = r.message.employees||[];
+      updateStats(r.message.summary);
+      renderTeam();
+    }
+  });
+}
+
+document.querySelectorAll('.fc').forEach(function(chip){
+  chip.addEventListener('click',function(){
+    document.querySelectorAll('.fc').forEach(function(c){ c.classList.remove('on'); });
+    chip.classList.add('on');
+    CUR_FILTER=chip.dataset.f;
+    renderTeam();
+  });
+});
+
+loadTeam('{{ date }}');
+</script>
+{% endblock %}

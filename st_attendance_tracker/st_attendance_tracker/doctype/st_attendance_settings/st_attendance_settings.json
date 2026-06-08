@@ -3,13 +3,82 @@
  "creation": "2024-01-01 00:00:00",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": ["section_recipients","report_recipients","section_info","morning_report_note","eod_report_note"],
+ "field_order": [
+  "section_thresholds",
+  "late_checkin_threshold",
+  "section_hybrid",
+  "hybrid_office_days",
+  "hybrid_days_note",
+  "section_info",
+  "morning_report_note",
+  "eod_report_note",
+  "section_recipients_info",
+  "recipients_note"
+ ],
  "fields": [
-  {"fieldname":"section_recipients","fieldtype":"Section Break","label":"Report Recipients"},
-  {"fieldname":"report_recipients","fieldtype":"Table","label":"Report Recipients","options":"Report Recipient"},
-  {"fieldname":"section_info","fieldtype":"Section Break","label":"Schedule Info"},
-  {"default":"Sent automatically at 11:30 AM IST, Monday-Saturday","fieldname":"morning_report_note","fieldtype":"Data","label":"Morning Report Schedule","read_only":1},
-  {"default":"Sent automatically at 10:00 PM IST, Monday-Saturday","fieldname":"eod_report_note","fieldtype":"Data","label":"EOD Report Schedule","read_only":1}
+  {
+   "fieldname": "section_thresholds",
+   "fieldtype": "Section Break",
+   "label": "Attendance Thresholds"
+  },
+  {
+   "default": "10:00:00",
+   "description": "Employees checking in after this time will be flagged as Late",
+   "fieldname": "late_checkin_threshold",
+   "fieldtype": "Time",
+   "label": "Late Check-In Threshold"
+  },
+  {
+   "fieldname": "section_hybrid",
+   "fieldtype": "Section Break",
+   "label": "Hybrid Work Configuration"
+  },
+  {
+   "default": "Tuesday\nThursday",
+   "description": "Days when Hybrid employees must come to office. One day per line. Valid values: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday",
+   "fieldname": "hybrid_office_days",
+   "fieldtype": "Small Text",
+   "label": "Hybrid Office Days",
+   "reqd": 0
+  },
+  {
+   "default": "Hybrid employees must select Office on these days. They can only select WFH if they have a saved Attendance Request for that date.",
+   "fieldname": "hybrid_days_note",
+   "fieldtype": "Small Text",
+   "label": "Note",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_info",
+   "fieldtype": "Section Break",
+   "label": "Schedule Info"
+  },
+  {
+   "default": "Sent at 11:30 AM IST Mon-Sat — missing check-ins + late arrivals combined",
+   "fieldname": "morning_report_note",
+   "fieldtype": "Data",
+   "label": "Morning Report",
+   "read_only": 1
+  },
+  {
+   "default": "Sent at 10:00 PM IST Mon-Sat — employees who have not submitted EOD",
+   "fieldname": "eod_report_note",
+   "fieldtype": "Data",
+   "label": "EOD Report",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_recipients_info",
+   "fieldtype": "Section Break",
+   "label": "Report Recipients"
+  },
+  {
+   "default": "Reports are automatically sent to all users with the HR Manager role. No manual configuration needed.",
+   "fieldname": "recipients_note",
+   "fieldtype": "Small Text",
+   "label": "Recipients",
+   "read_only": 1
+  }
  ],
  "issingle": 1,
  "links": [],
@@ -19,7 +88,7 @@
  "name": "ST Attendance Settings",
  "owner": "Administrator",
  "permissions": [
-  {"create":1,"delete":0,"read":1,"role":"HR Manager","write":1},
-  {"create":1,"delete":0,"read":1,"role":"System Manager","write":1}
+  {"create": 1, "delete": 0, "read": 1, "role": "HR Manager", "write": 1},
+  {"create": 1, "delete": 0, "read": 1, "role": "System Manager", "write": 1}
  ]
 }

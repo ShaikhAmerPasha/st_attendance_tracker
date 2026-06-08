@@ -1,210 +1,867 @@
 {% extends "templates/web.html" %}
-{% block title %}Daily Check-In — {{ employee.employee_name }}{% endblock %}
+{% block title %}Daily Check-In · {{ employee.employee_name }}{% endblock %}
 {% block head_include %}
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{background:#f4f5f7;font-family:'Inter','Segoe UI',Arial,sans-serif}
-.st-page{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:16px}
-.st-card{background:#fff;border-radius:12px;box-shadow:0 2px 16px rgba(0,0,0,0.08);width:100%;max-width:600px;overflow:hidden}
-.st-header{padding:20px 24px 16px;color:#fff}
-.st-header.morning{background:linear-gradient(135deg,#EE1C29 0%,#c0111d 100%)}
-.st-header.eod{background:linear-gradient(135deg,#131419 0%,#2d2f38 100%)}
-.st-header.done{background:linear-gradient(135deg,#1a7f4b 0%,#145c36 100%)}
-.st-header h1{font-size:20px;font-weight:700;margin-bottom:2px}
-.st-header .subtitle{font-size:13px;opacity:.85}
-.st-header .emp-badge{display:inline-block;background:rgba(255,255,255,0.18);border-radius:20px;padding:3px 12px;font-size:12px;margin-top:8px}
-.st-body{padding:20px 24px}
-.section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#888;margin-bottom:10px}
-.carried-notice{background:#fff8e1;border-left:3px solid #f59e0b;border-radius:4px;padding:10px 14px;font-size:13px;color:#92670a;margin-bottom:14px;display:flex;align-items:center;gap:8px}
-.task-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
-.task-row{display:flex;align-items:flex-start;gap:8px;background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;position:relative}
-.task-row.carried{border-left:3px solid #f59e0b}
-.task-row textarea{flex:1;border:none;background:transparent;font-size:14px;color:#1a1a1a;outline:none;resize:none;line-height:1.5;font-family:inherit;min-height:40px}
-.task-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0}
-.badge-carried{background:#fef3c7;color:#92670a}
-.badge-new{background:#dbeafe;color:#1d4ed8}
-.badge-adhoc{background:#f3e8ff;color:#7e22ce}
-.btn-remove-task{background:none;border:none;cursor:pointer;color:#ccc;font-size:18px;line-height:1;padding:0 4px;flex-shrink:0;transition:color .2s}
-.btn-remove-task:hover{color:#EE1C29}
-.eod-task-row{background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:8px;position:relative}
-.eod-task-row.carried{border-left:3px solid #f59e0b}
-.eod-task-row.adhoc-new{border-left:3px solid #a855f7}
-.eod-task-desc{font-size:14px;color:#1a1a1a;margin-bottom:8px;font-weight:500;line-height:1.5}
-.eod-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.status-select{border:1px solid #d1d5db;border-radius:6px;padding:5px 10px;font-size:13px;background:#fff;cursor:pointer;color:#374151;outline:none;flex-shrink:0}
-.status-select:focus{border-color:#EE1C29}
-.task-remarks-input{flex:1;border:1px solid #d1d5db;border-radius:6px;padding:5px 10px;font-size:13px;min-width:100px;outline:none;font-family:inherit;color:#374151}
-.task-remarks-input:focus{border-color:#EE1C29}
-.btn-add{display:flex;align-items:center;gap:6px;background:none;border:1px dashed #d1d5db;border-radius:8px;padding:8px 14px;font-size:13px;color:#6b7280;cursor:pointer;width:100%;transition:all .2s;margin-bottom:16px;font-family:inherit}
-.btn-add:hover{border-color:#EE1C29;color:#EE1C29;background:#fff5f5}
-.time-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
-@media(max-width:400px){.time-grid{grid-template-columns:1fr}}
-.time-field label{display:block;font-size:12px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
-.time-field input[type="time"]{width:100%;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;font-size:15px;outline:none;font-family:inherit;color:#1a1a1a}
-.time-field input[type="time"]:focus{border-color:#EE1C29}
-.btn-primary{width:100%;padding:14px;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.3px}
-.btn-checkin{background:#EE1C29;color:#fff}
-.btn-checkin:hover:not(:disabled){background:#c9111e}
-.btn-checkout{background:#131419;color:#fff}
-.btn-checkout:hover:not(:disabled){background:#2d2f38}
-.btn-primary:disabled{opacity:.6;cursor:not-allowed}
-.btn-primary .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle}
+body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#111827;font-size:14px;line-height:1.5}
+.app{display:flex;flex-direction:column;min-height:100vh}
+/* topnav */
+.tnav{height:48px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;padding:0 20px;gap:14px;position:sticky;top:0;z-index:100}
+.tnav-logo{font-size:13px;font-weight:600;color:#EE1C29;letter-spacing:-.3px}
+.tnav-sep{width:1px;height:16px;background:#e5e7eb}
+.tnav-bc{font-size:13px;color:#6b7280}
+.tnav-r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tnav-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;color:#374151;background:#fff;text-decoration:none;cursor:pointer;font-family:inherit}
+.tnav-btn:hover{background:#f9fafb}
+.tnav-btn i{font-size:13px}
+.tnav-av{width:30px;height:30px;border-radius:50%;background:#EE1C29;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.tnav-date{font-size:12px;color:#9ca3af}
+/* 3-col */
+.cols{display:grid;grid-template-columns:220px 1fr 300px}
+/* sidebar */
+.sidebar{background:#fff;border-right:1px solid #e5e7eb;overflow-y:auto;position:sticky;top:48px;height:calc(100vh - 48px);display:flex;flex-direction:column}
+.sb-top{padding:14px}
+.sb-card{background:#f9fafb;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.sb-av{width:34px;height:34px;border-radius:50%;background:#EE1C29;color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-name{font-size:13px;font-weight:500;color:#111}
+.sb-dept{font-size:11px;color:#9ca3af;margin-top:1px}
+.sb-badge{margin-left:auto;font-size:10px;font-weight:500;padding:3px 8px;border-radius:20px;white-space:nowrap}
+.sbb-in{background:#dcfce7;color:#15803d}
+.sbb-out{background:#f3f4f6;color:#6b7280}
+.sbb-eod{background:#dbeafe;color:#1e40af}
+.sb-sec{padding:0 14px;margin-bottom:14px}
+.sb-lbl{font-size:10px;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px}
+.sb-link{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;font-size:13px;color:#374151;text-decoration:none}
+.sb-link:hover{background:#f9fafb}
+.sb-link.on{background:#fef2f2;color:#EE1C29;font-weight:500}
+.sb-link i{font-size:15px;color:#9ca3af}
+.sb-link.on i{color:#EE1C29}
+.sb-cnt{margin-left:auto;font-size:10px;background:#f3f4f6;color:#6b7280;padding:2px 7px;border-radius:20px}
+.sb-link.on .sb-cnt{background:#fee2e2;color:#EE1C29}
+.sb-div{height:1px;background:#f3f4f6;margin:0 14px 14px}
+.sb-row{display:flex;align-items:center;gap:8px;padding:5px 10px}
+.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.d-g{background:#22c55e}.d-x{background:#d1d5db}
+.sb-rlbl{font-size:12px;color:#374151;flex:1}
+.sb-rn{font-size:12px;font-weight:500;color:#111}
+/* main */
+.main{display:flex;flex-direction:column;min-height:calc(100vh - 48px)}
+/* page header */
+.ph{background:#fff;border-bottom:1px solid #e5e7eb;padding:16px 24px;flex-shrink:0}
+.ph-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px}
+.ph-av{width:42px;height:42px;border-radius:10px;background:#EE1C29;color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ph-av.dk{background:#0f172a}.ph-av.gr{background:#15803d}
+.ph-info{flex:1}
+.ph-title{font-size:20px;font-weight:600;color:#111;letter-spacing:-.4px;line-height:1.2}
+.ph-sub{font-size:13px;color:#6b7280;margin-top:3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ph-right{text-align:right;flex-shrink:0}
+.ph-time{font-size:28px;font-weight:300;color:#111;letter-spacing:-1.5px;line-height:1}
+.ph-date{font-size:12px;color:#9ca3af;margin-top:2px}
+.ph-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500}
+.pc-in{background:#dcfce7;color:#15803d}
+.pc-ca{background:#fef3c7;color:#92400e}
+.pc-eo{background:#dbeafe;color:#1e40af}
+/* hours strip */
+.hstrip{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #f3f4f6}
+.hcell{padding:10px 20px;border-right:1px solid #f3f4f6}
+.hcell:last-child{border-right:none}
+.hl{font-size:10px;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.hv{font-size:18px;font-weight:500;color:#111;letter-spacing:-.5px}
+.hv.r{color:#EE1C29}.hv.g{color:#15803d}
+.hs{font-size:11px;color:#9ca3af;margin-top:1px}
+/* body */
+.body{flex:1;padding:20px 24px 80px}
+/* work location */
+.wl-wrap{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:14px}
+.wl-lbl{font-size:12px;font-weight:500;color:#374151;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.wl-lbl i{font-size:15px;color:#6b7280}
+.wl-sel{flex:1;max-width:200px;border:1.5px solid #e5e7eb;border-radius:7px;padding:8px 12px;font-size:13px;font-weight:500;color:#111;font-family:inherit;outline:none;background:#f9fafb;cursor:pointer;transition:border-color .15s}
+.wl-sel:focus{border-color:#EE1C29;background:#fff}
+.wl-sel:disabled{opacity:.6;cursor:not-allowed;background:#f3f4f6}
+.wl-note{font-size:11px;color:#9ca3af;line-height:1.5;flex:1}
+.wl-note.warn{color:#d97706}
+/* toolbar */
+.tbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.tbar-t{font-size:11px;font-weight:500;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:5px}
+.tbar-t i{font-size:14px}
+.tbar-r{display:flex;gap:6px}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;color:#374151;background:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .15s}
+.btn:hover{background:#f9fafb;border-color:#d1d5db}
+.btn i{font-size:13px}
+.btn.red{background:#EE1C29;color:#fff;border-color:#EE1C29}
+.btn.red:hover{background:#dc1a27}
+/* col headers */
+.col-hdr{display:grid;grid-template-columns:24px 1fr 130px 90px 90px 28px;gap:10px;padding:0 14px 6px;border-bottom:1px solid #f3f4f6;margin-bottom:8px}
+.ch{font-size:10px;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px}
+/* project group */
+.pg{border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#fff;margin-bottom:10px}
+.pg-head{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f9fafb;border-bottom:1px solid #e5e7eb;cursor:pointer;user-select:none}
+.pg-head:hover{background:#f3f4f6}
+.pg-ico{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pi0{background:#eff6ff;color:#2563eb}.pi1{background:#faf5ff;color:#7c3aed}
+.pi2{background:#f0fdf4;color:#15803d}.pi3{background:#fffbeb;color:#d97706}
+.pi4{background:#fef2f2;color:#dc2626}.pi5{background:#f0fdfa;color:#0f766e}
+.pg-ico i{font-size:14px}
+.pg-name{font-size:13px;font-weight:500;color:#111;flex:1}
+.pg-meta{font-size:11px;color:#9ca3af}
+.pg-chev{font-size:14px;color:#d1d5db;transition:transform .2s}
+.pg.closed .pg-chev{transform:rotate(-90deg)}
+.pg.closed .pg-body{display:none}
+/* task row */
+.trow{display:grid;grid-template-columns:24px 1fr 130px 90px 90px 28px;gap:10px;align-items:start;padding:10px 14px;border-bottom:1px solid #f9fafb}
+.trow:hover{background:#fafafa}
+.trow:last-child{border-bottom:none}
+.tck{width:16px;height:16px;border-radius:4px;border:1.5px solid #d1d5db;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
+.tck:hover{border-color:#EE1C29}
+.tck.dn{background:#EE1C29;border-color:#EE1C29}
+.tck.dn i{font-size:10px;color:#fff}
+.tdesc{font-size:13px;color:#111827;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.tdesc.dn{text-decoration:line-through;color:#9ca3af}
+.ttags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.ttag{font-size:10px;font-weight:500;padding:2px 7px;border-radius:4px}
+.ttag-c{background:#fef3c7;color:#92400e}
+.ttag-d{background:#fee2e2;color:#991b1b}
+.ttag-a{background:#faf5ff;color:#7c3aed}
+.tsel{width:100%;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;font-size:12px;color:#374151;background:#fff;font-family:inherit;outline:none;cursor:pointer}
+.tsel:focus{border-color:#EE1C29}
+.tinp{width:100%;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;font-size:12px;color:#374151;background:#fff;font-family:inherit;outline:none}
+.tinp:focus{border-color:#EE1C29}
+.trm{color:#e5e7eb;cursor:pointer;display:flex;align-items:center;justify-content:center;padding-top:2px}
+.trm:hover{color:#EE1C29}
+.trm i{font-size:14px}
+/* add task to project */
+.pg-add{display:flex;align-items:center;gap:6px;padding:7px 14px;cursor:pointer;color:#2563eb;border-top:1px dashed #e5e7eb;font-size:12px;font-weight:500;background:#f8faff;transition:background .15s}
+.pg-add:hover{background:#eff6ff}
+.pg-add i{font-size:13px}
+/* standalone */
+.stask{display:grid;grid-template-columns:24px 1fr 130px 90px 90px 28px;gap:10px;align-items:start;padding:10px 14px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:6px;background:#fff}
+.stask:hover{background:#fafafa}
+.stask.carried{border-left:2.5px solid #f59e0b;border-radius:0 8px 8px 0}
+.stlbl{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+/* empty */
+.empty{text-align:center;padding:48px 24px;background:#fff;border-radius:8px;border:1px dashed #e5e7eb}
+.empty-ico{width:52px;height:52px;border-radius:12px;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.empty-ico i{font-size:24px;color:#EE1C29}
+.empty-t{font-size:15px;font-weight:500;color:#111;margin-bottom:6px}
+.empty-s{font-size:13px;color:#6b7280;margin-bottom:18px;max-width:320px;margin-left:auto;margin-right:auto;line-height:1.6}
+.empty-btns{display:flex;align-items:center;justify-content:center;gap:8px}
+/* new task inputs */
+.npg{background:#fff;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;overflow:hidden}
+.npg-head{display:flex;align-items:center;gap:8px;padding:9px 13px;background:#f9fafb;border-bottom:1px solid #f3f4f6}
+.npg-ico{width:22px;height:22px;border-radius:5px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.npg-ico i{font-size:12px;color:#2563eb}
+.npg-ni{flex:1;border:none;background:transparent;font-size:13px;font-weight:500;color:#111;font-family:inherit;outline:none}
+/* FIX: remove button - visible red */
+.npg-rm{color:#ef4444;cursor:pointer;font-size:14px;padding:3px 7px;flex-shrink:0;border:1px solid #fecaca;border-radius:5px;background:#fef2f2;line-height:1;transition:all .15s}
+.npg-rm:hover{color:#fff;background:#EE1C29;border-color:#EE1C29}
+.npg-body{padding:8px 13px}
+.npg-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.npg-ti{flex:1;border:1px solid #e5e7eb;border-radius:6px;padding:6px 10px;font-size:13px;font-family:inherit;outline:none;color:#111}
+.npg-ti:focus{border-color:#EE1C29}
+.npg-ei{width:90px;border:1px solid #e5e7eb;border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;outline:none;color:#374151;flex-shrink:0}
+.npg-ei:focus{border-color:#EE1C29}
+/* FIX: task remove button - visible red */
+.npg-trm{color:#ef4444;cursor:pointer;font-size:15px;flex-shrink:0;padding:3px 7px;border:1px solid #fecaca;border-radius:5px;background:#fef2f2;line-height:1;transition:all .15s}
+.npg-trm:hover{color:#fff;background:#EE1C29;border-color:#EE1C29}
+/* add task to project button */
+.npg-add{display:flex;align-items:center;gap:6px;padding:7px 13px;cursor:pointer;color:#2563eb;border-top:1px dashed #e5e7eb;font-size:12px;font-weight:500;background:#f8faff;transition:background .15s}
+.npg-add:hover{background:#eff6ff}
+.npg-add i{font-size:12px}
+.ns{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px 13px;margin-bottom:6px}
+.ns-ti{flex:1;border:1px solid #e5e7eb;border-radius:6px;padding:6px 10px;font-size:13px;font-family:inherit;outline:none;color:#111}
+.ns-ti:focus{border-color:#EE1C29}
+.ns-ei{width:90px;border:1px solid #e5e7eb;border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;outline:none;color:#374151;flex-shrink:0}
+.ns-ei:focus{border-color:#EE1C29}
+/* FIX: standalone task remove button - visible red */
+.ns-rm{color:#ef4444;cursor:pointer;font-size:15px;flex-shrink:0;padding:3px 7px;border:1px solid #fecaca;border-radius:5px;background:#fef2f2;line-height:1;transition:all .15s}
+.ns-rm:hover{color:#fff;background:#EE1C29;border-color:#EE1C29}
+/* EOD fields */
+.eod-f{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-bottom:14px}
+.ef-hdr{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #f3f4f6;font-size:13px;font-weight:500;color:#111}
+.ef-hdr i{font-size:16px;color:#374151}
+.ef-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.ef-f label{display:block;font-size:10px;font-weight:500;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.ef-f .opt{font-size:10px;color:#9ca3af;font-weight:400;text-transform:none;letter-spacing:0}
+.ef-f input[type=time]{width:100%;border:1px solid #e5e7eb;border-radius:6px;padding:7px 10px;font-size:13px;font-weight:500;color:#111;font-family:inherit;outline:none}
+.ef-f input[type=time]:focus{border-color:#EE1C29}
+.ef-f .ro{width:100%;border:1px solid #e5e7eb;border-radius:6px;padding:7px 10px;font-size:13px;font-weight:500;color:#15803d;font-family:inherit;background:#f0fdf4;outline:none}
+.pb-row{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:14px}
+.pb-lbl{font-size:12px;color:#6b7280;white-space:nowrap}
+.pb-trk{flex:1;height:6px;background:#f3f4f6;border-radius:4px;overflow:hidden}
+.pb-fill{height:100%;background:#EE1C29;border-radius:4px;transition:width .3s}
+.pb-n{font-size:12px;font-weight:500;color:#111;white-space:nowrap}
+/* FIX: footer always visible - sticky to bottom of main column */
+.app-footer{padding:14px 24px;background:#fff;border-top:1px solid #e5e7eb;display:flex;align-items:center;gap:10px;position:sticky;bottom:0;z-index:50;box-shadow:0 -2px 8px rgba(0,0,0,.06)}
+.fbtn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:inherit;transition:all .15s;white-space:nowrap}
+.fbtn i{font-size:15px}
+.fbtn.red{background:#EE1C29;color:#fff}
+.fbtn.red:hover{background:#dc1a27}
+.fbtn.dk{background:#111;color:#fff}
+.fbtn.dk:hover{background:#1f2937}
+.fbtn.gh{background:#fff;color:#374151;border:1px solid #e5e7eb}
+.fbtn.gh:hover{background:#f9fafb}
+.fbtn:disabled{opacity:.55;cursor:not-allowed}
+.fbtn .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.st-divider{border:none;border-top:1px solid #f0f0f0;margin:18px 0}
-.done-body{padding:32px 24px;text-align:center}
-.done-icon{font-size:48px;margin-bottom:12px}
-.done-title{font-size:20px;font-weight:700;color:#1a7f4b;margin-bottom:6px}
-.done-sub{font-size:14px;color:#666}
-#st-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#131419;color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,0.25);z-index:9999;transition:transform .3s ease;max-width:320px;text-align:center}
-#st-toast.show{transform:translateX(-50%) translateY(0)}
-#st-toast.error{background:#EE1C29}
-#st-toast.success{background:#1a7f4b}
+.fhint{font-size:12px;color:#9ca3af;margin-left:auto}
+/* done */
+.done-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:32px}
+.done-card{background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:32px 28px;text-align:center;max-width:480px;width:100% }
+.done-ico{width:60px;height:60px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.done-ico i{font-size:28px;color:#15803d}
+.done-t{font-size:20px;font-weight:600;color:#111;margin-bottom:6px;letter-spacing:-.3px}
+.done-s{font-size:13px;color:#6b7280;line-height:1.65;margin-bottom:20px}
+.done-grid{background:#f9fafb;border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;text-align:left;margin-bottom:18px}
+.dg-l{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px}
+.dg-v{font-size:15px;font-weight:500;color:#111}
+.dg-v.g{color:#15803d}
+.done-links{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+.dl-btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;color:#374151;text-decoration:none;background:#fff;font-family:inherit}
+.dl-btn:hover{background:#f9fafb}
+/* right panel */
+.rp{background:#fff;border-left:1px solid #e5e7eb;overflow-y:auto;position:sticky;top:48px;height:calc(100vh - 48px)}
+.rp-sec{padding:14px 16px;border-bottom:1px solid #f3f4f6}
+.rp-sec:last-child{border-bottom:none}
+.rp-t{font-size:10px;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;display:flex;align-items:center;gap:5px}
+.rp-t i{font-size:13px}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sc{background:#f9fafb;border-radius:8px;padding:10px 12px}
+.sc-n{font-size:22px;font-weight:600;color:#111;letter-spacing:-.5px;line-height:1}
+.sc-n.g{color:#15803d}.sc-n.r{color:#EE1C29}.sc-n.a{color:#d97706}.sc-n.b{color:#2563eb}
+.sc-l{font-size:11px;color:#9ca3af;margin-top:3px}
+.tg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tc{background:#f9fafb;border-radius:7px;padding:9px 11px}
+.tc-l{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}
+.tc-v{font-size:14px;font-weight:500;color:#111}
+.tc-v.g{color:#15803d}
+.pi{margin-bottom:9px}
+.pi:last-child{margin-bottom:0}
+.pi-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.pi-lbl{font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}
+.pi-val{font-size:11px;font-weight:500;color:#6b7280;flex-shrink:0}
+.pi-trk{height:4px;background:#f3f4f6;border-radius:4px;overflow:hidden}
+.pi-fill{height:100%;border-radius:4px}
+.tm-row{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #f9fafb}
+.tm-row:last-child{border-bottom:none}
+.tm-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.av-g{background:#dcfce7;color:#15803d}.av-b{background:#dbeafe;color:#1e40af}
+.av-a{background:#fef9c3;color:#854d0e}.av-r{background:#fee2e2;color:#991b1b}
+.tm-name{font-size:12px;font-weight:500;color:#111}
+.tm-p{display:flex;align-items:center;gap:5px;margin-top:3px}
+.tmp-t{flex:1;height:3px;background:#f3f4f6;border-radius:4px;overflow:hidden}
+.tmp-f{height:100%;background:#15803d;border-radius:4px}
+.tmp-l{font-size:10px;color:#9ca3af;white-space:nowrap}
+.tm-b{font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;flex-shrink:0}
+.tmb-in{background:#dcfce7;color:#15803d}
+.tmb-la{background:#fef9c3;color:#854d0e}
+.tmb-ou{background:#fee2e2;color:#991b1b}
+.tmb-lv{background:#f3f4f6;color:#6b7280}
+.tmb-eo{background:#dbeafe;color:#1e40af}
+/* WFH modal */
+.wfh-ov{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px}
+.wfh-mo{background:#fff;border-radius:12px;padding:28px 24px;max-width:420px;width:100% ;box-shadow:0 20px 60px rgba(0,0,0,.18)}
+.wfh-mi{width:52px;height:52px;border-radius:50%;background:#fef9c3;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.wfh-mi i{font-size:24px;color:#d97706}
+.wfh-mt{font-size:17px;font-weight:600;color:#111;text-align:center;margin-bottom:8px}
+.wfh-ms{font-size:13px;color:#6b7280;text-align:center;line-height:1.65;margin-bottom:20px}
+.wfh-ma{display:flex;flex-direction:column;gap:8px}
+.wfh-mb{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 16px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none;border:none;width:100% ;font-family:inherit}
+.wfh-mb.pr{background:#EE1C29;color:#fff}
+.wfh-mb.pr:hover{background:#dc1a27}
+.wfh-mb.sc{background:#f3f4f6;color:#374151}
+.wfh-mb.sc:hover{background:#e5e7eb}
+/* toast */
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(80px);background:#111;color:#fff;padding:11px 20px;border-radius:8px;font-size:13px;font-weight:500;z-index:9999;transition:transform .3s;max-width:360px;text-align:center;pointer-events:none}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.err{background:#EE1C29}
+#toast.ok{background:#15803d}
+/* Hide Frappe page chrome - NOT our footer */
+.web-footer,.subscribe-section,
+form.row.mt-2,.mt-2.row:has(input[placeholder="Your email address..."]){display:none!important}
+.layout-main-section-wrapper,.layout-main-section,.page-content{padding:0!important;max-width:100%!important}
+/* mobile */
+.mob-nav{display:none}
+@media(max-width:900px){
+  .cols{grid-template-columns:1fr}
+  .sidebar,.rp{display:none}
+  .main{min-height:auto}
+  .body{padding:14px 14px 80px}
+  .app-footer{position:sticky;bottom:0;left:0;right:0;z-index:50}
+  .hstrip{grid-template-columns:1fr 1fr}
+  .col-hdr{display:none}
+  .trow,.stask{grid-template-columns:24px 1fr 100px}
+  .trow>*:nth-child(4),.trow>*:nth-child(5),.trow>*:nth-child(6){display:none}
+  .stask>*:nth-child(4),.stask>*:nth-child(5),.stask>*:nth-child(6){display:none}
+  .ef-grid{grid-template-columns:1fr 1fr}
+  .mob-nav{display:flex;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5e7eb;z-index:60;height:56px}
+  .mn-it{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#9ca3af;font-size:10px;font-weight:500;text-decoration:none;padding:6px 0}
+  .mn-it.on{color:#EE1C29}
+  .mn-it i{font-size:20px}
+  .app-footer{bottom:56px}
+}
+@media(min-width:901px){.mob-nav{display:none}}
 </style>
 {% endblock %}
 {% block page_content %}
-<div class="st-page">
-  <div class="st-card">
-    {% if eod_done %}
-    <div class="st-header done">
-      <h1>✅ Day Complete</h1>
-      <div class="subtitle">{{ date }}</div>
-      <div class="emp-badge">{{ employee.employee_name }} · {{ employee.department or 'No Dept' }}</div>
-    </div>
-    <div class="done-body">
-      <div class="done-icon">🎉</div>
-      <div class="done-title">Great work today!</div>
-      <div class="done-sub">Your End-of-Day report has been submitted.<br>Pending tasks have been automatically moved to tomorrow.</div>
-    </div>
-    {% elif is_checked_in %}
-    <div class="st-header eod">
-      <h1>🌆 End of Day</h1>
-      <div class="subtitle">{{ date }}</div>
-      <div class="emp-badge">{{ employee.employee_name }} · {{ employee.department or 'No Dept' }}</div>
-    </div>
-    <div class="st-body">
-      <div class="section-label">Work Hours</div>
-      <div class="time-grid">
-        <div class="time-field"><label>Lunch From</label><input type="time" id="lunch_from"></div>
-        <div class="time-field"><label>Lunch To</label><input type="time" id="lunch_to"></div>
-
-        <div class="time-field"><label>Logout Time *</label><input type="time" id="logout_time" value="{{ current_time }}"></div>
+<div class="app">
+<nav class="tnav">
+  <span class="tnav-logo">ST Tracker</span>
+  <span class="tnav-sep"></span>
+  <span class="tnav-bc">{% if eod_done %}Day Complete{% elif is_checked_in %}Working{% else %}Check-In{% endif %}</span>
+  <div class="tnav-r">
+    <span class="tnav-date">{{ date }}</span>
+    <a href="/my-history" class="tnav-btn"><i class="ti ti-history" aria-hidden="true"></i>History</a>
+    {% if is_team_leader %}<a href="/team-dashboard" class="tnav-btn"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
+    <div class="tnav-av">{{ employee.employee_name[:2].upper() }}</div>
+  </div>
+</nav>
+<div class="cols">
+<aside class="sidebar">
+  <div class="sb-top">
+    <div class="sb-card">
+      <div class="sb-av">{{ employee.employee_name[:2].upper() }}</div>
+      <div>
+        <div class="sb-name">{{ employee.employee_name }}</div>
+        <div class="sb-dept">{{ employee.department or 'No department' }}</div>
       </div>
-      <hr class="st-divider">
-      <div class="section-label">Update Task Status</div>
-      <div id="eod-task-list">
-        {% for task in tasks %}
-        <div class="eod-task-row {% if task.is_carried %}carried{% endif %}" data-id="{{ task.name }}">
-          <div class="eod-task-desc">
-            {% if task.is_carried %}<span class="task-badge badge-carried">↩ Carried</span>&nbsp;{% elif task.task_type == 'Ad-hoc' %}<span class="task-badge badge-adhoc">Ad-hoc</span>&nbsp;{% endif %}
-            {{ task.description }}
-          </div>
-          <div class="eod-controls">
-            <select class="status-select" data-id="{{ task.name }}">
-              <option value="Done" {% if task.status == 'Done' %}selected{% endif %}>✅ Done</option>
-              <option value="In Progress" {% if task.status == 'In Progress' %}selected{% endif %}>🔄 In Progress</option>
-              <option value="Pending" {% if task.status == 'Pending' %}selected{% endif %}>⏳ Pending</option>
-            </select>
-            <input type="text" class="task-remarks-input" data-id="{{ task.name }}" placeholder="Remarks (optional)" value="{{ task.remarks or '' }}">
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      <hr class="st-divider">
-      <div class="section-label">Mid-Day Tasks (Ad-hoc)</div>
-      <div id="adhoc-task-list"></div>
-      <button class="btn-add" onclick="addAdhocRow()">+ Add Ad-hoc Task</button>
-      <button class="btn-primary btn-checkout" id="btn-checkout" onclick="submitEOD()">🔴 Check Out &amp; Submit</button>
+      {% if eod_done %}<span class="sb-badge sbb-eod">EOD done</span>
+      {% elif is_checked_in %}<span class="sb-badge sbb-in">Checked in</span>
+      {% else %}<span class="sb-badge sbb-out">Not checked in</span>{% endif %}
     </div>
-    {% else %}
-    <div class="st-header morning">
-      <h1>🌅 Good Morning</h1>
-      <div class="subtitle">{{ date }}</div>
-      <div class="emp-badge">{{ employee.employee_name }} · {{ employee.department or 'No Dept' }}</div>
+  </div>
+  <div class="sb-sec">
+    <div class="sb-lbl">Navigation</div>
+    <a href="/daily-checkin" class="sb-link on"><i class="ti ti-check" aria-hidden="true"></i>Today<span class="sb-cnt">{{ total_count }}</span></a>
+    <a href="/my-history" class="sb-link"><i class="ti ti-history" aria-hidden="true"></i>My history</a>
+    {% if is_team_leader %}<a href="/team-dashboard" class="sb-link"><i class="ti ti-users" aria-hidden="true"></i>My team</a>{% endif %}
+  </div>
+  <div class="sb-div"></div>
+  <div class="sb-sec">
+    <div class="sb-lbl">Today's hours</div>
+    <div class="sb-row"><span class="sb-dot d-g"></span><span class="sb-rlbl">Login</span><span class="sb-rn">{{ login_time or '—' }}</span></div>
+    <div class="sb-row"><span class="sb-dot d-x"></span><span class="sb-rlbl">Logout</span><span class="sb-rn">{{ logout_time or '—' }}</span></div>
+    <div class="sb-row"><span class="sb-dot d-g"></span><span class="sb-rlbl">Net hours</span><span class="sb-rn" style="color:#15803d">{{ net_hours or '—' }}</span></div>
+  </div>
+</aside>
+<main class="main">
+{% if eod_done %}
+<div class="ph">
+  <div class="ph-row">
+    <div class="ph-av gr"><i class="ti ti-check" aria-hidden="true"></i></div>
+    <div class="ph-info">
+      <div class="ph-title">Day complete — well done!</div>
+      <div class="ph-sub">{{ employee.department or '' }}&nbsp;&nbsp;<span class="ph-chip pc-eo">EOD submitted</span></div>
     </div>
-    <div class="st-body">
-      {% if carried_count > 0 %}
-      <div class="carried-notice">📌 <strong>{{ carried_count }} task(s)</strong> carried forward from yesterday</div>
-      {% endif %}
-      <div class="section-label">Today's Planned Tasks</div>
-      <div id="morning-task-list" class="task-list">
-        {% for task in tasks %}
-        <div class="task-row carried" data-id="{{ task.name }}">
-          <span class="task-badge badge-carried">↩ Carried</span>
-          <textarea class="task-desc-input" data-id="{{ task.name }}" rows="1">{{ task.description }}</textarea>
-        </div>
-        {% endfor %}
-      </div>
-      <div id="new-task-list" class="task-list"></div>
-      <button class="btn-add" onclick="addMorningTaskRow()">+ Add Task</button>
-      <button class="btn-primary btn-checkin" id="btn-checkin" onclick="submitMorning()">✅ Check In &amp; Start Day</button>
-    </div>
-    {% endif %}
+    <div class="ph-right"><div class="ph-time">{{ net_hours or '—' }}</div><div class="ph-date">net hours</div></div>
   </div>
 </div>
-<div id="st-toast"></div>
+<div class="done-wrap">
+  <div class="done-card">
+    <div class="done-ico"><i class="ti ti-circle-check" aria-hidden="true"></i></div>
+    <div class="done-t">End-of-Day submitted</div>
+    <div class="done-s">Your work is logged. Pending tasks moved to the next working day.</div>
+    {% set dt = tasks|selectattr("status","equalto","Done")|list %}
+    {% set pt = tasks|selectattr("status","in",["Pending","In Progress"])|list %}
+    <div class="done-grid">
+      <div><div class="dg-l">Tasks done</div><div class="dg-v g">{{ dt|length }} / {{ tasks|length }}</div></div>
+      <div><div class="dg-l">Carried forward</div><div class="dg-v">{{ pt|length }}</div></div>
+      <div><div class="dg-l">Login</div><div class="dg-v">{{ login_time or '—' }}</div></div>
+      <div><div class="dg-l">Net hours</div><div class="dg-v g">{{ net_hours or '—' }}</div></div>
+    </div>
+    <div class="done-links">
+      <a href="/my-history" class="dl-btn"><i class="ti ti-history" aria-hidden="true"></i>View history</a>
+      {% if is_team_leader %}<a href="/team-dashboard" class="dl-btn"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
+    </div>
+  </div>
+</div>
+{% elif is_checked_in %}
+<div class="ph">
+  <div class="ph-row">
+    <div class="ph-av dk"><i class="ti ti-moon" aria-hidden="true"></i></div>
+    <div class="ph-info">
+      <div class="ph-title">End of day, {{ employee.employee_name.split()[0] }}</div>
+      <div class="ph-sub">{{ employee.department or '' }}&nbsp;&nbsp;
+        <span class="ph-chip pc-in">Checked in {{ login_time }}</span>
+        {% if carried_count > 0 %}<span class="ph-chip pc-ca">{{ carried_count }} carried</span>{% endif %}
+        {% if work_location %}<span class="ph-chip" style="background:#f3f4f6;color:#374151">{{ work_location }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="ph-right"><div class="ph-time" id="live-net">—</div><div class="ph-date">net hours</div></div>
+  </div>
+  <div class="hstrip">
+    <div class="hcell"><div class="hl">Login</div><div class="hv r">{{ login_time }}</div><div class="hs">Checked in</div></div>
+    <div class="hcell"><div class="hl">Logout</div><div class="hv" id="hs-lo">—</div><div class="hs">Set below</div></div>
+    <div class="hcell"><div class="hl">Net hours</div><div class="hv g" id="hs-net">—</div><div class="hs" id="hs-lunch">No lunch</div></div>
+    <div class="hcell"><div class="hl">Tasks</div><div class="hv">{{ done_count }} <span style="font-size:14px;color:#9ca3af;font-weight:400">/ {{ total_count }}</span></div><div class="hs">done</div></div>
+  </div>
+</div>
+<div class="body">
+  <div class="eod-f">
+    <div class="ef-hdr"><i class="ti ti-clock" aria-hidden="true"></i>Time details</div>
+    <div class="ef-grid">
+      <div class="ef-f"><label>Logout time *</label><input type="time" id="logout_time" value="{{ current_time }}" oninput="recalc()"></div>
+      <div class="ef-f"><label>Lunch from <span class="opt">optional</span></label><input type="time" id="lunch_from" oninput="recalc()"></div>
+      <div class="ef-f"><label>Lunch to <span class="opt">optional</span></label><input type="time" id="lunch_to" oninput="recalc()"></div>
+      <div class="ef-f"><label>Net hours</label><input type="text" id="net_disp" class="ro" readonly placeholder="Auto-calculated"></div>
+    </div>
+  </div>
+  <div class="pb-row">
+    <span class="pb-lbl">Task completion</span>
+    <div class="pb-trk"><div class="pb-fill" id="pb-fill" style="width:{% if total_count > 0 %}{{ (done_count/total_count*100)|int }}{% else %}0{% endif %}%"></div></div>
+    <span class="pb-n" id="pb-n">{{ done_count }} / {{ total_count }}</span>
+  </div>
+  <div class="tbar">
+    <span class="tbar-t"><i class="ti ti-list" aria-hidden="true"></i>Update tasks</span>
+    <div class="tbar-r"><button class="btn" onclick="addAdhoc()"><i class="ti ti-plus" aria-hidden="true"></i>Ad-hoc task</button></div>
+  </div>
+  {% if total_count > 0 %}
+  <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Status</div><div class="ch">Estimated</div><div class="ch">Actual</div><div class="ch"></div></div>
+  {% endif %}
+  {% set pico = ['pi0','pi1','pi2','pi3','pi4','pi5'] %}
+  {% for pname, ptasks in projects.items() %}
+  <div class="pg" id="epg{{ loop.index }}">
+    <div class="pg-head" onclick="togglePG('epg{{ loop.index }}')">
+      <div class="pg-ico {{ pico[loop.index0 % 6] }}"><i class="ti ti-folder" aria-hidden="true"></i></div>
+      <span class="pg-name">{{ pname }}</span>
+      <span class="pg-meta">{{ ptasks|length }} task{% if ptasks|length != 1 %}s{% endif %} &nbsp;·&nbsp; {{ ptasks|selectattr("status","equalto","Done")|list|length }} done</span>
+      <i class="ti ti-chevron-down pg-chev" aria-hidden="true"></i>
+    </div>
+    <div class="pg-body">
+      {% for task in ptasks %}
+      <div class="trow" data-id="{{ task.name }}">
+        <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
+        <div><textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description }}</textarea>{% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}</div>
+        <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
+        <input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est.">
+        <input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs">
+        <div class="trm"><i class="ti ti-x" aria-hidden="true"></i></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% if standalone %}
+  <div><div class="stlbl"><i class="ti ti-minus" aria-hidden="true"></i>Standalone tasks</div>
+  {% for task in standalone %}
+  <div class="stask {% if task.is_carried %}carried{% endif %}" data-id="{{ task.name }}">
+    <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
+    <div><div class="tdesc {% if task.status=='Done' %}dn{% endif %}">{{ task.description }}</div>{% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}</div>
+    <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
+    <input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est.">
+    <input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs">
+    <div class="trm"><i class="ti ti-x" aria-hidden="true"></i></div>
+  </div>
+  {% endfor %}
+  </div>
+  {% endif %}
+  <div id="adhoc-area"></div>
+  <div style="height:20px"></div>
+</div>
+<footer class="app-footer">
+  <button class="fbtn dk" id="btn-eod" onclick="submitEOD()"><i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit EOD</button>
+  <span class="fhint">Pending tasks auto-carry to tomorrow</span>
+</footer>
+{% else %}
+<div class="ph">
+  <div class="ph-row">
+    <div class="ph-av"><i class="ti ti-sun" aria-hidden="true"></i></div>
+    <div class="ph-info">
+      <div class="ph-title">Good morning, {{ employee.employee_name.split()[0] }}</div>
+      <div class="ph-sub">{{ employee.department or 'No department' }}&nbsp;&nbsp;{% if carried_count > 0 %}<span class="ph-chip pc-ca">{{ carried_count }} carried</span>{% endif %}</div>
+    </div>
+    <div class="ph-right"><div class="ph-time" id="clock">{{ current_time }}</div><div class="ph-date">{{ date }}</div></div>
+  </div>
+  <div class="hstrip">
+    <div class="hcell"><div class="hl">Login time</div><div class="hv r"><input type="time" id="login_time" value="{{ current_time }}" style="background:none;border:none;outline:none;font-size:18px;font-weight:500;color:#EE1C29;font-family:inherit;width:110px"></div></div>
+    <div class="hcell"><div class="hl">Date</div><div class="hv" style="font-size:15px">{{ date }}</div></div>
+    <div class="hcell"><div class="hl">Tasks queued</div><div class="hv" id="tc-n">{{ carried_count }}</div><div class="hs" id="tc-s">{% if carried_count > 0 %}carried + new{% else %}add below{% endif %}</div></div>
+    <div class="hcell"><div class="hl">Status</div><div class="hv" style="font-size:14px;color:#9ca3af">Not checked in</div></div>
+  </div>
+</div>
+<div class="body">
+  <div class="wl-wrap">
+    <label class="wl-lbl"><i class="ti ti-map-pin" aria-hidden="true"></i>Work location</label>
+    <select id="wl-sel" class="wl-sel" onchange="onWLChange()"></select>
+    <span id="wl-note" class="wl-note"></span>
+  </div>
+  {% if carried_count == 0 and tasks|length == 0 %}
+  <div class="empty">
+    <div class="empty-ico"><i class="ti ti-checklist" aria-hidden="true"></i></div>
+    <div class="empty-t">Plan your day</div>
+    <p class="empty-s">Add your tasks for today. Group them by project or add individually.</p>
+    <div class="empty-btns">
+      <button class="btn red" onclick="addPG()"><i class="ti ti-folder-plus" aria-hidden="true"></i>Add project</button>
+      <button class="btn" onclick="addT()"><i class="ti ti-plus" aria-hidden="true"></i>Add task</button>
+    </div>
+  </div>
+  {% else %}
+  {% if tasks|length > 0 %}
+  <div class="tbar" style="margin-bottom:10px"><span class="tbar-t"><i class="ti ti-history" aria-hidden="true"></i>Carried from previous days</span></div>
+  <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Project</div><div class="ch">Estimated</div><div class="ch"></div><div class="ch"></div></div>
+  {% for pname, ptasks in projects.items() %}
+  <div class="pg" id="cpg{{ loop.index }}">
+    <div class="pg-head" onclick="togglePG('cpg{{ loop.index }}')">
+      <div class="pg-ico pi{{ loop.index0 % 6 }}"><i class="ti ti-folder" aria-hidden="true"></i></div>
+      <span class="pg-name">{{ pname }}</span>
+      <span class="pg-meta">{{ ptasks|length }} carried</span>
+      <i class="ti ti-chevron-down pg-chev" aria-hidden="true"></i>
+    </div>
+    <div class="pg-body">
+      {% for task in ptasks %}
+      <div class="trow" data-id="{{ task.name }}" style="grid-template-columns:24px 1fr 120px 90px 1fr 28px">
+        <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
+        <div><textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div></div>
+        <div style="font-size:12px;color:#9ca3af;padding-top:6px">{{ pname }}</div>
+        <input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est.">
+        <div></div>
+        <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% if standalone %}
+  <div style="margin-top:6px"><div class="stlbl"><i class="ti ti-minus" aria-hidden="true"></i>Standalone carried</div>
+  {% for task in standalone %}
+  <div class="stask carried" data-id="{{ task.name }}" style="grid-template-columns:24px 1fr 120px 90px 1fr 28px">
+    <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
+    <div><textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div></div>
+    <div style="font-size:12px;color:#9ca3af;padding-top:6px">—</div>
+    <input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est.">
+    <div></div>
+    <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+  </div>
+  {% endfor %}
+  </div>
+  {% endif %}
+  {% endif %}
+  {% endif %}
+  <div class="tbar" style="margin-top:16px;margin-bottom:10px">
+    <span class="tbar-t"><i class="ti ti-plus" aria-hidden="true"></i>Add today's tasks</span>
+    <div class="tbar-r">
+      <button class="btn" onclick="addPG()"><i class="ti ti-folder-plus" aria-hidden="true"></i>Add project</button>
+      <button class="btn red" onclick="addT()"><i class="ti ti-plus" aria-hidden="true"></i>Add task</button>
+    </div>
+  </div>
+  <div id="new-area"></div>
+  <div style="height:20px"></div>
+</div>
+<footer class="app-footer">
+  <button class="fbtn red" id="btn-ci" onclick="submitMorning()"><i class="ti ti-login" aria-hidden="true"></i>Check in &amp; start day</button>
+  <button class="fbtn gh" onclick="addPG()"><i class="ti ti-folder-plus" aria-hidden="true"></i>Project</button>
+  <button class="fbtn gh" onclick="addT()"><i class="ti ti-plus" aria-hidden="true"></i>Task</button>
+  <span class="fhint" id="fhint">{{ carried_count }} carried{% if carried_count == 0 %} — add at least one{% endif %}</span>
+</footer>
+{% endif %}
+</main>
+<aside class="rp">
+  <div class="rp-sec">
+    <div class="rp-t"><i class="ti ti-chart-bar" aria-hidden="true"></i>Today's summary</div>
+    <div class="sg">
+      <div class="sc"><div class="sc-n g">{{ done_count }}</div><div class="sc-l">Done</div></div>
+      <div class="sc"><div class="sc-n a">{{ tasks|selectattr("status","equalto","In Progress")|list|length }}</div><div class="sc-l">In progress</div></div>
+      <div class="sc"><div class="sc-n r">{{ tasks|selectattr("status","in",["Pending"])|list|length }}</div><div class="sc-l">Pending</div></div>
+      <div class="sc"><div class="sc-n b">{{ total_count }}</div><div class="sc-l">Total tasks</div></div>
+    </div>
+  </div>
+  <div class="rp-sec">
+    <div class="rp-t"><i class="ti ti-clock" aria-hidden="true"></i>Time today</div>
+    <div class="tg">
+      <div class="tc"><div class="tc-l">Login</div><div class="tc-v">{{ login_time or '—' }}</div></div>
+      <div class="tc"><div class="tc-l">Logout</div><div class="tc-v" id="rp-lo">{{ logout_time or '—' }}</div></div>
+      <div class="tc"><div class="tc-l">Lunch</div><div class="tc-v" id="rp-ln" style="font-size:12px">—</div></div>
+      <div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g" id="rp-net">{{ net_hours or '—' }}</div></div>
+    </div>
+  </div>
+  {% if projects %}
+  <div class="rp-sec">
+    <div class="rp-t"><i class="ti ti-trending-up" aria-hidden="true"></i>Project progress</div>
+    {% set pclr = ['#EE1C29','#7c3aed','#15803d','#d97706','#2563eb','#0f766e'] %}
+    {% for pname, ptasks in projects.items() %}
+    {% set pdone = ptasks|selectattr("status","equalto","Done")|list|length %}
+    {% set ppct = (pdone/ptasks|length*100)|int if ptasks|length > 0 else 0 %}
+    <div class="pi">
+      <div class="pi-row"><span class="pi-lbl">{{ pname }}</span><span class="pi-val">{{ pdone }}/{{ ptasks|length }}</span></div>
+      <div class="pi-trk"><div class="pi-fill" style="width:{{ ppct }}%;background:{{ pclr[loop.index0 % 6] }}"></div></div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if is_team_leader %}
+  <div class="rp-sec">
+    <div class="rp-t"><i class="ti ti-users" aria-hidden="true"></i>My team today</div>
+    <div id="team-list"><div style="font-size:12px;color:#9ca3af">Loading...</div></div>
+    <a href="/team-dashboard" style="display:block;text-align:center;font-size:12px;color:#EE1C29;margin-top:10px;text-decoration:none;padding:6px;border:1px solid #fecaca;border-radius:6px">View full team dashboard</a>
+  </div>
+  {% endif %}
+</aside>
+</div>
+</div>
+<nav class="mob-nav">
+  <a href="/daily-checkin" class="mn-it on"><i class="ti ti-check" aria-hidden="true"></i>Today</a>
+  <a href="/my-history" class="mn-it"><i class="ti ti-history" aria-hidden="true"></i>History</a>
+  {% if is_team_leader %}<a href="/team-dashboard" class="mn-it"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
+</nav>
+<div class="wfh-ov" id="wfh-ov" style="display:none">
+  <div class="wfh-mo">
+    <div class="wfh-mi"><i class="ti ti-home-off" aria-hidden="true"></i></div>
+    <div class="wfh-mt">WFH Not Applied</div>
+    <div class="wfh-ms" id="wfh-msg">You have not applied for Work From Home today.</div>
+    <div class="wfh-ma">
+      <a href="#" id="wfh-link" class="wfh-mb pr" target="_blank"><i class="ti ti-external-link" aria-hidden="true"></i>Mark WFH in Attendance Request</a>
+      <button class="wfh-mb sc" onclick="closeWFH()">Cancel — select Office instead</button>
+    </div>
+  </div>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
 <script>
-function showToast(msg,type,duration){duration=duration||3500;var t=document.getElementById('st-toast');t.textContent=msg;t.className='show '+(type||'');setTimeout(function(){t.className='';},duration);}
-function setLoading(btnId,loading,label){var btn=document.getElementById(btnId);if(!btn)return;btn.disabled=loading;btn.innerHTML=loading?'<span class="spinner"></span> '+label:label;}
-var newTaskCounter=0;
-function addMorningTaskRow(value){newTaskCounter++;var id='new_'+newTaskCounter;var div=document.createElement('div');div.className='task-row';div.dataset.newId=id;div.innerHTML='<span class="task-badge badge-new">New</span><textarea class="task-desc-input" data-new-id="'+id+'" placeholder="Describe the task…" rows="1">'+(value||'')+'</textarea><button class="btn-remove-task" onclick="this.closest(\'.task-row\').remove()">×</button>';var ta=div.querySelector('textarea');ta.addEventListener('input',function(){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';});document.getElementById('new-task-list').appendChild(div);ta.focus();}
-function collectMorningTasks(){var tasks=[];document.querySelectorAll('#new-task-list .task-desc-input').forEach(function(el){var desc=el.value.trim();if(desc)tasks.push({description:desc});});return tasks;}
-async function submitMorning(){var tasks=collectMorningTasks();var carriedCount=document.querySelectorAll('#morning-task-list .task-row').length;if(!tasks.length&&carriedCount===0){showToast('Please add at least one planned task.','error');return;}setLoading('btn-checkin',true,'Checking In…');try{var r=await frappe.call({method:'st_attendance_tracker.api.submit_morning_log',args:{new_tasks:JSON.stringify(tasks)}});if(r.message&&r.message.success){showToast('✅ Checked in! Have a productive day.','success',2000);setTimeout(function(){location.reload();},1800);}}catch(e){setLoading('btn-checkin',false,'✅ Check In & Start Day');showToast(e.message||'Something went wrong. Please try again.','error');}}
-var adhocCounter=0;
-function addAdhocRow(){adhocCounter++;var id='adhoc_'+adhocCounter;var div=document.createElement('div');div.className='eod-task-row adhoc-new';div.dataset.adhocId=id;div.style.position='relative';div.innerHTML='<div class="eod-task-desc"><span class="task-badge badge-adhoc">Ad-hoc</span><input type="text" class="adhoc-desc" data-adhoc-id="'+id+'" placeholder="Describe the ad-hoc task…" style="border:none;background:transparent;font-size:14px;width:calc(100% - 80px);outline:none;margin-left:6px;"><button class="btn-remove-task" onclick="this.closest(\'.eod-task-row\').remove()" style="position:absolute;right:12px;top:12px;">×</button></div><div class="eod-controls" style="margin-top:8px;"><select class="status-select" data-adhoc-id="'+id+'"><option value="Done">✅ Done</option><option value="In Progress">🔄 In Progress</option><option value="Pending">⏳ Pending</option></select><input type="text" class="task-remarks-input" data-adhoc-id="'+id+'" placeholder="Remarks (optional)"></div>';document.getElementById('adhoc-task-list').appendChild(div);div.querySelector('.adhoc-desc').focus();}
-function collectEODData(){var task_updates=[];document.querySelectorAll('.eod-task-row[data-id]').forEach(function(row){var id=row.dataset.id;var status=row.querySelector('.status-select[data-id="'+id+'"]');var remarks=row.querySelector('.task-remarks-input[data-id="'+id+'"]');if(id&&status)task_updates.push({name:id,status:status.value,remarks:remarks?remarks.value:''});});var adhoc_tasks=[];document.querySelectorAll('.eod-task-row[data-adhoc-id]').forEach(function(row){var id=row.dataset.adhocId;var desc=(row.querySelector('.adhoc-desc[data-adhoc-id="'+id+'"]')||{}).value||'';var status=row.querySelector('.status-select[data-adhoc-id="'+id+'"]');var remarks=row.querySelector('.task-remarks-input[data-adhoc-id="'+id+'"]');if(desc.trim())adhoc_tasks.push({description:desc.trim(),status:status?status.value:'Done',remarks:remarks?remarks.value:''});});return{task_updates:task_updates,adhoc_tasks:adhoc_tasks};}
-async function submitEOD(){
-    var logout_time = document.getElementById('logout_time').value;
-    var lunch_from = document.getElementById('lunch_from').value;
-    var lunch_to = document.getElementById('lunch_to').value;
-
-    if(!logout_time){
-        showToast('Please enter your logout time.', 'error');
-        document.getElementById('logout_time').focus();
-        return;
-    }
-
-    if(lunch_from && lunch_to && lunch_from >= lunch_to){
-        showToast('Lunch end time must be after lunch start time.', 'error');
-        document.getElementById('lunch_to').focus();
-        return;
-    }
-
-    var d = collectEODData();
-    setLoading('btn-checkout', true, 'Submitting…');
-
-    try {
-        var r = await frappe.call({
-            method: 'st_attendance_tracker.api.submit_eod_log',
-            args: {
-                lunch_from: lunch_from || '',
-                lunch_to: lunch_to || '',
-                logout_time: logout_time,
-                task_updates: JSON.stringify(d.task_updates),
-                adhoc_tasks: JSON.stringify(d.adhoc_tasks)
-            }
-        });
-
-        if(r.message && r.message.success){
-            var p = r.message.pending_count;
-            var lunch_duration = '';
-            if(lunch_from && lunch_to){
-                var from_parts = lunch_from.split(':');
-                var to_parts = lunch_to.split(':');
-                var mins = (parseInt(to_parts[0]) * 60 + parseInt(to_parts[1])) 
-                         - (parseInt(from_parts[0]) * 60 + parseInt(from_parts[1]));
-                lunch_duration = ' Lunch: ' + mins + ' mins.';
-            }
-            var msg = p > 0
-                ? '✅ Checked out!' + lunch_duration + ' ' + p + ' pending task(s) moved to tomorrow.'
-                : '✅ Checked out!' + lunch_duration + ' Great work today.';
-            showToast(msg, 'success', 3000);
-            setTimeout(function(){ location.reload(); }, 2500);
-        }
-    } catch(e) {
-        setLoading('btn-checkout', false, '🔴 Check Out & Submit');
-        showToast(e.message || 'Something went wrong. Please try again.', 'error');
-    }
+var LOGIN_TIME = "{{ login_time or current_time }}";
+var CARRIED = {{ carried_count }};
+var DONE_N  = {{ done_count }};
+var TOTAL_N = {{ total_count }};
+var WLC = {};
+try { WLC = {{ work_location_config | tojson }}; } catch(e) { WLC = {value:'Office',readonly:false,options:['Office','WFH'],validate:true,note:'Select work location.'}; }
+var SEL_WL = WLC.value || 'Office';
+function initWL() {
+  var sel = document.getElementById('wl-sel');
+  var note = document.getElementById('wl-note');
+  if (!sel) return;
+  var opts = WLC.options || ['Office','WFH'];
+  sel.innerHTML = opts.map(function(o){ return '<option value="'+o+'"'+(o===SEL_WL?' selected':'')+'>'+o+'</option>'; }).join('');
+  sel.disabled = !!WLC.readonly;
+  if (note && WLC.note) { note.className = 'wl-note'+(WLC.hybrid_office_day?' warn':''); note.textContent = WLC.note; }
 }
+function onWLChange() {
+  var sel = document.getElementById('wl-sel');
+  if (!sel) return;
+  SEL_WL = sel.value;
+  var note = document.getElementById('wl-note');
+  if (note && SEL_WL === 'WFH' && WLC.validate) { note.className = 'wl-note warn'; note.textContent = 'WFH requires an Attendance Request — validated on check-in.'; }
+  else if (note && WLC.note) { note.className = 'wl-note'+(WLC.hybrid_office_day?' warn':''); note.textContent = WLC.note; }
+}
+function toast(msg, type, dur) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show '+(type||'');
+  clearTimeout(t._t); t._t = setTimeout(function(){ t.className=''; }, dur||3500);
+}
+var clk = document.getElementById('clock');
+if (clk) setInterval(function(){ var n=new Date(); clk.textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }, 15000);
+function toMin(s){ if(!s) return 0; var p=String(s).split(':'); return parseInt(p[0]||0)*60+parseInt(p[1]||0); }
+function fmtMin(m){ m=Math.max(0,m); return Math.floor(m/60)+'h '+(m%60)+'m'; }
+function recalc(){
+  var lo=document.getElementById('logout_time'), lf=document.getElementById('lunch_from'), lt=document.getElementById('lunch_to'), nd=document.getElementById('net_disp');
+  if (!lo) return;
+  var lv=lo.value;
+  var el=document.getElementById('hs-lo'); if(el) el.textContent=lv||'—';
+  var el2=document.getElementById('rp-lo'); if(el2) el2.textContent=lv||'—';
+  if (!lv||!LOGIN_TIME){ if(nd) nd.value=''; return; }
+  var tot=toMin(lv)-toMin(LOGIN_TIME), lun=0;
+  if(lf&&lt&&lf.value&&lt.value){
+    lun=Math.max(0,toMin(lt.value)-toMin(lf.value));
+    var rl=document.getElementById('rp-ln'); if(rl) rl.textContent=lf.value.slice(0,5)+'–'+lt.value.slice(0,5);
+    var hl=document.getElementById('hs-lunch'); if(hl) hl.textContent=lf.value.slice(0,5)+'–'+lt.value.slice(0,5);
+  }
+  var net=tot-lun, label=fmtMin(net);
+  if(nd) nd.value=label;
+  var en=document.getElementById('hs-net'); if(en) en.textContent=label;
+  var rn=document.getElementById('rp-net'); if(rn) rn.textContent=label;
+  var ln=document.getElementById('live-net'); if(ln) ln.textContent=label;
+}
+recalc();
+function updProg(){
+  var sels=document.querySelectorAll('.tsel'), done=0;
+  sels.forEach(function(s){ if(s.value==='Done') done++; });
+  var tot=sels.length, pct=tot>0?Math.round(done/tot*100):0;
+  var f=document.getElementById('pb-fill'); if(f) f.style.width=pct+'%';
+  var l=document.getElementById('pb-n'); if(l) l.textContent=done+' / '+tot;
+}
+function toggleCheck(el, id) {
+  event.stopPropagation();
+  var dn=el.classList.contains('dn');
+  el.classList.toggle('dn'); el.innerHTML=!dn?'<i class="ti ti-check" aria-hidden="true"></i>':'';
+  var row=el.closest('[data-id]');
+  if(row){ var d=row.querySelector('.tdesc'); if(d) d.classList.toggle('dn',!dn); var s=row.querySelector('.tsel'); if(s) s.value=!dn?'Done':'Pending'; }
+  updProg();
+}
+function onSel(s){
+  var id=s.dataset.id, row=s.closest('[data-id="'+id+'"]');
+  if(row){ var c=row.querySelector('.tck'), d=row.querySelector('.tdesc'), dn=s.value==='Done'; if(c){ c.classList.toggle('dn',dn); c.innerHTML=dn?'<i class="ti ti-check" aria-hidden="true"></i>':''; } if(d) d.classList.toggle('dn',dn); }
+  updProg();
+}
+function togglePG(id){ var el=document.getElementById(id); if(el) el.classList.toggle('closed'); }
+async function delCarried(name, btn) {
+  if (!confirm('Remove this carried task?')) return;
+  btn.innerHTML='<i class="ti ti-loader" style="animation:spin .7s linear infinite" aria-hidden="true"></i>';
+  try {
+    await frappe.call({ method:'st_attendance_tracker.api.delete_carried_task', args:{name:name} });
+    var row = btn.closest('[data-id]'); if (row) row.remove();
+    CARRIED = Math.max(0, CARRIED-1); updCounts();
+    toast('Task removed.','ok',2000);
+  } catch(e) { toast(e.message||'Could not delete task.','err'); btn.innerHTML='<i class="ti ti-x" aria-hidden="true"></i>'; }
+}
+function updCounts(){
+  var np=document.querySelectorAll('.npg-desc').length;
+  var ns=document.querySelectorAll('.ns-desc').length;
+  var tot=CARRIED+np+ns;
+  var d=document.getElementById('tc-n'); if(d) d.textContent=tot;
+  var s=document.getElementById('tc-s'); if(s) s.textContent=tot>0?(CARRIED>0?'carried + new':'queued'):'add below';
+  var h=document.getElementById('fhint'); if(h) h.textContent=tot+' task'+(tot!==1?'s':'')+(tot===0?' — add at least one':'');
+}
+var pgC=0, tkC=0;
+function addPG() {
+  pgC++; var gid='npg'+pgC;
+  var d=document.createElement('div'); d.className='npg'; d.dataset.pgid=gid;
+  d.innerHTML='<div class="npg-head"><div class="npg-ico"><i class="ti ti-folder" aria-hidden="true"></i></div>'+
+    '<input class="npg-ni" data-pname="'+gid+'" placeholder="Project name...">'+
+    '<span class="npg-rm" onclick="this.closest(\'.npg\').remove();updCounts()" title="Remove project"><i class="ti ti-x" aria-hidden="true"></i></span></div>'+
+    '<div class="npg-body" data-tc="'+gid+'"></div>'+
+    '<div class="npg-add" onclick="addTaskToPG(\''+gid+'\')"><i class="ti ti-plus" aria-hidden="true"></i>Add task to this project</div>';
+  document.getElementById('new-area').appendChild(d);
+  d.querySelector('input[data-pname]').focus();
+  addTaskToPG(gid); updCounts();
+}
+function addTaskToPG(gid) {
+  tkC++; var tid='nt'+tkC;
+  var c=document.querySelector('[data-tc="'+gid+'"]'); if(!c) return;
+  var r=document.createElement('div'); r.className='npg-row'; r.dataset.tid=tid;
+  r.innerHTML='<textarea class="npg-ti npg-desc" data-tid="'+tid+'" data-pg="'+gid+'" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit"></textarea>'+
+    '<input class="npg-ei" data-tid="'+tid+'" placeholder="Est. time">'+
+    '<span class="npg-trm" onclick="this.closest(\'.npg-row\').remove();updCounts()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';
+  c.appendChild(r); r.querySelector('input').focus(); updCounts();
+}
+function addT() {
+  tkC++; var tid='st'+tkC;
+  var d=document.createElement('div'); d.className='ns'; d.dataset.stid=tid;
+  d.innerHTML='<textarea class="ns-ti ns-desc" data-tid="'+tid+'" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit"></textarea>'+
+    '<input class="ns-ei" data-tid="'+tid+'" placeholder="Est. time">'+
+    '<span class="ns-rm" onclick="this.closest(\'.ns\').remove();updCounts()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';
+  document.getElementById('new-area').appendChild(d); d.querySelector('input').focus(); updCounts();
+}
+function showWFH(msg, link) {
+  var m=document.getElementById('wfh-msg'), l=document.getElementById('wfh-link');
+  if(m) m.textContent=msg; if(l) l.href=link||'/app/attendance-request/new-attendance-request-1';
+  document.getElementById('wfh-ov').style.display='flex';
+}
+function closeWFH() {
+  document.getElementById('wfh-ov').style.display='none';
+  SEL_WL='Office'; var sel=document.getElementById('wl-sel'); if(sel) sel.value='Office';
+  var note=document.getElementById('wl-note'); if(note){ note.className='wl-note'; note.textContent=WLC.note||''; }
+}
+document.addEventListener('click',function(e){ if(e.target===document.getElementById('wfh-ov')) closeWFH(); });
+async function submitMorning() {
+  var loginEl=document.getElementById('login_time'), loginVal=loginEl?loginEl.value:'';
+  var newTasks=[];
+  document.querySelectorAll('.npg[data-pgid]').forEach(function(pg){
+    var pn=(pg.querySelector('input[data-pname]')||{}).value||'';
+    pg.querySelectorAll('.npg-row').forEach(function(row){
+      var desc=(row.querySelector('.npg-desc')||{}).value||'';
+      var est=(row.querySelector('.npg-ei')||{}).value||'';
+      if(desc.trim()) newTasks.push({description:desc.trim(),estimated_time:est.trim(),project_name:pn.trim()});
+    });
+  });
+  document.querySelectorAll('.ns[data-stid]').forEach(function(ns){
+    var desc=(ns.querySelector('.ns-desc')||{}).value||'';
+    var est=(ns.querySelector('.ns-ei')||{}).value||'';
+    if(desc.trim()) newTasks.push({description:desc.trim(),estimated_time:est.trim(),project_name:''});
+  });
+  var cUp=[];
+  document.querySelectorAll('.carried-desc').forEach(function(el){
+    var id=el.dataset.id, est=(document.querySelector('.carried-est[data-id="'+id+'"]')||{}).value||'';
+    if(id) cUp.push({name:id,description:el.value,estimated_time:est});
+  });
+  if(newTasks.length+CARRIED===0){ toast('Add at least one task before checking in.','err'); return; }
+  var curWL = document.getElementById('wl-sel') ? document.getElementById('wl-sel').value : SEL_WL;
+  if(curWL==='WFH' && WLC.validate){
+    try{
+      var wR=await frappe.call({method:'st_attendance_tracker.api.validate_wfh_request'});
+      if(wR.message&&!wR.message.valid){ showWFH(wR.message.message,wR.message.link); return; }
+    }catch(e){ toast('WFH validation failed. Try again.','err'); return; }
+  }
+  var btn=document.getElementById('btn-ci');
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> Checking in...';
+  try{
+    var r=await frappe.call({method:'st_attendance_tracker.api.submit_morning_log',args:{new_tasks:JSON.stringify(newTasks),login_time:loginVal,work_location:curWL,carried_updates:JSON.stringify(cUp)}});
+    if(r.message&&r.message.success){ toast('Checked in at '+r.message.login_time+'. Have a great day!','ok',2000); setTimeout(function(){ location.reload(); },1800); }
+  }catch(e){ btn.disabled=false; btn.innerHTML='<i class="ti ti-login" aria-hidden="true"></i>Check in &amp; start day'; toast(e.message||'Something went wrong.','err'); }
+}
+var adC=0;
+function addAdhoc(){
+  adC++; var id='ad'+adC;
+  var d=document.createElement('div');
+  d.className='stask'; d.style.gridTemplateColumns='24px 1fr 130px 90px 90px 28px'; d.dataset.adhocid=id;
+  d.innerHTML='<div style="display:flex;align-items:center;justify-content:center"><i class="ti ti-zap" style="font-size:13px;color:#7c3aed" aria-hidden="true"></i></div>'+
+    '<div><textarea class="tinp adhoc-d" data-aid="'+id+'" rows="1" placeholder="Ad-hoc task..." style="resize:none;min-height:32px;line-height:1.4;width:100% "></textarea><div class="ttags"><span class="ttag ttag-a">Ad-hoc</span></div></div>'+
+    '<select class="tsel" data-aid="'+id+'"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
+    '<input type="text" class="tinp" placeholder="Est.">'+
+    '<input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="Actual">'+
+    '<div class="trm" onclick="this.closest(\'.stask\').remove()"><i class="ti ti-x" aria-hidden="true"></i></div>';
+  document.getElementById('adhoc-area').appendChild(d); d.querySelector('textarea').focus();
+}
+async function submitEOD(){
+  var lo=document.getElementById('logout_time'), lf=document.getElementById('lunch_from'), lt=document.getElementById('lunch_to');
+  var logout=lo?lo.value:'', lfv=lf?lf.value:'', ltv=lt?lt.value:'';
+  if(!logout){ toast('Please enter your logout time.','err'); if(lo) lo.focus(); return; }
+  if(lfv&&ltv&&lfv>=ltv){ toast('Lunch end must be after lunch start.','err'); return; }
+  var tu=[];
+  document.querySelectorAll('[data-id]').forEach(function(row){
+    var id=row.dataset.id; if(!id) return;
+    var sel=row.querySelector('.tsel[data-id="'+id+'"]'), act=row.querySelector('.act-in[data-id="'+id+'"]'), desc=row.querySelector('.desc-edit[data-id="'+id+'"]');
+    if(sel) tu.push({name:id,status:sel.value,actual_time:act?act.value:'',description:desc?desc.value:'',remarks:''});
+  });
+  var at=[];
+  document.querySelectorAll('[data-adhocid]').forEach(function(row){
+    var id=row.dataset.adhocid;
+    var desc=(row.querySelector('.adhoc-d[data-aid="'+id+'"]')||{}).value||'';
+    var stat=(row.querySelector('.tsel[data-aid="'+id+'"]')||{}).value||'Done';
+    var act=(row.querySelector('.adhoc-act[data-aid="'+id+'"]')||{}).value||'';
+    if(desc.trim()) at.push({description:desc.trim(),status:stat,actual_time:act,remarks:''});
+  });
+  var btn=document.getElementById('btn-eod');
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> Submitting...';
+  try{
+    var r=await frappe.call({method:'st_attendance_tracker.api.submit_eod_log',args:{lunch_from:lfv,lunch_to:ltv,logout_time:logout,task_updates:JSON.stringify(tu),adhoc_tasks:JSON.stringify(at)}});
+    if(r.message&&r.message.success){
+      var p=r.message.pending_count, nh=r.message.net_hours, msg='Checked out at '+r.message.logout_time;
+      if(nh) msg+=' · '+nh+' worked';
+      if(p>0) msg+=' · '+p+' task'+(p>1?'s':'')+' carried to tomorrow';
+      toast(msg,'ok',3500); setTimeout(function(){ location.reload(); },3000);
+    }
+  }catch(e){ btn.disabled=false; btn.innerHTML='<i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit EOD'; toast(e.message||'Something went wrong.','err'); }
+}
+{% if is_team_leader %}
+frappe.call({method:'st_attendance_tracker.api.get_team_dashboard',callback:function(r){
+  var list=document.getElementById('team-list');
+  if(!list||!r.message) return;
+  var emps=r.message.employees||[];
+  if(!emps.length){ list.innerHTML='<div style="font-size:12px;color:#9ca3af">No team members.</div>'; return; }
+  var avCls=['av-g','av-b','av-a','av-r'];
+  function av(n){ var s=0; for(var i=0;i<n.length;i++) s+=n.charCodeAt(i); return avCls[s%avCls.length]; }
+  function ini(n){ var p=(n||'').split(' ').filter(Boolean); return p.length>=2?(p[0][0]+p[1][0]).toUpperCase():n.slice(0,2).toUpperCase(); }
+  var bm={checked_in:'tmb-in',late:'tmb-la',missing:'tmb-ou',leave:'tmb-lv',eod_done:'tmb-eo'};
+  var lm={checked_in:'In',late:'Late',missing:'Missing',leave:'Leave',eod_done:'EOD done'};
+  list.innerHTML=emps.slice(0,5).map(function(e){
+    var done=e.done_tasks||0,tot=e.total_tasks||0,pct=tot>0?Math.round(done/tot*100):0;
+    return '<div class="tm-row"><div class="tm-av '+av(e.employee_name)+'">'+ini(e.employee_name)+'</div>'+
+      '<div style="flex:1;min-width:0"><div class="tm-name">'+e.employee_name+'</div>'+
+      (tot>0?'<div class="tm-p"><div class="tmp-t"><div class="tmp-f" style="width:'+pct+'%"></div></div><span class="tmp-l">'+done+'/'+tot+'</span></div>':'<div style="font-size:11px;color:#9ca3af">No tasks</div>')+
+      '</div><span class="tm-b '+(bm[e.status]||'tmb-lv')+'">'+(lm[e.status]||'—')+'</span></div>';
+  }).join('');
+}});
+{% endif %}
+function saveDescEdit(el) {
+  var id = el.dataset.id; if (!id) return;
+  frappe.call({ method:'frappe.client.set_value', args:{doctype:'Daily Task',name:id,fieldname:'description',value:el.value} });
+}
+document.addEventListener('focusin', function(e) {
+  if (e.target.classList.contains('desc-edit')) { e.target.style.borderColor='#EE1C29'; e.target.style.background='#fff'; e.target.style.padding='4px 6px'; e.target.style.borderRadius='4px'; }
+});
+document.addEventListener('focusout', function(e) {
+  if (e.target.classList.contains('desc-edit')) { e.target.style.borderColor='transparent'; e.target.style.background='transparent'; e.target.style.padding='0'; }
+});
+initWL();
+updProg();
 </script>
 {% endblock %}
