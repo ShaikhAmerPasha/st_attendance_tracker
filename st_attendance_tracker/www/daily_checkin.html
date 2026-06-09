@@ -827,7 +827,7 @@ async function submitEOD(){
       var p=r.message.pending_count, nh=r.message.net_hours, msg='Checked out at '+r.message.logout_time;
       if(nh) msg+=' · '+nh+' worked';
       if(p>0) msg+=' · '+p+' task'+(p>1?'s':'')+' carried to tomorrow';
-      toast(msg,'ok',3500); setTimeout(function(){ location.reload(); },3000);
+      toast(msg,'ok',2000); setTimeout(function(){ window.location.href=window.location.href.split('?')[0]; },1800);
     }
   }catch(e){ btn.disabled=false; btn.innerHTML='<i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit EOD'; toast(e.message||'Something went wrong.','err'); }
 }

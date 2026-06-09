@@ -263,6 +263,6 @@ function loadHistory(reset) {
   });
 }
 
-loadHistory(true);
+frappe.ready(function(){ loadHistory(true); });
 </script>
 {% endblock %}

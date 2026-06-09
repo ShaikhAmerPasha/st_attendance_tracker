@@ -792,7 +792,7 @@ def get_my_history(page=0):
         FROM `tabDaily Task Log` l
         WHERE l.employee = %(employee)s
           AND l.docstatus = 1
-          AND l.date < %(today)s
+          AND l.date <= %(today)s
         GROUP BY l.date
         ORDER BY l.date DESC
         LIMIT %(limit)s OFFSET %(offset)s
