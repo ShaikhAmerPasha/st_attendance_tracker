@@ -12,8 +12,12 @@ after_migrate = ["st_attendance_tracker.setup.create_custom_fields"]
 # ── Scheduled Jobs ─────────────────────────────────────────────────────────────
 scheduler_events = {
     "cron": {
-        "30 11 * * 1-6": ["st_attendance_tracker.tasks.send_morning_combined_report"],
-        "0 22 * * 1-6":  ["st_attendance_tracker.tasks.send_eod_missing_report"],
+        # 10:30 AM IST Mon-Sat — individual reminder to employees not checked in
+        "0 5 * * 1-6":   ["st_attendance_tracker.tasks.send_employee_checkin_reminder"],
+        # 11:30 AM IST Mon-Sat — HR summary: missing + late
+        "30 6 * * 1-6":  ["st_attendance_tracker.tasks.send_morning_combined_report"],
+        # 10:00 PM IST Mon-Sat — HR summary: no EOD submitted
+        "30 16 * * 1-6": ["st_attendance_tracker.tasks.send_eod_missing_report"],
     }
 }
 

@@ -228,6 +228,9 @@ def _rollover_pending_tasks(employee, date):
         new_task.insert(ignore_permissions=True)
         rolled += 1
 
+        # Mark source task as Rolled Over so it stops re-rolling
+        frappe.db.set_value("Daily Task", task.name, "status", "Rolled Over")
+
     if rolled:
         frappe.db.commit()
     return rolled
@@ -271,6 +274,9 @@ def _safety_rollover(employee, today_date):
         new_task.project_name    = task.project_name or ""
         new_task.remarks = f"[Auto-carried from {task.origin_date or task.task_date}]"
         new_task.insert(ignore_permissions=True)
+
+        # Mark the old task as Rolled Over so it stops accumulating
+        frappe.db.set_value("Daily Task", task.name, "status", "Rolled Over")
 
     frappe.db.commit()
 

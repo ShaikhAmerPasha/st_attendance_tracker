@@ -1,20 +1,112 @@
 """
 Scheduled email tasks for ST Attendance Tracker.
-  11:30 AM IST Mon-Sat → send_morning_combined_report (missing + late)
-  10:00 PM IST Mon-Sat → send_eod_missing_report
+  10:30 AM IST Mon-Sat → send_employee_checkin_reminder  (to employees who haven't checked in)
+  11:30 AM IST Mon-Sat → send_morning_combined_report    (to HR: missing + late summary)
+  10:00 PM IST Mon-Sat → send_eod_missing_report         (to HR: employees without EOD)
 
-Recipients: automatically fetched from users with HR Manager role.
-No manual configuration needed.
+HR reports go to all users with HR Manager role.
+Employee reminders go directly to each employee's work email.
 """
 
 import frappe
-from frappe.utils import today, getdate
+from frappe.utils import today, getdate, now_datetime
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EMPLOYEE REMINDER — 10:30 AM
+# ─────────────────────────────────────────────────────────────────────────────
+
+def send_employee_checkin_reminder():
+    """
+    Sent at 10:30 AM IST Mon-Sat.
+    Emails each employee individually who hasn't checked in today.
+    """
+    date = today()
+    day_label = getdate(date).strftime("%A, %d %B %Y")
+
+    expected = _get_expected_employees(date)
+    if not expected:
+        return
+
+    emp_names = [e.name for e in expected]
+    checked_in = {r.employee for r in frappe.get_all("Daily Task Log", filters={
+        "date": date,
+        "log_type": "Morning Check-In",
+        "docstatus": 1,
+        "employee": ["in", emp_names],
+    }, fields=["employee"])}
+
+    not_checked = [e for e in expected if e.name not in checked_in]
+    if not not_checked:
+        return
+
+    for emp in not_checked:
+        # Get employee's personal email or company email
+        emp_email = frappe.db.get_value("Employee", emp.name,
+            ["prefered_email", "company_email", "personal_email"], as_dict=True)
+
+        email = (
+            emp_email.get("prefered_email") or
+            emp_email.get("company_email") or
+            emp_email.get("personal_email")
+        )
+
+        # Also try user account email
+        if not email:
+            user_id = frappe.db.get_value("Employee", emp.name, "user_id")
+            if user_id:
+                email = frappe.db.get_value("User", user_id, "email") or user_id
+
+        if not email:
+            continue
+
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
+          <div style="background:#EE1C29;padding:20px 24px;border-radius:6px 6px 0 0">
+            <h2 style="color:#fff;margin:0;font-size:18px">Check-In Reminder</h2>
+            <p style="color:rgba(255,255,255,0.8);margin:5px 0 0;font-size:13px">
+              StandardTouch e-Solutions · Attendance System
+            </p>
+          </div>
+          <div style="background:#fff;padding:20px 24px;border:1px solid #e0e0e0;
+                      border-top:none;border-radius:0 0 6px 6px">
+            <p style="font-size:15px;color:#111;margin:0 0 10px">
+              Hi <strong>{emp.employee_name}</strong>,
+            </p>
+            <p style="font-size:13px;color:#444;line-height:1.6;margin:0 0 16px">
+              You have not checked in for today — <strong>{day_label}</strong>.
+            </p>
+            <p style="font-size:13px;color:#444;line-height:1.6;margin:0 0 20px">
+              Please check in as soon as possible by visiting the attendance portal.
+            </p>
+            <a href="/daily-checkin"
+               style="display:inline-block;background:#EE1C29;color:#fff;
+                      padding:10px 22px;border-radius:6px;text-decoration:none;
+                      font-size:13px;font-weight:500">
+              Check In Now →
+            </a>
+          </div>
+          <p style="font-size:11px;color:#aaa;text-align:center;margin-top:10px">
+            Automated reminder · StandardTouch Attendance System · Do not reply
+          </p>
+        </div>"""
+
+        frappe.sendmail(
+            recipients=[email],
+            subject=f"Reminder: You have not checked in today ({date})",
+            message=html,
+            now=True,
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MORNING HR REPORT — 11:30 AM
+# ─────────────────────────────────────────────────────────────────────────────
 
 def send_morning_combined_report():
     """
     Combined report: Section 1 = not checked in, Section 2 = checked in late.
-    Sent at 11:30 AM IST Mon-Sat.
+    Sent at 11:30 AM IST Mon-Sat to all HR Manager role users.
     """
     date = today()
     expected = _get_expected_employees(date)
@@ -24,7 +116,9 @@ def send_morning_combined_report():
     emp_names = [e.name for e in expected]
 
     morning_logs = frappe.get_all("Daily Task Log", filters={
-        "date": date, "log_type": "Morning Check-In", "docstatus": 1,
+        "date": date,
+        "log_type": "Morning Check-In",
+        "docstatus": 1,
         "employee": ["in", emp_names],
     }, fields=["employee", "login_time", "is_late"])
 
@@ -126,15 +220,21 @@ def send_morning_combined_report():
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# EOD HR REPORT — 10:00 PM
+# ─────────────────────────────────────────────────────────────────────────────
+
 def send_eod_missing_report():
-    """EOD missing report sent at 10:00 PM IST Mon-Sat."""
+    """EOD missing report sent at 10:00 PM IST Mon-Sat to all HR Manager role users."""
     date = today()
     expected = _get_expected_employees(date)
     if not expected:
         return
 
     submitted = {r.employee for r in frappe.get_all("Daily Task Log", filters={
-        "date": date, "log_type": "End of Day", "docstatus": 1,
+        "date": date,
+        "log_type": "End of Day",
+        "docstatus": 1,
     }, fields=["employee"])}
 
     missing = [e for e in expected if e.name not in submitted]
@@ -165,7 +265,6 @@ def send_eod_missing_report():
                   border-top:none;border-radius:0 0 6px 6px">
         <p style="font-size:13px;color:#333;margin:0 0 14px">
           The following employees have not submitted their End-of-Day report.
-          Pending tasks will NOT roll over until EOD is submitted.
         </p>
         <table width="100%" cellpadding="0" cellspacing="0"
                style="border-collapse:collapse;border:1px solid #ddd;border-radius:4px">
@@ -193,17 +292,21 @@ def send_eod_missing_report():
     )
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _get_expected_employees(date):
-    """Active employees excluding those on leave or holiday today."""
+    """Active employees excluding those on approved leave or holiday today."""
     all_employees = frappe.get_all("Employee",
         filters={"status": "Active"},
         fields=["name", "employee_name", "department", "holiday_list"],
     )
     on_leave = {r.employee for r in frappe.get_all("Leave Application", filters={
-        "from_date": ["<=", date], "to_date": [">=", date],
-        "status": "Approved", "docstatus": 1,
+        "from_date": ["<=", date],
+        "to_date":   [">=", date],
+        "status":    "Approved",
+        "docstatus": 1,
     }, fields=["employee"])}
 
     result = []
@@ -220,7 +323,7 @@ def _is_holiday(holiday_list_name, date):
     if not holiday_list_name:
         return False
     return bool(frappe.db.exists("Holiday", {
-        "parent": holiday_list_name,
+        "parent":       holiday_list_name,
         "holiday_date": getdate(date),
     }))
 
@@ -228,7 +331,7 @@ def _is_holiday(holiday_list_name, date):
 def _send_to_hr_managers(subject, message):
     """
     Fetch all enabled users with HR Manager role and send email.
-    No manual recipient configuration needed.
+    Uses SQL to reliably get the recipients.
     """
     recipients = frappe.db.sql("""
         SELECT DISTINCT u.email
@@ -238,15 +341,15 @@ def _send_to_hr_managers(subject, message):
           AND u.enabled = 1
           AND u.email IS NOT NULL
           AND u.email != ''
-          AND u.name != 'Administrator'
     """, as_dict=True)
 
     emails = [r.email for r in recipients if r.email]
 
     if not emails:
         frappe.log_error(
-            "No enabled users with HR Manager role found. Report not sent.",
-            "ST Attendance Tracker"
+            "ST Attendance Tracker: No users with HR Manager role found. "
+            "Report not sent. Please assign HR Manager role to at least one user.",
+            "ST Attendance Tracker — Report"
         )
         return
 
