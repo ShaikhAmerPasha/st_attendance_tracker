@@ -50,11 +50,28 @@ def get_context(context):
         "log_type": "End of Day", "docstatus": 1,
     })
 
-    tasks = []
     login_time_val = ""
     net_hours_val = ""
     logout_time_val = ""
     work_location_val = ""
+
+    # Always load tasks for today — needed for pre-checkin carried display
+    tasks = frappe.get_all("Daily Task",
+        filters={"employee": employee.name, "task_date": date},
+        fields=["name", "description", "status", "task_type",
+                "origin_date", "rolled_over_from", "remarks",
+                "estimated_time", "actual_time", "project_name"],
+        order_by="project_name asc, creation asc",
+    )
+    for task in tasks:
+        task["is_carried"] = bool(task.get("rolled_over_from"))
+        if task.get("rolled_over_from") and task.get("origin_date"):
+            task["days_pending"] = (
+                frappe.utils.getdate(date) -
+                frappe.utils.getdate(task["origin_date"])
+            ).days
+        else:
+            task["days_pending"] = 0
 
     if morning_log:
         login_time_val = frappe.db.get_value(
@@ -63,22 +80,6 @@ def get_context(context):
         work_location_val = frappe.db.get_value(
             "Daily Task Log", morning_log, "work_location"
         ) or ""
-        tasks = frappe.get_all("Daily Task",
-            filters={"employee": employee.name, "task_date": date},
-            fields=["name", "description", "status", "task_type",
-                    "origin_date", "rolled_over_from", "remarks",
-                    "estimated_time", "actual_time", "project_name"],
-            order_by="project_name asc, creation asc",
-        )
-        for task in tasks:
-            task["is_carried"] = bool(task.get("rolled_over_from"))
-            if task.get("rolled_over_from") and task.get("origin_date"):
-                task["days_pending"] = (
-                    frappe.utils.getdate(date) -
-                    frappe.utils.getdate(task["origin_date"])
-                ).days
-            else:
-                task["days_pending"] = 0
 
     if eod_log:
         eod_data = frappe.db.get_value(
