@@ -591,12 +591,18 @@ var TOTAL_N = {{ total_count }};
 var WLC = {};
 try { WLC = {{ work_location_config | tojson }}; } catch(e) { WLC = {value:'Office',readonly:false,options:['Office','WFH'],validate:true,note:'Select work location.'}; }
 var SEL_WL = WLC.value || 'Office';
+function wlLabel(o) {
+  // Show a friendlier label for WFH on a hybrid employee's routine (non-office) day,
+  // without changing the underlying value sent to the server.
+  if (o === 'WFH' && WLC.hybrid_routine_day) return 'Hybrid (WFH)';
+  return o;
+}
 function initWL() {
   var sel = document.getElementById('wl-sel');
   var note = document.getElementById('wl-note');
   if (!sel) return;
   var opts = WLC.options || ['Office','WFH'];
-  sel.innerHTML = opts.map(function(o){ return '<option value="'+o+'"'+(o===SEL_WL?' selected':'')+'>'+o+'</option>'; }).join('');
+  sel.innerHTML = opts.map(function(o){ return '<option value="'+o+'"'+(o===SEL_WL?' selected':'')+'>'+wlLabel(o)+'</option>'; }).join('');
   sel.disabled = !!WLC.readonly;
   if (note && WLC.note) { note.className = 'wl-note'+(WLC.hybrid_office_day?' warn':''); note.textContent = WLC.note; }
 }

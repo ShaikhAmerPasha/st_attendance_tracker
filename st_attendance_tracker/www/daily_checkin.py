@@ -132,6 +132,18 @@ def _get_work_location_config(employee, date_obj):
     """
     Returns work location field config for the check-in form as a DICT.
     Jinja will serialize with | tojson.
+
+    Rules:
+      - Saturday          → WFH, readonly, no validation (everyone)
+      - Remote employee   → Remote, readonly, no validation
+      - Office employee   → Office / WFH (WFH needs Attendance Request)
+      - Hybrid + office day (Tue/Thu by default)
+                           → Office / WFH (WFH needs Attendance Request,
+                             since they're expected in office that day)
+      - Hybrid + non-office day
+                           → Office / Hybrid (WFH) — no Attendance Request
+                             needed, this IS their normal routine. They can
+                             still choose Office if they want to come in.
     """
     work_type = (employee.get("work_type") or "Office").strip()
     weekday_num = date_obj.weekday()  # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
@@ -161,25 +173,43 @@ def _get_work_location_config(employee, date_obj):
     hybrid_days = _get_hybrid_office_days()
     is_hybrid_office_day = (work_type == "Hybrid") and (weekday_num in hybrid_days)
 
-    day_names = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
-    hybrid_day_labels = [day_names[d] for d in hybrid_days]
+    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
     if work_type == "Hybrid":
         if is_hybrid_office_day:
+            # Office day for hybrid — same strict rule as Office employees
             note = (
-                f"Today ({day_names[weekday_num]} is an office day for hybrid employees. "
-                f"Select Office or apply for WFH first."
+                f"Today ({day_names[weekday_num]}) is an office day for hybrid "
+                f"employees. Select Office, or apply for WFH first."
             )
+            return {
+                "value":    "Office",
+                "readonly": False,
+                "options":  ["Office", "WFH"],
+                "validate": True,
+                "hybrid_office_day": True,
+                "note":     note,
+            }
         else:
-            note = "Select your work location for today."
-        return {
-            "value":    "Office",
-            "readonly": False,
-            "options":  ["Office", "WFH"],
-            "validate": True,
-            "hybrid_office_day": is_hybrid_office_day,
-            "note":     note,
-        }
+            # Non-office day — WFH is their normal routine, no AR needed.
+            # Still allow them to choose Office if they want to come in.
+            # NOTE: value/options must stay within Daily Task Log.work_location's
+            # allowed Select values ("", "Office", "WFH", "Remote"). The friendlier
+            # "Hybrid (WFH)" wording is applied client-side as a display label only —
+            # the underlying value saved to the database is always "WFH".
+            note = (
+                f"Today ({day_names[weekday_num]}) is a regular WFH day for "
+                f"hybrid employees. No Attendance Request needed."
+            )
+            return {
+                "value":    "WFH",
+                "readonly": False,
+                "options":  ["WFH", "Office"],
+                "validate": False,
+                "hybrid_office_day": False,
+                "hybrid_routine_day": True,
+                "note":     note,
+            }
 
     # Office employee
     return {
