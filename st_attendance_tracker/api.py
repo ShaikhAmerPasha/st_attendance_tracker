@@ -95,6 +95,275 @@ def _make_checkin(employee, log_type, time_value=None):
 
 # ── Notification helper ────────────────────────────────────────────────────────
 
+
+# ── Employee self-notification emails ─────────────────────────────────────────
+
+def _send_employee_checkin_email(employee_name, employee_display_name,
+                                  login_time, work_location, tasks, date):
+    """
+    Send check-in confirmation email to the employee themselves.
+    Includes today's planned task list grouped by project.
+    """
+    try:
+        emp_email = _get_employee_email(employee_name)
+        if not emp_email:
+            return
+
+        late_flag = frappe.db.get_value("Daily Task Log",
+            {"employee": employee_name, "date": date,
+             "log_type": "Morning Check-In", "docstatus": 1}, "is_late")
+        late_badge = (
+            '<span style="background:#fef9c3;color:#854d0e;font-size:11px;'
+            'padding:2px 8px;border-radius:20px;margin-left:8px">Late</span>'
+            if late_flag else ""
+        )
+        wl_badge = ""
+        if work_location and work_location != "Office":
+            wl_badge = (
+                f'<span style="background:#f3f4f6;color:#374151;font-size:11px;'
+                f'padding:2px 8px;border-radius:20px;margin-left:8px">{work_location}</span>'
+            )
+
+        # Build task list HTML grouped by project
+        projects = {}
+        standalone = []
+        for t in tasks:
+            pname = (t.get("project_name") or "").strip()
+            if pname:
+                projects.setdefault(pname, []).append(t)
+            else:
+                standalone.append(t)
+
+        task_html = ""
+        proj_icons = ["📁", "📂", "🗂️", "📋"]
+
+        for i, (pname, ptasks) in enumerate(projects.items()):
+            icon = proj_icons[i % len(proj_icons)]
+            rows = ""
+            for t in ptasks:
+                est = f'<span style="color:#9ca3af;font-size:11px;margin-left:8px">Est: {t["estimated_time"]}</span>' if t.get("estimated_time") else ""
+                carried = '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:6px">Carried</span>' if t.get("rolled_over_from") else ""
+                rows += f'''
+                <tr>
+                  <td style="padding:7px 10px;border-bottom:1px solid #f9fafb;font-size:13px;color:#374151">
+                    {t["description"]}{carried}{est}
+                  </td>
+                </tr>'''
+            task_html += f'''
+            <div style="margin-bottom:14px">
+              <div style="font-size:12px;font-weight:600;color:#111;margin-bottom:6px">{icon} {pname}</div>
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="border-collapse:collapse;background:#f9fafb;border-radius:6px;overflow:hidden">
+                {rows}
+              </table>
+            </div>'''
+
+        for t in standalone:
+            est = f'<span style="color:#9ca3af;font-size:11px;margin-left:8px">Est: {t["estimated_time"]}</span>' if t.get("estimated_time") else ""
+            carried = '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:6px">Carried</span>' if t.get("rolled_over_from") else ""
+            task_html += f'''
+            <div style="padding:7px 10px;background:#f9fafb;border-radius:6px;
+                        font-size:13px;color:#374151;margin-bottom:6px">
+              📌 {t["description"]}{carried}{est}
+            </div>'''
+
+        total_tasks = len(tasks)
+        carried_count = sum(1 for t in tasks if t.get("rolled_over_from"))
+        est_total = sum(
+            int(t["estimated_time"].replace("hr","").replace("h","").strip())
+            for t in tasks
+            if t.get("estimated_time") and t["estimated_time"].replace("hr","").replace("h","").strip().isdigit()
+        )
+
+        no_tasks_msg = '<p style="font-size:13px;color:#9ca3af;font-style:italic">No tasks added yet.</p>' if not tasks else ""
+
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
+          <div style="background:#EE1C29;padding:18px 22px;border-radius:6px 6px 0 0">
+            <h2 style="color:#fff;margin:0;font-size:17px">
+              ✅ You're checked in {late_badge}{wl_badge}
+            </h2>
+            <p style="color:rgba(255,255,255,.75);margin:5px 0 0;font-size:12px">
+              StandardTouch e-Solutions · {date}
+            </p>
+          </div>
+          <div style="background:#fff;padding:18px 22px;border:1px solid #e5e7eb;border-top:none">
+            <p style="font-size:14px;color:#111;margin:0 0 6px">
+              Hi <strong>{employee_display_name}</strong>,
+            </p>
+            <p style="font-size:13px;color:#6b7280;margin:0 0 18px;line-height:1.5">
+              Your check-in has been recorded at <strong>{str(login_time)[:5]}</strong>.
+              Here's your plan for today:
+            </p>
+
+            <div style="border-top:2px solid #f3f4f6;padding-top:14px;margin-bottom:14px">
+              {task_html or no_tasks_msg}
+            </div>
+
+            <div style="background:#f9fafb;border-radius:8px;padding:10px 14px;
+                        display:flex;gap:16px;font-size:12px;color:#6b7280">
+              <span>📊 <strong style="color:#111">{total_tasks}</strong> tasks planned</span>
+              {"<span>🔄 <strong style=\"color:#92400e\">" + str(carried_count) + "</strong> carried</span>" if carried_count else ""}
+              {"<span>⏱ <strong style=\"color:#111\">" + str(est_total) + "h</strong> estimated</span>" if est_total else ""}
+            </div>
+          </div>
+          <p style="font-size:11px;color:#aaa;text-align:center;margin-top:8px">
+            Automated confirmation · StandardTouch Attendance System · Do not reply
+          </p>
+        </div>"""
+
+        frappe.sendmail(
+            recipients=[emp_email],
+            subject=f"Checked in at {str(login_time)[:5]} — Your plan for {date}",
+            message=html,
+            now=True,
+        )
+    except Exception as e:
+        frappe.log_error(
+            f"Check-in email failed for {employee_name}: {e}",
+            "ST Attendance Tracker"
+        )
+
+
+def _send_employee_eod_email(employee_name, employee_display_name,
+                              logout_time, net_hours, tasks, date):
+    """
+    Send EOD confirmation email to the employee themselves.
+    Includes done tasks and carried-forward tasks.
+    """
+    try:
+        emp_email = _get_employee_email(employee_name)
+        if not emp_email:
+            return
+
+        done_tasks    = [t for t in tasks if t.get("status") == "Done"]
+        pending_tasks = [t for t in tasks if t.get("status") in ["Pending", "In Progress"]]
+        adhoc_tasks   = [t for t in done_tasks if t.get("task_type") == "Ad-hoc"]
+
+        def task_row(t, color="#15803d", icon="✅"):
+            est  = f'<span style="color:#9ca3af;font-size:11px;margin-left:8px">Est: {t["estimated_time"]}</span>' if t.get("estimated_time") else ""
+            act  = f'<span style="color:#2563eb;font-size:11px;margin-left:6px">Actual: {t["actual_time"]}</span>' if t.get("actual_time") else ""
+            proj = f'<span style="color:#9ca3af;font-size:10px;margin-left:6px">[{t["project_name"]}]</span>' if t.get("project_name") else ""
+            return f'''<tr>
+              <td style="padding:7px 10px;border-bottom:1px solid #f9fafb;font-size:13px;color:#374151">
+                {icon} {t["description"]}{proj}{est}{act}
+              </td>
+            </tr>'''
+
+        done_html = ""
+        if done_tasks:
+            rows = "".join(task_row(t, icon="✅") for t in done_tasks)
+            done_html = f'''
+            <div style="margin-bottom:16px">
+              <div style="font-size:12px;font-weight:600;color:#15803d;margin-bottom:6px">
+                ✅ Completed ({len(done_tasks)})
+              </div>
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="border-collapse:collapse;background:#f0fdf4;border-radius:6px;overflow:hidden">
+                {rows}
+              </table>
+            </div>'''
+
+        pending_html = ""
+        if pending_tasks:
+            rows = "".join(task_row(t, icon="🔄") for t in pending_tasks)
+            pending_html = f'''
+            <div style="margin-bottom:16px">
+              <div style="font-size:12px;font-weight:600;color:#d97706;margin-bottom:6px">
+                🔄 Carried to tomorrow ({len(pending_tasks)})
+              </div>
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="border-collapse:collapse;background:#fffbeb;border-radius:6px;overflow:hidden">
+                {rows}
+              </table>
+            </div>'''
+
+        pct = int(len(done_tasks) / len(tasks) * 100) if tasks else 0
+        bar_color = "#15803d" if pct >= 80 else "#d97706" if pct >= 50 else "#EE1C29"
+
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
+          <div style="background:#0f172a;padding:18px 22px;border-radius:6px 6px 0 0">
+            <h2 style="color:#fff;margin:0;font-size:17px">
+              🌙 End of Day submitted
+            </h2>
+            <p style="color:rgba(255,255,255,.5);margin:5px 0 0;font-size:12px">
+              StandardTouch e-Solutions · {date}
+            </p>
+          </div>
+          <div style="background:#fff;padding:18px 22px;border:1px solid #e5e7eb;border-top:none">
+            <p style="font-size:14px;color:#111;margin:0 0 6px">
+              Hi <strong>{employee_display_name}</strong>,
+            </p>
+            <p style="font-size:13px;color:#6b7280;margin:0 0 16px;line-height:1.5">
+              You checked out at <strong>{str(logout_time)[:5]}</strong>.
+              Here's your day summary:
+            </p>
+
+            <div style="background:#f9fafb;border-radius:8px;padding:12px 16px;
+                        margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr">
+              <div style="text-align:center">
+                <div style="font-size:22px;font-weight:600;color:#111">{len(done_tasks)}/{len(tasks)}</div>
+                <div style="font-size:11px;color:#9ca3af;margin-top:2px">Tasks done</div>
+              </div>
+              <div style="text-align:center;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb">
+                <div style="font-size:22px;font-weight:600;color:#15803d">{net_hours or "—"}</div>
+                <div style="font-size:11px;color:#9ca3af;margin-top:2px">Net hours</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:22px;font-weight:600;color:#d97706">{len(pending_tasks)}</div>
+                <div style="font-size:11px;color:#9ca3af;margin-top:2px">Carried fwd</div>
+              </div>
+            </div>
+
+            <div style="background:#f9fafb;border-radius:6px;padding:8px 12px;margin-bottom:18px">
+              <div style="font-size:11px;color:#9ca3af;margin-bottom:5px">Completion</div>
+              <div style="background:#e5e7eb;border-radius:4px;height:8px;overflow:hidden">
+                <div style="width:{pct}%;background:{bar_color};height:100%;border-radius:4px"></div>
+              </div>
+              <div style="font-size:11px;color:#6b7280;margin-top:4px">{pct}% complete</div>
+            </div>
+
+            <div style="border-top:2px solid #f3f4f6;padding-top:14px">
+              {done_html}
+              {pending_html}
+            </div>
+          </div>
+          <p style="font-size:11px;color:#aaa;text-align:center;margin-top:8px">
+            Automated confirmation · StandardTouch Attendance System · Do not reply
+          </p>
+        </div>"""
+
+        frappe.sendmail(
+            recipients=[emp_email],
+            subject=f"Day complete — {len(done_tasks)}/{len(tasks)} tasks done | {net_hours} worked | {date}",
+            message=html,
+            now=True,
+        )
+    except Exception as e:
+        frappe.log_error(
+            f"EOD email failed for {employee_name}: {e}",
+            "ST Attendance Tracker"
+        )
+
+
+def _get_employee_email(employee_name):
+    """Get employee's best available email address."""
+    emp = frappe.db.get_value("Employee", employee_name,
+        ["prefered_email", "company_email", "personal_email", "user_id"],
+        as_dict=True)
+    if not emp:
+        return None
+    email = (
+        emp.get("prefered_email") or
+        emp.get("company_email") or
+        emp.get("personal_email")
+    )
+    if not email and emp.get("user_id"):
+        email = frappe.db.get_value("User", emp["user_id"], "email") or emp["user_id"]
+    return email
+
+
 def _notify_hr_and_team_leader(employee_name, employee_display_name, event, details=""):
     """
     Send email to:
@@ -228,9 +497,6 @@ def _rollover_pending_tasks(employee, date):
         new_task.insert(ignore_permissions=True)
         rolled += 1
 
-        # Mark source task as Rolled Over so it stops re-rolling
-        frappe.db.set_value("Daily Task", task.name, "status", "Rolled Over")
-
     if rolled:
         frappe.db.commit()
     return rolled
@@ -274,9 +540,6 @@ def _safety_rollover(employee, today_date):
         new_task.project_name    = task.project_name or ""
         new_task.remarks = f"[Auto-carried from {task.origin_date or task.task_date}]"
         new_task.insert(ignore_permissions=True)
-
-        # Mark the old task as Rolled Over so it stops accumulating
-        frappe.db.set_value("Daily Task", task.name, "status", "Rolled Over")
 
     frappe.db.commit()
 
@@ -338,9 +601,18 @@ def validate_wfh_request():
         return {"valid": False, "message": "Employee record not found."}
 
     date = today()
+    weekday_num = getdate(date).weekday()
 
-    if getdate(date).weekday() == 5:
+    if weekday_num == 5:
         return {"valid": True, "message": "Saturday — WFH approved for all."}
+
+    # Hybrid employees have routine WFH days (every day except their
+    # configured office days). No Attendance Request needed on those days.
+    work_type = frappe.db.get_value("Employee", employee, "work_type") or "Office"
+    if work_type == "Hybrid":
+        hybrid_office_days = _get_hybrid_office_days()
+        if weekday_num not in hybrid_office_days:
+            return {"valid": True, "message": "Hybrid routine WFH day — no Attendance Request needed."}
 
     exists = frappe.db.exists("Attendance Request", {
         "employee": employee,
@@ -362,7 +634,7 @@ def validate_wfh_request():
         "valid": False,
         "message": (
             "You have not applied for Work From Home today. "
-            "Please submit an Attendance Request with reason \'Work From Home\' "
+            "Please submit an Attendance Request with reason 'Work From Home' "
             "before checking in as WFH."
         ),
         "link": link,
@@ -463,9 +735,20 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
 
     # ── WFH Validation ──────────────────────────────────────────────────
     work_location = (work_location or "Office").strip()
-    is_saturday = getdate(date).weekday() == 5
+    weekday_num = getdate(date).weekday()
+    is_saturday = weekday_num == 5
 
-    if work_location == "WFH" and not is_saturday:
+    # Hybrid employees have routine WFH days (every day except their
+    # configured office days, e.g. Tue/Thu). On those days WFH is expected
+    # and does NOT require an Attendance Request — same rule as the
+    # check-in page (_get_work_location_config in daily_checkin.py).
+    work_type = frappe.db.get_value("Employee", employee.name, "work_type") or "Office"
+    is_hybrid_routine_day = False
+    if work_type == "Hybrid" and not is_saturday:
+        hybrid_office_days = _get_hybrid_office_days()
+        is_hybrid_routine_day = weekday_num not in hybrid_office_days
+
+    if work_location == "WFH" and not is_saturday and not is_hybrid_routine_day:
         wfh_exists = frappe.db.exists("Attendance Request", {
             "employee": employee.name,
             "from_date": ["<=", date],
@@ -549,6 +832,22 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
     )
 
     return {"success": True, "login_time": str(actual_login)[:5]}
+
+    # Send check-in confirmation to employee with task list
+    all_tasks = frappe.get_all("Daily Task",
+        filters={"employee": employee.name, "task_date": date},
+        fields=["name", "description", "status", "task_type",
+                "estimated_time", "project_name", "rolled_over_from"],
+        order_by="project_name asc, creation asc",
+    )
+    _send_employee_checkin_email(
+        employee.name,
+        employee.employee_name,
+        actual_login,
+        work_location,
+        all_tasks,
+        date,
+    )
 
 
 # ── EOD submit ─────────────────────────────────────────────────────────────────
@@ -644,6 +943,22 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         "checkout",
         f"{employee.employee_name} submitted EOD at {str(logout_time)[:5]}. "
         f"{done_count}/{total_count} tasks done. Net hours: {net_hours or '—'}."
+    )
+
+    # Send EOD confirmation to employee with task summary
+    all_tasks = frappe.get_all("Daily Task",
+        filters={"employee": employee.name, "task_date": date},
+        fields=["name", "description", "status", "task_type",
+                "estimated_time", "actual_time", "project_name", "rolled_over_from"],
+        order_by="project_name asc, creation asc",
+    )
+    _send_employee_eod_email(
+        employee.name,
+        employee.employee_name,
+        logout_time,
+        net_hours,
+        all_tasks,
+        date,
     )
 
     return {
