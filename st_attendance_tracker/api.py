@@ -1036,6 +1036,14 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
             update_fields["description"] = t["description"].strip()
         frappe.db.set_value("Daily Task", name, update_fields)
 
+        if t.get("status") == "Done":
+            ancestor = frappe.db.get_value("Daily Task", name, "rolled_over_from")
+            depth = 0
+            while ancestor and depth < 365:
+                frappe.db.set_value("Daily Task", ancestor, "status", "Done")
+                ancestor = frappe.db.get_value("Daily Task", ancestor, "rolled_over_from")
+                depth += 1
+
     # Insert ad-hoc tasks
     for t in adhocs:
         desc = (t.get("description") or "").strip()
