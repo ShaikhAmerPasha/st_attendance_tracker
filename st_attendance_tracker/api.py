@@ -364,11 +364,61 @@ def _get_employee_email(employee_name):
     return email
 
 
-def _notify_hr_and_team_leader(employee_name, employee_display_name, event, details=""):
+def _render_compact_task_rows(tasks, mode="checkin"):
+    """
+    Compact, scannable task list for HR/Team Leader emails.
+    mode="checkin"  → shows all tasks for today, tags Carried tasks
+    mode="checkout" → groups into Done / Ad-hoc / Pending sections
+    Kept deliberately denser than the employee's own email since HR/TL
+    receive one of these per employee per event, multiple times a day.
+    """
+    if not tasks:
+        return '<p style="font-size:12px;color:#9ca3af;font-style:italic;margin:6px 0">No tasks recorded.</p>'
+
+    def row(t):
+        tag = ""
+        if t.get("rolled_over_from"):
+            tag = ' <span style="color:#92400e;font-size:10px;background:#fef3c7;padding:1px 6px;border-radius:8px">Carried</span>'
+        elif t.get("task_type") == "Ad-hoc":
+            tag = ' <span style="color:#7c3aed;font-size:10px;background:#f3e8ff;padding:1px 6px;border-radius:8px">Ad-hoc</span>'
+        proj = f' <span style="color:#9ca3af;font-size:10px">[{t["project_name"]}]</span>' if t.get("project_name") else ""
+        est  = f' <span style="color:#9ca3af;font-size:10px">Est:{t["estimated_time"]}</span>' if t.get("estimated_time") else ""
+        act  = f' <span style="color:#2563eb;font-size:10px">Done in:{t["actual_time"]}</span>' if t.get("actual_time") else ""
+        return f'<li style="margin-bottom:4px;font-size:12.5px;color:#374151">{t["description"]}{tag}{proj}{est}{act}</li>'
+
+    if mode == "checkin":
+        items = "".join(row(t) for t in tasks)
+        return f'<ul style="margin:6px 0 0;padding-left:18px">{items}</ul>'
+
+    # checkout mode: split into sections
+    done    = [t for t in tasks if t.get("status") == "Done"]
+    pending = [t for t in tasks if t.get("status") in ["Pending", "In Progress"]]
+
+    out = ""
+    if done:
+        out += (
+            '<div style="font-size:11px;font-weight:600;color:#15803d;margin:10px 0 3px">'
+            f'Completed ({len(done)})</div>'
+            f'<ul style="margin:0;padding-left:18px">{"".join(row(t) for t in done)}</ul>'
+        )
+    if pending:
+        out += (
+            '<div style="font-size:11px;font-weight:600;color:#d97706;margin:10px 0 3px">'
+            f'Carried to tomorrow ({len(pending)})</div>'
+            f'<ul style="margin:0;padding-left:18px">{"".join(row(t) for t in pending)}</ul>'
+        )
+    return out or '<p style="font-size:12px;color:#9ca3af;font-style:italic;margin:6px 0">No tasks recorded.</p>'
+
+
+def _notify_hr_and_team_leader(employee_name, employee_display_name, event, details="", tasks=None):
     """
     Send email to:
     1. All users with HR Manager role (auto-fetched)
     2. The employee's Team Leader (via reports_to → user_id)
+
+    tasks: optional list of Daily Task dicts for the relevant date.
+           Rendered compactly below the summary line so HR/TL can see
+           what the employee is working on without opening the system.
     """
     try:
         recipients = _get_hr_manager_emails()
@@ -391,15 +441,23 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
         }
         subject = subject_map.get(event, f"{employee_display_name} — attendance update")
 
+        task_mode = "checkin" if event == "checkin" else "checkout"
+        task_html = _render_compact_task_rows(tasks or [], mode=task_mode)
+        task_label = "Today's tasks" if event == "checkin" else "Task summary"
+
         html = f"""
-        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto">
           <div style="background:#EE1C29;padding:16px 20px;border-radius:6px 6px 0 0">
             <h2 style="color:#fff;margin:0;font-size:16px">{subject}</h2>
           </div>
           <div style="background:#fff;padding:16px 20px;border:1px solid #e0e0e0;
                       border-top:none;border-radius:0 0 6px 6px">
             <p style="font-size:14px;color:#333;margin:0 0 10px">{details}</p>
-            <p style="font-size:12px;color:#999;margin:0">
+            <div style="border-top:1px solid #f3f4f6;padding-top:10px">
+              <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px">{task_label}</div>
+              {task_html}
+            </div>
+            <p style="font-size:12px;color:#999;margin:14px 0 0">
               StandardTouch Attendance System &nbsp;·&nbsp; {frappe.utils.today()}
             </p>
           </div>
@@ -547,19 +605,45 @@ def _safety_rollover(employee, today_date):
 # ── Working hours calculation ──────────────────────────────────────────────────
 
 def _calc_net_hours(login_time, logout_time, lunch_from, lunch_to, date_str):
+    """
+    Calculates net working hours = (logout - login) - lunch duration.
+
+    IMPORTANT: uses total_seconds(), not .seconds. timedelta.seconds only
+    returns the seconds *within the current day component* and silently
+    wraps/corrupts whenever the delta is negative (e.g. logout time stored
+    a moment earlier than login due to timezone drift, stray date strings,
+    or an empty-but-not-None lunch field) — producing nonsensical results
+    like a 22-23 hour "workday" instead of erroring out.
+    """
     try:
         base = str(date_str) + " "
         login_dt  = get_datetime(base + str(login_time))
         logout_dt = get_datetime(base + str(logout_time))
-        total_mins = max(0, int((logout_dt - login_dt).seconds / 60))
+        total_mins = int((logout_dt - login_dt).total_seconds() / 60)
 
         lunch_mins = 0
         if lunch_from and lunch_to:
             lf = get_datetime(base + str(lunch_from))
             lt = get_datetime(base + str(lunch_to))
-            lunch_mins = max(0, int((lt - lf).seconds / 60))
+            lunch_mins = int((lt - lf).total_seconds() / 60)
+            # Invalid/reversed lunch entry — ignore rather than let it corrupt net hours
+            if lunch_mins < 0 or lunch_mins > 240:
+                lunch_mins = 0
 
         net = total_mins - lunch_mins
+
+        # Sanity ceiling — a workday can't sensibly exceed 18 hours.
+        # If it does, something upstream (bad time string, day mismatch) is
+        # wrong; surface that as empty rather than display a misleading number.
+        if net < 0 or net > 18 * 60:
+            frappe.log_error(
+                f"Suspicious net hours calc: login={login_time} logout={logout_time} "
+                f"lunch_from={lunch_from} lunch_to={lunch_to} date={date_str} "
+                f"-> total_mins={total_mins} lunch_mins={lunch_mins} net={net}",
+                "ST Attendance Tracker — net hours sanity check"
+            )
+            return ""
+
         return f"{net // 60}h {net % 60}m"
     except Exception:
         return ""
@@ -820,7 +904,15 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
     _make_checkin(employee.name, "IN", actual_login)
     frappe.db.commit()
 
-    # Notification
+    # Fetch today's full task list (planned + carried) once, reused below
+    all_tasks = frappe.get_all("Daily Task",
+        filters={"employee": employee.name, "task_date": date},
+        fields=["name", "description", "status", "task_type",
+                "estimated_time", "project_name", "rolled_over_from"],
+        order_by="project_name asc, creation asc",
+    )
+
+    # Notification — includes today's tasks + carried-forward tasks
     late_flag = frappe.db.get_value("Daily Task Log", log.name, "is_late")
     late_text = " (Late check-in)" if late_flag else ""
     wfh_text = f" [{work_location}]" if work_location != "Office" else ""
@@ -828,18 +920,11 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         employee.name,
         employee.employee_name,
         "checkin",
-        f"{employee.employee_name} checked in at {str(actual_login)[:5]}{late_text}{wfh_text} on {date}."
+        f"{employee.employee_name} checked in at {str(actual_login)[:5]}{late_text}{wfh_text} on {date}.",
+        tasks=all_tasks,
     )
-
-    return {"success": True, "login_time": str(actual_login)[:5]}
 
     # Send check-in confirmation to employee with task list
-    all_tasks = frappe.get_all("Daily Task",
-        filters={"employee": employee.name, "task_date": date},
-        fields=["name", "description", "status", "task_type",
-                "estimated_time", "project_name", "rolled_over_from"],
-        order_by="project_name asc, creation asc",
-    )
     _send_employee_checkin_email(
         employee.name,
         employee.employee_name,
@@ -848,6 +933,8 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         all_tasks,
         date,
     )
+
+    return {"success": True, "login_time": str(actual_login)[:5]}
 
 
 # ── EOD submit ─────────────────────────────────────────────────────────────────
@@ -937,21 +1024,24 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         "employee": employee.name, "task_date": date,
     })
 
-    _notify_hr_and_team_leader(
-        employee.name,
-        employee.employee_name,
-        "checkout",
-        f"{employee.employee_name} submitted EOD at {str(logout_time)[:5]}. "
-        f"{done_count}/{total_count} tasks done. Net hours: {net_hours or '—'}."
-    )
-
-    # Send EOD confirmation to employee with task summary
+    # Fetch full task list once — used by both HR/TL notification and employee email
     all_tasks = frappe.get_all("Daily Task",
         filters={"employee": employee.name, "task_date": date},
         fields=["name", "description", "status", "task_type",
                 "estimated_time", "actual_time", "project_name", "rolled_over_from"],
         order_by="project_name asc, creation asc",
     )
+
+    _notify_hr_and_team_leader(
+        employee.name,
+        employee.employee_name,
+        "checkout",
+        f"{employee.employee_name} submitted EOD at {str(logout_time)[:5]}. "
+        f"{done_count}/{total_count} tasks done. Net hours: {net_hours or '—'}.",
+        tasks=all_tasks,
+    )
+
+    # Send EOD confirmation to employee with task summary
     _send_employee_eod_email(
         employee.name,
         employee.employee_name,
