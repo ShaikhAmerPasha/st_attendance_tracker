@@ -691,8 +691,8 @@ function addPG() {
     '<div class="npg-body" data-tc="'+gid+'"></div>'+
     '<div class="npg-add" onclick="addTaskToPG(\''+gid+'\')"><i class="ti ti-plus" aria-hidden="true"></i>Add task to this project</div>';
   document.getElementById('new-area').appendChild(d);
-  d.querySelector('input[data-pname]').focus();
   addTaskToPG(gid); updCounts();
+  d.querySelector('input[data-pname]').focus();
 }
 function addTaskToPG(gid) {
   tkC++; var tid='nt'+tkC;
