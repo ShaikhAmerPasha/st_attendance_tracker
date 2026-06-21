@@ -143,113 +143,18 @@ def _send_employee_checkin_email(employee_name, employee_display_name,
         if not emp_email:
             return
 
-        late_flag = frappe.db.get_value("Daily Task Log",
-            {"employee": employee_name, "date": date,
-             "log_type": "Morning Check-In", "docstatus": 1}, "is_late")
-        late_badge = (
-            '<span style="background:#fef9c3;color:#854d0e;font-size:11px;'
-            'padding:2px 8px;border-radius:20px;margin-left:8px">Late</span>'
-            if late_flag else ""
-        )
-        wl_badge = ""
-        if work_location and work_location != "Office":
-            wl_badge = (
-                f'<span style="background:#f3f4f6;color:#374151;font-size:11px;'
-                f'padding:2px 8px;border-radius:20px;margin-left:8px">{work_location}</span>'
-            )
-
-        # Build task list HTML grouped by project
-        projects = {}
-        standalone = []
-        for t in tasks:
-            pname = (t.get("project_name") or "").strip()
-            if pname:
-                projects.setdefault(pname, []).append(t)
-            else:
-                standalone.append(t)
-
-        task_html = ""
-        proj_icons = ["📁", "📂", "🗂️", "📋"]
-
-        for i, (pname, ptasks) in enumerate(projects.items()):
-            icon = proj_icons[i % len(proj_icons)]
-            rows = ""
-            for t in ptasks:
-                est = f'<span style="color:#9ca3af;font-size:11px;margin-left:8px">Est: {t["estimated_time"]}</span>' if t.get("estimated_time") else ""
-                carried = '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:6px">Carried</span>' if t.get("rolled_over_from") else ""
-                rows += f'''
-                <tr>
-                  <td style="padding:7px 10px;border-bottom:1px solid #f9fafb;font-size:13px;color:#374151">
-                    {t["description"]}{carried}{est}
-                  </td>
-                </tr>'''
-            task_html += f'''
-            <div style="margin-bottom:14px">
-              <div style="font-size:12px;font-weight:600;color:#111;margin-bottom:6px">{icon} {pname}</div>
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="border-collapse:collapse;background:#f9fafb;border-radius:6px;overflow:hidden">
-                {rows}
-              </table>
-            </div>'''
-
-        for t in standalone:
-            est = f'<span style="color:#9ca3af;font-size:11px;margin-left:8px">Est: {t["estimated_time"]}</span>' if t.get("estimated_time") else ""
-            carried = '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:6px">Carried</span>' if t.get("rolled_over_from") else ""
-            task_html += f'''
-            <div style="padding:7px 10px;background:#f9fafb;border-radius:6px;
-                        font-size:13px;color:#374151;margin-bottom:6px">
-              📌 {t["description"]}{carried}{est}
-            </div>'''
-
-        total_tasks = len(tasks)
-        carried_count = sum(1 for t in tasks if t.get("rolled_over_from"))
-        est_total = sum(
-            int(t["estimated_time"].replace("hr","").replace("h","").strip())
-            for t in tasks
-            if t.get("estimated_time") and t["estimated_time"].replace("hr","").replace("h","").strip().isdigit()
-        )
-
-        carried_span = f'<span>🔄 <strong style="color:#92400e">{carried_count}</strong> carried</span>' if carried_count else ""
-        est_span = f'<span>⏱ <strong style="color:#111">{est_total}h</strong> estimated</span>' if est_total else ""
-
-        no_tasks_msg = '<p style="font-size:13px;color:#9ca3af;font-style:italic">No tasks added yet.</p>' if not tasks else ""
-
         login_hm = _to_hhmm(login_time)
+        task_table_html = _render_screenshot_task_table(tasks, is_checkout=False)
 
         html = f"""
-        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
-          <div style="background:#EE1C29;padding:18px 22px;border-radius:6px 6px 0 0">
-            <h2 style="color:#fff;margin:0;font-size:17px">
-              ✅ You're checked in {late_badge}{wl_badge}
-            </h2>
-            <p style="color:rgba(255,255,255,.75);margin:5px 0 0;font-size:12px">
-              StandardTouch e-Solutions · {date}
-            </p>
+        <div style="font-family:'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 12px;">
+          <div style="font-size: 16px; font-weight: bold; color: #15803d; margin-bottom: 4px;">Login: {login_hm}</div>
+          <div style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin-bottom: 16px;">Today's Work To Do:</div>
+          <div>
+            {task_table_html}
           </div>
-          <div style="background:#fff;padding:18px 22px;border:1px solid #e5e7eb;border-top:none">
-            <p style="font-size:14px;color:#111;margin:0 0 6px">
-              Hi <strong>{employee_display_name}</strong>,
-            </p>
-            <p style="font-size:13px;color:#6b7280;margin:0 0 18px;line-height:1.5">
-              Your check-in has been recorded at <strong>{login_hm}</strong>.
-              Here's your plan for today:
-            </p>
-
-            <div style="border-top:2px solid #f3f4f6;padding-top:14px;margin-bottom:14px">
-              {task_html or no_tasks_msg}
-            </div>
-
-            <div style="background:#f9fafb;border-radius:8px;padding:10px 14px;
-                        display:flex;gap:16px;font-size:12px;color:#6b7280">
-              <span>📊 <strong style="color:#111">{total_tasks}</strong> tasks planned</span>
-             {carried_span}
-              {est_span}
-            </div>
-          </div>
-          <p style="font-size:11px;color:#aaa;text-align:center;margin-top:8px">
-            Automated confirmation · StandardTouch Attendance System · Do not reply
-          </p>
-        </div>"""
+        </div>
+        """
 
         frappe.sendmail(
             recipients=[emp_email],
@@ -277,107 +182,46 @@ def _send_employee_eod_email(employee_name, employee_display_name,
 
         done_tasks    = [t for t in tasks if t.get("status") == "Done"]
         pending_tasks = [t for t in tasks if t.get("status") in ["Pending", "In Progress"]]
-        adhoc_tasks   = [t for t in done_tasks if t.get("task_type") == "Ad-hoc"]
 
-        def task_row(t, color="#15803d", icon="✅"):
-            est  = f'<span style="color:#9ca3af;font-size:11px;margin-left:8px">Est: {t["estimated_time"]}</span>' if t.get("estimated_time") else ""
-            act  = f'<span style="color:#2563eb;font-size:11px;margin-left:6px">Actual: {t["actual_time"]}</span>' if t.get("actual_time") else ""
-            proj = f'<span style="color:#9ca3af;font-size:10px;margin-left:6px">[{t["project_name"]}]</span>' if t.get("project_name") else ""
-            return f'''<tr>
-              <td style="padding:7px 10px;border-bottom:1px solid #f9fafb;font-size:13px;color:#374151">
-                {icon} {t["description"]}{proj}{est}{act}
-              </td>
-            </tr>'''
+        # Fetch lunch and check-in times from Daily Task Log
+        db_vals = frappe.db.get_value("Daily Task Log", {
+            "employee": employee_name,
+            "date": date,
+            "log_type": "End of Day",
+            "docstatus": 1
+        }, ["lunch_from", "lunch_to"])
+        lunch_from, lunch_to = db_vals if db_vals else (None, None)
 
-        done_html = ""
-        if done_tasks:
-            rows = "".join(task_row(t, icon="✅") for t in done_tasks)
-            done_html = f'''
-            <div style="margin-bottom:16px">
-              <div style="font-size:12px;font-weight:600;color:#15803d;margin-bottom:6px">
-                ✅ Completed ({len(done_tasks)})
-              </div>
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="border-collapse:collapse;background:#f0fdf4;border-radius:6px;overflow:hidden">
-                {rows}
-              </table>
-            </div>'''
+        login_time = frappe.db.get_value("Daily Task Log", {
+            "employee": employee_name,
+            "date": date,
+            "log_type": "Morning Check-In",
+            "docstatus": 1
+        }, "login_time")
 
-        pending_html = ""
-        if pending_tasks:
-            rows = "".join(task_row(t, icon="🔄") for t in pending_tasks)
-            pending_html = f'''
-            <div style="margin-bottom:16px">
-              <div style="font-size:12px;font-weight:600;color:#d97706;margin-bottom:6px">
-                🔄 Carried to tomorrow ({len(pending_tasks)})
-              </div>
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="border-collapse:collapse;background:#fffbeb;border-radius:6px;overflow:hidden">
-                {rows}
-              </table>
-            </div>'''
-
-        pct = int(len(done_tasks) / len(tasks) * 100) if tasks else 0
-        bar_color = "#15803d" if pct >= 80 else "#d97706" if pct >= 50 else "#EE1C29"
-
+        login_hm = _to_hhmm(login_time) if login_time else "—"
         logout_hm = _to_hhmm(logout_time)
+        lunch_from_hm = _to_hhmm(lunch_from) if lunch_from else None
+        lunch_to_hm = _to_hhmm(lunch_to) if lunch_to else None
+
+        task_table_html = _render_screenshot_task_table(
+            tasks, is_checkout=True, lunch_from=lunch_from_hm, lunch_to=lunch_to_hm
+        )
 
         html = f"""
-        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
-          <div style="background:#0f172a;padding:18px 22px;border-radius:6px 6px 0 0">
-            <h2 style="color:#fff;margin:0;font-size:17px">
-              🌙 End of Day submitted
-            </h2>
-            <p style="color:rgba(255,255,255,.5);margin:5px 0 0;font-size:12px">
-              StandardTouch e-Solutions · {date}
-            </p>
+        <div style="font-family:'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 12px;">
+          <div style="font-size: 16px; font-weight: bold; color: #15803d; margin-bottom: 4px;">Login: {login_hm}</div>
+          <div style="font-size: 16px; font-weight: bold; color: #dc2626; margin-bottom: 4px;">Logout: {logout_hm}</div>
+          <div style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin-bottom: 16px;">Today's Work Summary:</div>
+          <div>
+            {task_table_html}
           </div>
-          <div style="background:#fff;padding:18px 22px;border:1px solid #e5e7eb;border-top:none">
-            <p style="font-size:14px;color:#111;margin:0 0 6px">
-              Hi <strong>{employee_display_name}</strong>,
-            </p>
-            <p style="font-size:13px;color:#6b7280;margin:0 0 16px;line-height:1.5">
-              You checked out at <strong>{logout_hm}</strong>.
-              Here's your day summary:
-            </p>
-
-            <div style="background:#f9fafb;border-radius:8px;padding:12px 16px;
-                        margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr">
-              <div style="text-align:center">
-                <div style="font-size:22px;font-weight:600;color:#111">{len(done_tasks)}/{len(tasks)}</div>
-                <div style="font-size:11px;color:#9ca3af;margin-top:2px">Tasks done</div>
-              </div>
-              <div style="text-align:center;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb">
-                <div style="font-size:22px;font-weight:600;color:#15803d">{net_hours or "—"}</div>
-                <div style="font-size:11px;color:#9ca3af;margin-top:2px">Net hours</div>
-              </div>
-              <div style="text-align:center">
-                <div style="font-size:22px;font-weight:600;color:#d97706">{len(pending_tasks)}</div>
-                <div style="font-size:11px;color:#9ca3af;margin-top:2px">Carried fwd</div>
-              </div>
-            </div>
-
-            <div style="background:#f9fafb;border-radius:6px;padding:8px 12px;margin-bottom:18px">
-              <div style="font-size:11px;color:#9ca3af;margin-bottom:5px">Completion</div>
-              <div style="background:#e5e7eb;border-radius:4px;height:8px;overflow:hidden">
-                <div style="width:{pct}%;background:{bar_color};height:100%;border-radius:4px"></div>
-              </div>
-              <div style="font-size:11px;color:#6b7280;margin-top:4px">{pct}% complete</div>
-            </div>
-
-            <div style="border-top:2px solid #f3f4f6;padding-top:14px">
-              {done_html}
-              {pending_html}
-            </div>
-          </div>
-          <p style="font-size:11px;color:#aaa;text-align:center;margin-top:8px">
-            Automated confirmation · StandardTouch Attendance System · Do not reply
-          </p>
-        </div>"""
+        </div>
+        """
 
         frappe.sendmail(
             recipients=[emp_email],
-            subject=f"Day complete — {len(done_tasks)}/{len(tasks)} tasks done | {net_hours} worked | {date}",
+            subject=f"Day complete — {len(done_tasks)}/{len(tasks)} tasks done | {date}",
             message=html,
             now=True,
         )
@@ -403,6 +247,137 @@ def _get_employee_email(employee_name):
     if not email and emp.get("user_id"):
         email = frappe.db.get_value("User", emp["user_id"], "email") or emp["user_id"]
     return email
+
+
+def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lunch_to=None):
+    if not tasks:
+        return '<p style="font-size:13px;color:#9ca3af;font-style:italic;margin:6px 0">No tasks added yet.</p>'
+
+    # Group tasks by project
+    groups = {}
+    for t in tasks:
+        pname = (t.get("project_name") or "").strip()
+        if not pname:
+            pname = "General"
+        groups.setdefault(pname, []).append(t)
+
+    # Sort groups: General first, then alphabetically
+    sorted_group_names = sorted(groups.keys(), key=lambda x: (x != "General", x.lower()))
+
+    palettes = [
+        {"bg": "#eff6ff", "border": "#bfdbfe", "text": "#1e40af"}, # Blue (General)
+        {"bg": "#fdf2f8", "border": "#fbcfe8", "text": "#9d174d"}, # Pink
+        {"bg": "#fffbeb", "border": "#fde68a", "text": "#92400e"}, # Amber
+        {"bg": "#f0fdfa", "border": "#99f6e4", "text": "#115e59"}, # Teal
+        {"bg": "#faf5ff", "border": "#e9d5ff", "text": "#6b21a8"}, # Purple
+        {"bg": "#f5f3ff", "border": "#ddd6fe", "text": "#5b21b6"}, # Indigo
+    ]
+
+    html_rows = []
+
+    header_html = """
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px;font-family:'Segoe UI', Arial, sans-serif;border:1px solid #cbd5e1;table-layout:fixed">
+      <thead>
+        <tr style="background-color:#1553a1;color:#ffffff;font-size:12.5px;font-weight:bold">
+          <th style="padding:12px 10px;text-align:left;border:1px solid #cbd5e1;width:20%">Client</th>
+          <th style="padding:12px 10px;text-align:left;border:1px solid #cbd5e1;width:50%">Task / Work</th>
+          <th style="padding:12px 10px;text-align:center;border:1px solid #cbd5e1;width:15%">Time</th>
+          <th style="padding:12px 10px;text-align:center;border:1px solid #cbd5e1;width:15%">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+    """
+    html_rows.append(header_html)
+
+    lunch_shown = False
+    for group_idx, pname in enumerate(sorted_group_names):
+        palette = palettes[group_idx % len(palettes)]
+        ptasks = groups[pname]
+
+        if group_idx > 0:
+            # Dynamic placement of Lunch separator row
+            if lunch_from and lunch_to and not lunch_shown:
+                show_lunch = False
+                if len(sorted_group_names) <= 2 and group_idx == 1:
+                    show_lunch = True
+                elif len(sorted_group_names) > 2 and group_idx == 2:
+                    show_lunch = True
+
+                if show_lunch:
+                    lunch_html = f"""
+                    <tr style="height:12px;line-height:12px"><td colspan="4" style="border:none;background-color:transparent;height:12px;padding:0;margin:0"></td></tr>
+                    <tr>
+                      <td colspan="4" style="border:none;background-color:transparent;font-size:13px;color:#4b5563;font-style:italic;padding:12px 4px;font-family:'Segoe UI', Arial, sans-serif">
+                        lunch: {lunch_from} - {lunch_to}
+                      </td>
+                    </tr>
+                    <tr style="height:12px;line-height:12px"><td colspan="4" style="border:none;background-color:transparent;height:12px;padding:0;margin:0"></td></tr>
+                    """
+                    html_rows.append(lunch_html)
+                    lunch_shown = True
+
+            if not (lunch_shown and group_idx == 2):
+                sep_html = """
+                <tr style="height:12px;line-height:12px">
+                  <td colspan="4" style="border:none;background-color:transparent;height:12px;padding:0;margin:0"></td>
+                </tr>
+                """
+                html_rows.append(sep_html)
+
+        for task_idx, t in enumerate(ptasks):
+            client_text = pname if task_idx == 0 else ""
+            client_style = f"padding:10px 12px;font-size:13px;font-weight:bold;color:{palette['text']};background-color:{palette['bg']};border:1px solid {palette['border']};vertical-align:top;word-wrap:break-word;overflow:hidden;text-overflow:ellipsis" if task_idx == 0 else f"padding:10px 12px;background-color:{palette['bg']};border:1px solid {palette['border']};vertical-align:top"
+
+            badges = []
+            if t.get("rolled_over_from"):
+                badges.append('<span style="background-color:#fffbeb;color:#b45309;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid #fde68a;margin-left:6px;display:inline-block">Carried</span>')
+            if t.get("task_type") == "Ad-hoc":
+                badges.append('<span style="background-color:#faf5ff;color:#7c3aed;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid #e9d5ff;margin-left:6px;display:inline-block">Ad-hoc</span>')
+            
+            badges_str = "".join(badges)
+            task_style = f"padding:10px 12px;font-size:13px;color:#334155;background-color:{palette['bg']};border:1px solid {palette['border']};vertical-align:top;word-wrap:break-word"
+
+            if is_checkout:
+                time_val = t.get("actual_time") or t.get("estimated_time") or ""
+            else:
+                time_val = t.get("estimated_time") or ""
+            time_style = f"padding:10px 12px;font-size:12px;color:#475569;text-align:center;background-color:{palette['bg']};border:1px solid {palette['border']};vertical-align:middle"
+
+            status_val = ""
+            status_style_color = "#475569"
+            if is_checkout:
+                if t.get("status") == "Done":
+                    status_val = "✔ Done"
+                    status_style_color = "#047857"
+                else:
+                    status_val = "Pending"
+                    status_style_color = "#b45309"
+            
+            status_style = f"padding:10px 12px;font-size:12px;font-weight:bold;text-align:center;color:{status_style_color};background-color:#fef8e7;border:1px solid {palette['border']};vertical-align:middle"
+
+            row_html = f"""
+            <tr>
+              <td style="{client_style}">{client_text}</td>
+              <td style="{task_style}">{t.get("description") or ""}{badges_str}</td>
+              <td style="{time_style}">{time_val}</td>
+              <td style="{status_style}">{status_val}</td>
+            </tr>
+            """
+            html_rows.append(row_html)
+
+    if lunch_from and lunch_to and not lunch_shown:
+        lunch_html = f"""
+        <tr style="height:12px;line-height:12px"><td colspan="4" style="border:none;background-color:transparent;height:12px;padding:0;margin:0"></td></tr>
+        <tr>
+          <td colspan="4" style="border:none;background-color:transparent;font-size:13px;color:#4b5563;font-style:italic;padding:12px 4px;font-family:'Segoe UI', Arial, sans-serif">
+            lunch: {lunch_from} - {lunch_to}
+          </td>
+        </tr>
+        """
+        html_rows.append(lunch_html)
+
+    html_rows.append("  </tbody>\n</table>")
+    return "".join(html_rows)
 
 
 def _render_compact_task_rows(tasks, mode="checkin"):
@@ -482,27 +457,36 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
         }
         subject = subject_map.get(event, f"{employee_display_name} — attendance update")
 
-        task_mode = "checkin" if event == "checkin" else "checkout"
-        task_html = _render_compact_task_rows(tasks or [], mode=task_mode)
+        lunch_from_hm = None
+        lunch_to_hm = None
+        if event == "checkout":
+            date = tasks[0].get("task_date") if (tasks and tasks[0].get("task_date")) else frappe.utils.today()
+            db_vals = frappe.db.get_value("Daily Task Log", {
+                "employee": employee_name,
+                "date": date,
+                "log_type": "End of Day",
+                "docstatus": 1
+            }, ["lunch_from", "lunch_to"])
+            if db_vals:
+                lunch_from_hm = _to_hhmm(db_vals[0]) if db_vals[0] else None
+                lunch_to_hm = _to_hhmm(db_vals[1]) if db_vals[1] else None
+
+        task_html = _render_screenshot_task_table(
+            tasks or [],
+            is_checkout=(event == "checkout"),
+            lunch_from=lunch_from_hm,
+            lunch_to=lunch_to_hm
+        )
         task_label = "Today's tasks" if event == "checkin" else "Task summary"
 
         html = f"""
-        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto">
-          <div style="background:#EE1C29;padding:16px 20px;border-radius:6px 6px 0 0">
-            <h2 style="color:#fff;margin:0;font-size:16px">{subject}</h2>
+        <div style="font-family:'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 12px;">
+          <p style="font-size: 14px; color: #334155; margin: 0 0 16px; line-height: 1.5;">{details}</p>
+          <div>
+            {task_html}
           </div>
-          <div style="background:#fff;padding:16px 20px;border:1px solid #e0e0e0;
-                      border-top:none;border-radius:0 0 6px 6px">
-            <p style="font-size:14px;color:#333;margin:0 0 10px">{details}</p>
-            <div style="border-top:1px solid #f3f4f6;padding-top:10px">
-              <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px">{task_label}</div>
-              {task_html}
-            </div>
-            <p style="font-size:12px;color:#999;margin:14px 0 0">
-              StandardTouch Attendance System &nbsp;·&nbsp; {frappe.utils.today()}
-            </p>
-          </div>
-        </div>"""
+        </div>
+        """
 
         frappe.sendmail(
             recipients=recipients,
@@ -573,6 +557,11 @@ def _rollover_pending_tasks(employee, date):
     rolled = 0
     for task in pending:
         root = _get_root_task(task.name)
+        root_status = frappe.db.get_value("Daily Task", root, "status")
+        if root_status == "Done":
+            frappe.db.set_value("Daily Task", task.name, "status", "Done")
+            continue
+
         already = frappe.db.exists("Daily Task", {
             "employee": employee,
             "task_date": next_date,
@@ -617,6 +606,11 @@ def _safety_rollover(employee, today_date):
 
     for task in missed:
         root = _get_root_task(task.name)
+        root_status = frappe.db.get_value("Daily Task", root, "status")
+        if root_status == "Done":
+            frappe.db.set_value("Daily Task", task.name, "status", "Done")
+            continue
+
         already = frappe.db.exists("Daily Task", {
             "employee": employee,
             "task_date": today_date,
@@ -1083,6 +1077,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     log.employee    = employee.name
     log.date        = date
     log.log_type    = "End of Day"
+    log.login_time  = login_time_raw
     log.lunch_from  = lunch_from  or ""
     log.lunch_to    = lunch_to    or ""
     log.logout_time = logout_time
@@ -1114,7 +1109,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         employee.employee_name,
         "checkout",
         f"{employee.employee_name} submitted EOD at {_to_hhmm(logout_time)}. "
-        f"{done_count}/{total_count} tasks done. Net hours: {net_hours or '—'}.",
+        f"{done_count}/{total_count} tasks done.",
         tasks=all_tasks,
     )
 

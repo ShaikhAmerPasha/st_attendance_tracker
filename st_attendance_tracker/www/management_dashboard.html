@@ -1,6 +1,6 @@
 {% extends "templates/web.html" %}
 {% block title %}Management Dashboard{% endblock %}
-{% {% block head_include %}
+{% block head_include %}
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -945,6 +945,17 @@ function selectEmp(cell, empName){
   });
 }
 
+function formatTimeHM(t) {
+  if (!t) return '—';
+  var parts = String(t).split(':');
+  if (parts.length >= 2) {
+    var h = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+    return (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
+  }
+  return String(t);
+}
+
 function renderDetail(data){
   var emp=data.employee||{}, ml=data.morning_log||{}, el=data.eod_log||{}, tasks=data.tasks||[];
   var done=tasks.filter(function(t){ return t.status==='Done'; }).length;
@@ -984,10 +995,10 @@ function renderDetail(data){
       '<div class="dp-sec">'+
         '<div class="dp-lbl">Time</div>'+
         '<div class="tg">'+
-          '<div class="tc"><div class="tc-l">Login</div><div class="tc-v">'+(ml.login_time?String(ml.login_time).slice(0,5):'—')+(ml.is_late?' <span style="color:#d97706;font-size:10px">Late</span>':'')+'</div></div>'+
-          '<div class="tc"><div class="tc-l">Logout</div><div class="tc-v">'+(el.logout_time?String(el.logout_time).slice(0,5):'—')+'</div></div>'+
-          '<div class="tc"><div class="tc-l">Lunch</div><div class="tc-v" style="font-size:12px">'+(el.lunch_from?String(el.lunch_from).slice(0,5)+'–'+String(el.lunch_to||'').slice(0,5):'—')+'</div></div>'+
-          '<div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g">'+(el.net_hours||'—')+'</div></div>'+
+          '<div class="tc"><div class="tc-l">Login</div><div class="tc-v">'+(ml.login_time?formatTimeHM(ml.login_time):'—')+(ml.is_late?' <span style="color:#d97706;font-size:10px">Late</span>':'')+'</div></div>'+
+          '<div class="tc"><div class="tc-l">Logout</div><div class="tc-v">'+(el.logout_time?formatTimeHM(el.logout_time):'—')+'</div></div>'+
+          '<div class="tc"><div class="tc-l">Lunch</div><div class="tc-v" style="font-size:12px">'+(el.lunch_from?formatTimeHM(el.lunch_from)+'–'+formatTimeHM(el.lunch_to):'—')+'</div></div>'/*+
+          '<div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g">'+(el.net_hours||'—')+'</div></div>'*/+
         '</div>'+
       '</div>'+
       '<div class="dp-sec">'+

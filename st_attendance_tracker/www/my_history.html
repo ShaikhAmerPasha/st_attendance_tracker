@@ -646,6 +646,17 @@ function getStag(s) {
   return 'st-pe';
 }
 
+function formatTimeHM(t) {
+  if (!t) return '—';
+  var parts = String(t).split(':');
+  if (parts.length >= 2) {
+    var h = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+    return (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
+  }
+  return String(t);
+}
+
 function renderLog(log) {
   var d = parseDateParts(log.date);
   var total = parseInt(log.total_tasks) || 0;
@@ -653,9 +664,9 @@ function renderLog(log) {
   var pct   = total > 0 ? Math.round(done / total * 100) : 0;
 
   var metas = [];
-  if (log.login_time)  metas.push('<span class="dm"><i class="ti ti-login" aria-hidden="true"></i>' + String(log.login_time).slice(0,5) + '</span>');
-  if (log.logout_time) metas.push('<span class="dm"><i class="ti ti-logout" aria-hidden="true"></i>' + String(log.logout_time).slice(0,5) + '</span>');
-  if (log.net_hours)   metas.push('<span class="dm"><i class="ti ti-clock" aria-hidden="true"></i>' + log.net_hours + '</span>');
+  if (log.login_time)  metas.push('<span class="dm"><i class="ti ti-login" aria-hidden="true"></i>' + formatTimeHM(log.login_time) + '</span>');
+  if (log.logout_time) metas.push('<span class="dm"><i class="ti ti-logout" aria-hidden="true"></i>' + formatTimeHM(log.logout_time) + '</span>');
+  // if (log.net_hours)   metas.push('<span class="dm"><i class="ti ti-clock" aria-hidden="true"></i>' + log.net_hours + '</span>');
 
   return '<div class="day-card" data-date="' + log.date + '" onclick="toggleDay(this)">' +
     '<div class="day-head">' +
@@ -698,9 +709,9 @@ function loadDayDetail(date) {
 
       var timeHtml =
         '<div class="time-row">' +
-          '<div class="tc"><div class="tc-l">Login</div><div class="tc-v">' + (ml.login_time ? String(ml.login_time).slice(0,5) : '—') + (ml.is_late ? ' <span style="color:#d97706;font-size:10px">Late</span>' : '') + '</div></div>' +
-          '<div class="tc"><div class="tc-l">Logout</div><div class="tc-v">' + (el.logout_time ? String(el.logout_time).slice(0,5) : '—') + '</div></div>' +
-          '<div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g">' + (el.net_hours || '—') + '</div></div>' +
+          '<div class="tc"><div class="tc-l">Login</div><div class="tc-v">' + (ml.login_time ? formatTimeHM(ml.login_time) : '—') + (ml.is_late ? ' <span style="color:#d97706;font-size:10px">Late</span>' : '') + '</div></div>' +
+          '<div class="tc"><div class="tc-l">Logout</div><div class="tc-v">' + (el.logout_time ? formatTimeHM(el.logout_time) : '—') + '</div></div>'/* +
+          '<div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g">' + (el.net_hours || '—') + '</div></div>'*/ +
         '</div>';
 
       var tasksHtml = '';

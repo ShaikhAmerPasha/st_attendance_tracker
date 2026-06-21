@@ -500,7 +500,7 @@ body {
 
 .td-time-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
   margin-bottom: 20px;
 }
@@ -679,7 +679,7 @@ body {
 
 .sg {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 
@@ -898,7 +898,7 @@ function renderTeam(){
         '<div class="mc-av '+getAv(emp.employee_name)+'">'+getInitials(emp.employee_name)+'</div>'+
         '<div class="mc-info">'+
           '<div class="mc-name">'+emp.employee_name+'</div>'+
-          '<div class="mc-meta">'+timeInfo+(emp.net_hours?' &nbsp;·&nbsp; <i class="ti ti-clock" aria-hidden="true"></i>'+emp.net_hours:'')+'</div>'+
+          '<div class="mc-meta">'+timeInfo/*+(emp.net_hours?' &nbsp;·&nbsp; <i class="ti ti-clock" aria-hidden="true"></i>'+emp.net_hours:'')*/+'</div>'+
         '</div>'+
         '<div class="mc-right">'+getBadge(emp.status)+'<i class="ti ti-chevron-down mc-chev" aria-hidden="true"></i></div>'+
       '</div>'+
@@ -906,8 +906,8 @@ function renderTeam(){
       '<div class="task-detail">'+
         '<div class="td-time-row">'+
           '<div class="td-cell"><div class="td-l">Login</div><div class="td-v">'+mlTime+'</div></div>'+
-          '<div class="td-cell"><div class="td-l">Logout</div><div class="td-v">'+loTime+'</div></div>'+
-          '<div class="td-cell"><div class="td-l">Net hours</div><div class="td-v g">'+netH+'</div></div>'+
+          '<div class="td-cell"><div class="td-l">Logout</div><div class="td-v">'+loTime+'</div></div>'/*+
+          '<div class="td-cell"><div class="td-l">Net hours</div><div class="td-v g">'+netH+'</div></div>'*/+
         '</div>'+
         '<div class="td-tasks-lbl">Tasks ('+tasks.length+')</div>'+
         taskRows+
@@ -940,8 +940,8 @@ function updateRightPanel(empName){
       '<div class="sg">'+
         '<div class="sc"><div class="sc-n g">'+done+'</div><div class="sc-l">Done</div></div>'+
         '<div class="sc"><div class="sc-n a">'+(tasks.length-done)+'</div><div class="sc-l">Pending</div></div>'+
-        '<div class="sc"><div class="sc-n">'+tasks.length+'</div><div class="sc-l">Total</div></div>'+
-        '<div class="sc"><div class="sc-n">'+(emp.net_hours||'—')+'</div><div class="sc-l">Net hrs</div></div>'+
+        '<div class="sc"><div class="sc-n">'+tasks.length+'</div><div class="sc-l">Total</div></div>'/*+
+        '<div class="sc"><div class="sc-n">'+(emp.net_hours||'—')+'</div><div class="sc-l">Net hrs</div></div>'*/+
       '</div>'+
     '</div>'+
     '<div class="rp-sec">'+
