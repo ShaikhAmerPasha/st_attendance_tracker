@@ -1021,7 +1021,27 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
 @frappe.whitelist()
 def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks):
     employee = _get_employee()
-    date = today()
+    
+    # Resolve active date: latest check-in without a checkout, else today
+    latest_checkin = frappe.db.get_value("Daily Task Log", {
+        "employee": employee.name,
+        "log_type": "Morning Check-In",
+        "docstatus": 1
+    }, "date", order_by="date desc")
+
+    if latest_checkin:
+        has_eod = frappe.db.exists("Daily Task Log", {
+            "employee": employee.name,
+            "date": latest_checkin,
+            "log_type": "End of Day",
+            "docstatus": 1
+        })
+        if not has_eod:
+            date = latest_checkin
+        else:
+            date = today()
+    else:
+        date = today()
 
     if not logout_time:
         frappe.throw("Logout time is required.")
@@ -1030,7 +1050,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         "employee": employee.name, "date": date,
         "log_type": "End of Day", "docstatus": 1,
     }):
-        frappe.throw("You have already submitted End of Day for today.")
+        frappe.throw(f"You have already submitted End of Day for {date}.")
 
     updates = json.loads(task_updates) if isinstance(task_updates, str) else task_updates
     adhocs  = json.loads(adhoc_tasks)  if isinstance(adhoc_tasks, str)  else adhoc_tasks
@@ -1371,7 +1391,27 @@ def delete_carried_task(name):
 def reset_morning_checkin():
     """Reset morning check-in by deleting check-in logs and newly created tasks for today."""
     employee = _get_employee()
-    date = today()
+    
+    # Resolve active date: latest check-in without a checkout, else today
+    latest_checkin = frappe.db.get_value("Daily Task Log", {
+        "employee": employee.name,
+        "log_type": "Morning Check-In",
+        "docstatus": 1
+    }, "date", order_by="date desc")
+
+    if latest_checkin:
+        has_eod = frappe.db.exists("Daily Task Log", {
+            "employee": employee.name,
+            "date": latest_checkin,
+            "log_type": "End of Day",
+            "docstatus": 1
+        })
+        if not has_eod:
+            date = latest_checkin
+        else:
+            date = today()
+    else:
+        date = today()
 
     # 1. Check if EOD is already submitted
     eod_exists = frappe.db.exists("Daily Task Log", {
@@ -1381,7 +1421,7 @@ def reset_morning_checkin():
         "docstatus": 1,
     })
     if eod_exists:
-        frappe.throw("Cannot reset check-in because End of Day has already been submitted.")
+        frappe.throw(f"Cannot reset check-in because End of Day has already been submitted for {date}.")
 
     # 2. Get Morning Check-In log name
     morning_log = frappe.db.get_value("Daily Task Log", {
@@ -1390,7 +1430,7 @@ def reset_morning_checkin():
         "log_type": "Morning Check-In",
     })
     if not morning_log:
-        frappe.throw("You have not checked in today.")
+        frappe.throw(f"You have not checked in on {date}.")
 
     # 3. Delete Morning Check-In log
     frappe.db.delete("Daily Task Log", {"name": morning_log})

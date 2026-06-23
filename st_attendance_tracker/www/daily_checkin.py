@@ -27,6 +27,22 @@ def get_context(context):
         )
 
     date = today()
+    latest_checkin = frappe.db.get_value("Daily Task Log", {
+        "employee": employee.name,
+        "log_type": "Morning Check-In",
+        "docstatus": 1
+    }, ["name", "date"], order_by="date desc", as_dict=True)
+
+    if latest_checkin:
+        has_eod = frappe.db.exists("Daily Task Log", {
+            "employee": employee.name,
+            "date": latest_checkin.date,
+            "log_type": "End of Day",
+            "docstatus": 1
+        })
+        if not has_eod:
+            date = latest_checkin.date
+
     date_obj = getdate(date)
 
     # ── Work location configuration ───────────────────────────────────────
