@@ -1043,6 +1043,9 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     else:
         date = today()
 
+    if not isinstance(date, str):
+        date = frappe.utils.getdate(date).strftime("%Y-%m-%d")
+
     if not logout_time:
         frappe.throw("Logout time is required.")
 
@@ -1412,6 +1415,9 @@ def reset_morning_checkin():
             date = today()
     else:
         date = today()
+
+    if not isinstance(date, str):
+        date = frappe.utils.getdate(date).strftime("%Y-%m-%d")
 
     # 1. Check if EOD is already submitted
     eod_exists = frappe.db.exists("Daily Task Log", {
