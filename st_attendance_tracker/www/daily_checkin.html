@@ -2303,7 +2303,10 @@ textarea.adhoc-d {
   </div>
   <div class="tbar">
     <span class="tbar-t"><i class="ti ti-list" aria-hidden="true"></i>Update tasks</span>
-    <div class="tbar-r"><button class="btn" onclick="addAdhoc()"><i class="ti ti-plus" aria-hidden="true"></i>Ad-hoc task</button></div>
+    <div class="tbar-r" style="display:flex;gap:8px">
+      <button class="btn" onclick="addEodProject()"><i class="ti ti-folder-plus" aria-hidden="true"></i>Add project</button>
+      <button class="btn" onclick="addAdhoc()"><i class="ti ti-plus" aria-hidden="true"></i>Ad-hoc task</button>
+    </div>
   </div>
   {% if total_count > 0 %}
   <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Status</div><div class="ch">Estimated</div><div class="ch">Actual</div><div class="ch"></div></div>
@@ -2715,11 +2718,15 @@ function addAdhocToProj(pgId, projName) {
   row.className = 'trow';
   row.style.gridTemplateColumns = '24px 1fr 130px 90px 90px 28px';
   row.dataset.adhocid = id;
-  row.dataset.projName = projName;
+  row.dataset.projName = projName || '';
+  
+  var placeholder = projName ? 'Ad-hoc task for ' + projName + '...' : 'Ad-hoc task description...';
+  var tagHtml = projName ? '<span class="ttag" style="background:#ede9fe;color:#7c3aed">' + projName + '</span>' : '';
+  
   row.innerHTML =
     '<div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-zap" style="font-size:13px;color:#7c3aed" aria-hidden="true"></i></div>'+
-    '<div><textarea class="tinp adhoc-d" data-aid="'+id+'" rows="1" placeholder="Ad-hoc task for '+projName+'..." style="resize:none;min-height:32px;line-height:1.4;width:100%"></textarea>'+
-    '<div class="ttags"><span class="ttag ttag-a">Ad-hoc</span><span class="ttag" style="background:#ede9fe;color:#7c3aed">'+projName+'</span></div></div>'+
+    '<div><textarea class="tinp adhoc-d" data-aid="'+id+'" rows="1" placeholder="'+placeholder+'" style="resize:none;min-height:32px;line-height:1.4;width:100%"></textarea>'+
+    '<div class="ttags"><span class="ttag ttag-a">Ad-hoc</span>' + tagHtml + '</div></div>'+
     '<select class="tsel" data-aid="'+id+'"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
     '<input type="text" class="tinp" placeholder="Est.">'+
     '<input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="Actual">'+
@@ -2729,6 +2736,32 @@ function addAdhocToProj(pgId, projName) {
   var ta = row.querySelector('textarea');
   ta.focus();
   autoResizeTextarea(ta);
+}
+var eodPgC = 0;
+function addEodProject() {
+  eodPgC++;
+  var gid = 'epg_new_' + eodPgC;
+  var d = document.createElement('div');
+  d.className = 'pg';
+  d.id = gid;
+  d.innerHTML = 
+    '<div class="pg-head" style="cursor:default">' +
+      '<div class="pg-ico pi1"><i class="ti ti-folder" aria-hidden="true"></i></div>' +
+      '<input class="npg-ni" placeholder="Project name..." data-pname="' + gid + '" style="font-size:14px; font-weight:600; border:none; outline:none; background:transparent; width: 60%; color:var(--text-main)">' +
+      '<div class="trm" onclick="this.closest(\'.pg\').remove()" style="margin-left:auto; width:28px; height:28px; display:flex; align-items:center; justify-content:center; cursor:pointer" title="Remove project"><i class="ti ti-x" aria-hidden="true"></i></div>' +
+    '</div>' +
+    '<div class="pg-body" style="display:block">' +
+      '<div class="pg-add" onclick="addAdhocToProj(\'' + gid + '\', \'\')" style="color:#7c3aed;background:#faf5ff;border-top:1px dashed #e9d5ff">' +
+        '<i class="ti ti-zap" aria-hidden="true"></i>Add ad-hoc task to this project' +
+      '</div>' +
+    '</div>';
+  var adhocArea = document.getElementById('adhoc-area');
+  if (adhocArea) {
+    adhocArea.parentNode.insertBefore(d, adhocArea);
+  }
+  var input = d.querySelector('input');
+  if (input) input.focus();
+  addAdhocToProj(gid, '');
 }
 async function submitEOD(){
   var lo=document.getElementById('logout_time'), lf=document.getElementById('lunch_from'), lt=document.getElementById('lunch_to');
@@ -2746,9 +2779,24 @@ async function submitEOD(){
     var id=row.dataset.adhocid;
     var desc=(row.querySelector('.adhoc-d[data-aid="'+id+'"]')||{}).value||'';
     var stat=(row.querySelector('.tsel[data-aid="'+id+'"]')||{}).value||'Done';
-    var act=(row.querySelector('.adhoc-act[data-aid="'+id+'"]')||{}).value||'';
+    var inputs=row.querySelectorAll('input');
+    var est='';
+    var act='';
+    if(inputs.length>=2){
+      est=inputs[0].value||'';
+      act=inputs[1].value||'';
+    } else if(inputs.length===1){
+      act=inputs[0].value||'';
+    }
     var proj=row.dataset.projName||'';
-    if(desc.trim()) at.push({description:desc.trim(),status:stat,actual_time:act,remarks:'',project_name:proj});
+    if(!proj){
+      var pgCard=row.closest('.pg');
+      if(pgCard){
+        var input=pgCard.querySelector('.npg-ni');
+        if(input) proj=input.value||'';
+      }
+    }
+    if(desc.trim()) at.push({description:desc.trim(),status:stat,estimated_time:est,actual_time:act,remarks:'',project_name:proj});
   });
   var btn=document.getElementById('btn-eod');
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> Submitting...';

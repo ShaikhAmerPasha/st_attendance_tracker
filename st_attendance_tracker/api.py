@@ -1070,6 +1070,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         task_doc.task_type   = "Ad-hoc"
         task_doc.status      = t.get("status", "Done")
         task_doc.origin_date = date
+        task_doc.estimated_time = t.get("estimated_time", "")
         task_doc.actual_time = t.get("actual_time", "")
         task_doc.remarks     = t.get("remarks", "")
         task_doc.project_name = (t.get("project_name") or "").strip()
