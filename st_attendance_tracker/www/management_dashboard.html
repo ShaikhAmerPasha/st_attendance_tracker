@@ -947,11 +947,18 @@ function selectEmp(cell, empName){
 
 function formatTimeHM(t) {
   if (!t) return '—';
+  if (/AM|PM/i.test(t)) return t;
   var parts = String(t).split(':');
   if (parts.length >= 2) {
     var h = parseInt(parts[0], 10);
     var m = parseInt(parts[1], 10);
-    return (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
+    if (isNaN(h) || isNaN(m)) return String(t);
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    var hStr = h < 10 ? '0' + h : h;
+    var mStr = m < 10 ? '0' + m : m;
+    return hStr + ':' + mStr + ' ' + ampm;
   }
   return String(t);
 }

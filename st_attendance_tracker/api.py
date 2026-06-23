@@ -127,6 +127,26 @@ def _to_hhmm(t):
     return ""
 
 
+def _to_ampm(t):
+    """
+    Converts a time/timedelta/string to 'HH:MM AM/PM' format.
+    """
+    hhmm = _to_hhmm(t)
+    if not hhmm:
+        return ""
+    try:
+        parts = hhmm.split(":")
+        h = int(parts[0])
+        m = int(parts[1])
+        ampm = "PM" if h >= 12 else "AM"
+        h = h % 12
+        if h == 0:
+            h = 12
+        return f"{h:02d}:{m:02d} {ampm}"
+    except Exception:
+        return hhmm
+
+
 # ── Notification helper ────────────────────────────────────────────────────────
 
 
@@ -143,7 +163,7 @@ def _send_employee_checkin_email(employee_name, employee_display_name,
         if not emp_email:
             return
 
-        login_hm = _to_hhmm(login_time)
+        login_hm = _to_ampm(login_time)
         task_table_html = _render_screenshot_task_table(tasks, is_checkout=False)
 
         html = f"""
@@ -160,7 +180,7 @@ def _send_employee_checkin_email(employee_name, employee_display_name,
             recipients=[emp_email],
             subject=f"Checked in at {login_hm} — Your plan for {date}",
             message=html,
-            now=True,
+            now=False,
         )
     except Exception as e:
         frappe.log_error(
@@ -199,10 +219,10 @@ def _send_employee_eod_email(employee_name, employee_display_name,
             "docstatus": 1
         }, "login_time")
 
-        login_hm = _to_hhmm(login_time) if login_time else "—"
-        logout_hm = _to_hhmm(logout_time)
-        lunch_from_hm = _to_hhmm(lunch_from) if lunch_from else None
-        lunch_to_hm = _to_hhmm(lunch_to) if lunch_to else None
+        login_hm = _to_ampm(login_time) if login_time else "—"
+        logout_hm = _to_ampm(logout_time)
+        lunch_from_hm = _to_ampm(lunch_from) if lunch_from else None
+        lunch_to_hm = _to_ampm(lunch_to) if lunch_to else None
 
         task_table_html = _render_screenshot_task_table(
             tasks, is_checkout=True, lunch_from=lunch_from_hm, lunch_to=lunch_to_hm
@@ -223,7 +243,7 @@ def _send_employee_eod_email(employee_name, employee_display_name,
             recipients=[emp_email],
             subject=f"Day complete — {len(done_tasks)}/{len(tasks)} tasks done | {date}",
             message=html,
-            now=True,
+            now=False,
         )
     except Exception as e:
         frappe.log_error(
@@ -468,8 +488,8 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
                 "docstatus": 1
             }, ["lunch_from", "lunch_to"])
             if db_vals:
-                lunch_from_hm = _to_hhmm(db_vals[0]) if db_vals[0] else None
-                lunch_to_hm = _to_hhmm(db_vals[1]) if db_vals[1] else None
+                lunch_from_hm = _to_ampm(db_vals[0]) if db_vals[0] else None
+                lunch_to_hm = _to_ampm(db_vals[1]) if db_vals[1] else None
 
         task_html = _render_screenshot_task_table(
             tasks or [],
@@ -492,7 +512,7 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
             recipients=recipients,
             subject=subject,
             message=html,
-            now=True,
+            now=False,
         )
     except Exception as e:
         frappe.log_error(
@@ -857,7 +877,7 @@ def get_page_state():
         "current_time":   now_datetime().strftime("%H:%M"),
         # FIX: use _to_hhmm so single-digit-hour timedeltas (e.g. 9:30:00)
         # don't produce a trailing colon after [:5] slicing
-        "login_time":     _to_hhmm(login_time_val),
+        "login_time":     _to_ampm(login_time_val),
         "is_team_leader": _is_team_leader(employee.name),
     }
 
@@ -993,7 +1013,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         date,
     )
 
-    return {"success": True, "login_time": _to_hhmm(actual_login)}
+    return {"success": True, "login_time": _to_ampm(actual_login)}
 
 
 # ── EOD submit ─────────────────────────────────────────────────────────────────
@@ -1127,7 +1147,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         "success":       True,
         "pending_count": pending_count,
         "net_hours":     net_hours,
-        "logout_time":   _to_hhmm(logout_time),
+        "logout_time":   _to_ampm(logout_time),
     }
 
 
@@ -1310,7 +1330,7 @@ def get_history_day_detail(date):
         "employee": employee.name, "task_date": date,
     }, fields=["name", "description", "status", "task_type",
                "estimated_time", "actual_time", "rolled_over_from",
-               "origin_date", "remarks"],
+               "origin_date", "remarks", "project_name"],
     order_by="task_type asc, creation asc")
 
     for task in tasks:
@@ -1344,6 +1364,62 @@ def delete_carried_task(name):
     frappe.delete_doc("Daily Task", name, ignore_permissions=True, force=True)
     frappe.db.commit()
     return {"success": True}
+
+
+@frappe.whitelist()
+def reset_morning_checkin():
+    """Reset morning check-in by deleting check-in logs and newly created tasks for today."""
+    employee = _get_employee()
+    date = today()
+
+    # 1. Check if EOD is already submitted
+    eod_exists = frappe.db.exists("Daily Task Log", {
+        "employee": employee.name,
+        "date": date,
+        "log_type": "End of Day",
+        "docstatus": 1,
+    })
+    if eod_exists:
+        frappe.throw("Cannot reset check-in because End of Day has already been submitted.")
+
+    # 2. Get Morning Check-In log name
+    morning_log = frappe.db.get_value("Daily Task Log", {
+        "employee": employee.name,
+        "date": date,
+        "log_type": "Morning Check-In",
+    })
+    if not morning_log:
+        frappe.throw("You have not checked in today.")
+
+    # 3. Delete Morning Check-In log
+    frappe.db.delete("Daily Task Log", {"name": morning_log})
+
+    # 4. Delete Employee Checkin created by ST Daily Checkin today
+    frappe.db.delete("Employee Checkin", {
+        "employee": employee.name,
+        "log_type": "IN",
+        "device_id": "ST Daily Checkin",
+        "time": ["between", [date + " 00:00:00", date + " 23:59:59"]],
+    })
+
+    # 5. Delete newly planned tasks created today (not rolled over)
+    frappe.db.delete("Daily Task", {
+        "employee": employee.name,
+        "task_date": date,
+        "task_type": "Planned",
+        "rolled_over_from": ["is", "not set"],
+    })
+
+    # 6. Revert carried-forward tasks back to Pending status so they are ready to check in again
+    frappe.db.set_value("Daily Task", {
+        "employee": employee.name,
+        "task_date": date,
+        "rolled_over_from": ["is", "set"],
+    }, "status", "Pending", update_modified=False)
+
+    frappe.db.commit()
+    return {"success": True}
+
 
 # ── Shared builder ─────────────────────────────────────────────────────────────
 
@@ -1411,8 +1487,8 @@ def _build_team_data(employees, date):
             "designation":   emp.get("designation", ""),
             "status":        status,
             # FIX: _to_hhmm prevents trailing-colon from single-digit-hour timedeltas
-            "login_time":    _to_hhmm(morning.login_time)  if morning and morning.login_time  else "",
-            "logout_time":   _to_hhmm(eod.logout_time)     if eod     and eod.logout_time     else "",
+            "login_time":    _to_ampm(morning.login_time)  if morning and morning.login_time  else "",
+            "logout_time":   _to_ampm(eod.logout_time)     if eod     and eod.logout_time     else "",
             "net_hours":     eod.net_hours                  if eod                              else "",
             "is_late":       bool(morning.is_late)          if morning                          else False,
             "tasks":         tasks,

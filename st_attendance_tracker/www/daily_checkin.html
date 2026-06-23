@@ -1179,7 +1179,7 @@ body {
 
 .npg-row {
   display: flex;
-  align-items: center;
+  align-items: start;
   gap: 12px;
   margin-bottom: 10px;
 }
@@ -1264,7 +1264,7 @@ body {
 
 .ns {
   display: flex;
-  align-items: center;
+  align-items: start;
   gap: 12px;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -2097,6 +2097,21 @@ body {
     left: 0;
     right: 0;
     z-index: 50;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    padding: 12px 16px;
+  }
+  .app-footer .fbtn {
+    flex: 1;
+    min-width: 110px;
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+  .app-footer .fhint {
+    width: 100%;
+    text-align: center;
+    margin-top: 4px;
+    margin-left: 0;
   }
   .hstrip {
     grid-template-columns: repeat(2, 1fr);
@@ -2105,14 +2120,25 @@ body {
     display: none;
   }
   .trow, .stask {
-    grid-template-columns: 28px 1fr 90px;
+    grid-template-columns: 24px 1fr 90px 24px;
     padding: 12px 14px;
+    gap: 8px;
   }
-  .trow>*:nth-child(4), .trow>*:nth-child(5), .trow>*:nth-child(6) {
+  .trow>*:nth-child(4), .trow>*:nth-child(5) {
     display: none;
   }
-  .stask>*:nth-child(4), .stask>*:nth-child(5), .stask>*:nth-child(6) {
+  .trow>*:nth-child(6) {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+  .stask>*:nth-child(4), .stask>*:nth-child(5) {
     display: none;
+  }
+  .stask>*:nth-child(6) {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
   }
   .ef-grid {
     grid-template-columns: 1fr;
@@ -2158,6 +2184,18 @@ body {
   .mob-nav {
     display: none;
   }
+}
+
+/* Auto-resizing textareas styling */
+textarea.desc-edit,
+textarea.carried-desc,
+textarea.npg-desc,
+textarea.ns-desc,
+textarea.adhoc-d {
+  resize: vertical !important;
+  overflow-y: auto !important;
+  box-sizing: border-box;
+  max-height: 250px;
 }
 </style>
 {% endblock %}
@@ -2287,7 +2325,7 @@ body {
         <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
         <input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est.">
         <input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs">
-        <div class="trm"><i class="ti ti-x" aria-hidden="true"></i></div>
+        <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
       </div>
       {% endfor %}
       <div class="pg-add" onclick="addAdhocToProj('epg{{ loop.index }}','{{ pname }}')" style="color:#7c3aed;background:#faf5ff;border-top:1px dashed #e9d5ff">
@@ -2301,11 +2339,11 @@ body {
   {% for task in standalone %}
   <div class="stask {% if task.is_carried %}carried{% endif %}" data-id="{{ task.name }}">
     <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
-    <div><div class="tdesc {% if task.status=='Done' %}dn{% endif %}">{{ task.description }}</div>{% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}</div>
+    <div><textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description }}</textarea>{% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}</div>
     <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
     <input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est.">
     <input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs">
-    <div class="trm"><i class="ti ti-x" aria-hidden="true"></i></div>
+    <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
   </div>
   {% endfor %}
   </div>
@@ -2315,7 +2353,8 @@ body {
 </div>
 <footer class="app-footer">
   <button class="fbtn dk" id="btn-eod" onclick="submitEOD()"><i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit EOD</button>
-  <span class="fhint">Pending tasks auto-carry to tomorrow</span>
+  <button class="fbtn gh" id="btn-reset-ci" onclick="resetCheckin()" style="background:#fff5f5;color:#dc2626;border:1px solid #fecaca"><i class="ti ti-rotate-clockwise" aria-hidden="true"></i>Reset check-in</button>
+  <span class="fhint" style="margin-left:auto">Pending tasks auto-carry to tomorrow</span>
 </footer>
 {% else %}
 <div class="ph">
@@ -2364,7 +2403,7 @@ body {
     </div>
     <div class="pg-body">
       {% for task in ptasks %}
-      <div class="trow" data-id="{{ task.name }}" style="grid-template-columns:24px 1fr 120px 90px 1fr 28px">
+      <div class="trow" data-id="{{ task.name }}" style="grid-template-columns:24px 1fr 120px 90px 90px 28px">
         <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
         <div><textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div></div>
         <div style="font-size:12px;color:#9ca3af;padding-top:6px">{{ pname }}</div>
@@ -2379,7 +2418,7 @@ body {
   {% if standalone %}
   <div style="margin-top:6px"><div class="stlbl"><i class="ti ti-minus" aria-hidden="true"></i>Standalone carried</div>
   {% for task in standalone %}
-  <div class="stask carried" data-id="{{ task.name }}" style="grid-template-columns:24px 1fr 120px 90px 1fr 28px">
+  <div class="stask carried" data-id="{{ task.name }}" style="grid-template-columns:24px 1fr 120px 90px 90px 28px">
     <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
     <div><textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div></div>
     <div style="font-size:12px;color:#9ca3af;padding-top:6px">—</div>
@@ -2519,10 +2558,10 @@ function recalc(){
   var lo=document.getElementById('logout_time'), lf=document.getElementById('lunch_from'), lt=document.getElementById('lunch_to');
   if (!lo) return;
   var lv=lo.value;
-  var el=document.getElementById('hs-lo'); if(el) el.textContent=lv||'—';
-  var el2=document.getElementById('rp-lo'); if(el2) el2.textContent=lv||'—';
+  var el=document.getElementById('hs-lo'); if(el) el.textContent=formatTimeAMPM(lv)||'—';
+  var el2=document.getElementById('rp-lo'); if(el2) el2.textContent=formatTimeAMPM(lv)||'—';
   if(lf&&lt&&lf.value&&lt.value){
-    var rl=document.getElementById('rp-ln'); if(rl) rl.textContent=lf.value.slice(0,5)+'–'+lt.value.slice(0,5);
+    var rl=document.getElementById('rp-ln'); if(rl) rl.textContent=formatTimeAMPM(lf.value)+'–'+formatTimeAMPM(lt.value);
   }
 }
 recalc();
@@ -2548,12 +2587,12 @@ function onSel(s){
 }
 function togglePG(id){ var el=document.getElementById(id); if(el) el.classList.toggle('closed'); }
 async function delCarried(name, btn) {
-  if (!confirm('Remove this carried task?')) return;
+  if (!confirm('Are you sure you want to delete this task?')) return;
   btn.innerHTML='<i class="ti ti-loader" style="animation:spin .7s linear infinite" aria-hidden="true"></i>';
   try {
     await frappe.call({ method:'st_attendance_tracker.api.delete_carried_task', args:{name:name} });
     var row = btn.closest('[data-id]'); if (row) row.remove();
-    CARRIED = Math.max(0, CARRIED-1); updCounts();
+    CARRIED = Math.max(0, CARRIED-1); updCounts(); updProg();
     toast('Task removed.','ok',2000);
   } catch(e) { toast(e.message||'Could not delete task.','err'); btn.innerHTML='<i class="ti ti-x" aria-hidden="true"></i>'; }
 }
@@ -2585,7 +2624,11 @@ function addTaskToPG(gid) {
   r.innerHTML='<textarea class="npg-ti npg-desc" data-tid="'+tid+'" data-pg="'+gid+'" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit"></textarea>'+
     '<input class="npg-ei" data-tid="'+tid+'" placeholder="Est. time">'+
     '<span class="npg-trm" onclick="this.closest(\'.npg-row\').remove();updCounts()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';
-  c.appendChild(r); r.querySelector('textarea').focus(); updCounts();
+  c.appendChild(r);
+  var ta = r.querySelector('textarea');
+  ta.focus();
+  autoResizeTextarea(ta);
+  updCounts();
 }
 function addT() {
   tkC++; var tid='st'+tkC;
@@ -2593,7 +2636,11 @@ function addT() {
   d.innerHTML='<textarea class="ns-ti ns-desc" data-tid="'+tid+'" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit"></textarea>'+
     '<input class="ns-ei" data-tid="'+tid+'" placeholder="Est. time">'+
     '<span class="ns-rm" onclick="this.closest(\'.ns\').remove();updCounts()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';
-  document.getElementById('new-area').appendChild(d); d.querySelector('textarea').focus(); updCounts();
+  document.getElementById('new-area').appendChild(d);
+  var ta = d.querySelector('textarea');
+  ta.focus();
+  autoResizeTextarea(ta);
+  updCounts();
 }
 function showWFH(msg, link) {
   var m=document.getElementById('wfh-msg'), l=document.getElementById('wfh-link');
@@ -2653,7 +2700,10 @@ function addAdhoc(){
     '<input type="text" class="tinp" placeholder="Est.">'+
     '<input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="Actual">'+
     '<div class="trm adhoc-rm" onclick="this.closest(\'.stask\').remove()" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>';
-  document.getElementById('adhoc-area').appendChild(d); d.querySelector('textarea').focus();
+  document.getElementById('adhoc-area').appendChild(d);
+  var ta = d.querySelector('textarea');
+  ta.focus();
+  autoResizeTextarea(ta);
 }
 var projAdC = 0;
 function addAdhocToProj(pgId, projName) {
@@ -2676,7 +2726,9 @@ function addAdhocToProj(pgId, projName) {
     '<div class="trm adhoc-rm" onclick="this.closest(\'[data-adhocid]\').remove()" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>';
   var pgAdd = pgEl.querySelector('.pg-add');
   if (pgAdd) body.insertBefore(row, pgAdd); else body.appendChild(row);
-  row.querySelector('textarea').focus();
+  var ta = row.querySelector('textarea');
+  ta.focus();
+  autoResizeTextarea(ta);
 }
 async function submitEOD(){
   var lo=document.getElementById('logout_time'), lf=document.getElementById('lunch_from'), lt=document.getElementById('lunch_to');
@@ -2733,12 +2785,130 @@ function saveDescEdit(el) {
   var id = el.dataset.id; if (!id) return;
   frappe.call({ method:'frappe.client.set_value', args:{doctype:'Daily Task',name:id,fieldname:'description',value:el.value} });
 }
+function formatTimeAMPM(t) {
+  if (!t) return '—';
+  if (/AM|PM/i.test(t)) return t;
+  var parts = String(t).split(':');
+  if (parts.length >= 2) {
+    var h = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+    if (isNaN(h) || isNaN(m)) return String(t);
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    var hStr = h < 10 ? '0' + h : h;
+    var mStr = m < 10 ? '0' + m : m;
+    return hStr + ':' + mStr + ' ' + ampm;
+  }
+  return String(t);
+}
+function autoResizeTextarea(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  var sh = el.scrollHeight;
+  var mh = parseInt(el.dataset.manualHeight || '0', 10);
+  el.style.height = Math.max(sh, mh) + 'px';
+}
+function initTextareaResizer() {
+  document.querySelectorAll('textarea.desc-edit, textarea.carried-desc, textarea.npg-desc, textarea.ns-desc, textarea.adhoc-d').forEach(function(el) {
+    autoResizeTextarea(el);
+  });
+}
+var isResizing = false, initialHeight = 0;
+document.addEventListener('mousedown', function(e) {
+  if (e.target.tagName === 'TEXTAREA' && (
+    e.target.classList.contains('desc-edit') ||
+    e.target.classList.contains('carried-desc') ||
+    e.target.classList.contains('npg-desc') ||
+    e.target.classList.contains('ns-desc') ||
+    e.target.classList.contains('adhoc-d')
+  )) {
+    isResizing = true;
+    initialHeight = e.target.offsetHeight;
+  }
+});
+document.addEventListener('mouseup', function(e) {
+  if (isResizing && e.target.tagName === 'TEXTAREA') {
+    isResizing = false;
+    var currentHeight = e.target.offsetHeight;
+    if (currentHeight !== initialHeight) {
+      e.target.dataset.manualHeight = currentHeight;
+      autoResizeTextarea(e.target);
+    }
+  }
+});
 document.addEventListener('focusin', function(e) {
-  if (e.target.classList.contains('desc-edit')) { e.target.style.borderColor='var(--primary)'; e.target.style.background='#fff'; e.target.style.padding='4px 6px'; e.target.style.borderRadius='4px'; }
+  if (e.target.tagName === 'TEXTAREA' && (
+    e.target.classList.contains('desc-edit') ||
+    e.target.classList.contains('carried-desc') ||
+    e.target.classList.contains('npg-desc') ||
+    e.target.classList.contains('ns-desc') ||
+    e.target.classList.contains('adhoc-d')
+  )) {
+    if (e.target.classList.contains('desc-edit')) {
+      e.target.style.borderColor='var(--primary)';
+      e.target.style.background='#fff';
+      e.target.style.padding='4px 6px';
+      e.target.style.borderRadius='4px';
+    }
+    autoResizeTextarea(e.target);
+  }
 });
 document.addEventListener('focusout', function(e) {
-  if (e.target.classList.contains('desc-edit')) { e.target.style.borderColor='transparent'; e.target.style.background='transparent'; e.target.style.padding='0'; }
+  if (e.target.tagName === 'TEXTAREA' && (
+    e.target.classList.contains('desc-edit') ||
+    e.target.classList.contains('carried-desc') ||
+    e.target.classList.contains('npg-desc') ||
+    e.target.classList.contains('ns-desc') ||
+    e.target.classList.contains('adhoc-d')
+  )) {
+    if (e.target.classList.contains('desc-edit')) {
+      e.target.style.borderColor='transparent';
+      e.target.style.background='transparent';
+      e.target.style.padding='0';
+      e.target.style.borderRadius='0';
+    }
+    autoResizeTextarea(e.target);
+  }
 });
+document.addEventListener('input', function(e) {
+  if (e.target.tagName === 'TEXTAREA' && (
+    e.target.classList.contains('desc-edit') ||
+    e.target.classList.contains('carried-desc') ||
+    e.target.classList.contains('npg-desc') ||
+    e.target.classList.contains('ns-desc') ||
+    e.target.classList.contains('adhoc-d')
+  )) {
+    autoResizeTextarea(e.target);
+  }
+});
+async function resetCheckin() {
+  if (!confirm("Are you sure you want to reset today's check-in? This will delete today's check-in log and newly added morning tasks, restoring your state back to before check-in.")) return;
+  var btn = document.getElementById('btn-reset-ci');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span> Resetting...';
+  }
+  try {
+    var r = await frappe.call({method: 'st_attendance_tracker.api.reset_morning_checkin'});
+    if (r.message && r.message.success) {
+      toast("Check-in reset successfully. Reloading...", "ok", 2000);
+      setTimeout(function() { location.reload(); }, 1800);
+    }
+  } catch(e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-rotate-clockwise" aria-hidden="true"></i>Reset check-in';
+    }
+    toast(e.message || "Could not reset check-in.", "err");
+  }
+}
+window.addEventListener('resize', initTextareaResizer);
+document.addEventListener('DOMContentLoaded', initTextareaResizer);
+window.addEventListener('load', initTextareaResizer);
+setTimeout(initTextareaResizer, 100);
+setTimeout(initTextareaResizer, 500);
+setTimeout(initTextareaResizer, 1500);
 initWL();
 updProg();
 </script>

@@ -1,6 +1,6 @@
 import frappe
 from frappe.utils import today, now_datetime, getdate
-from st_attendance_tracker.api import _to_hhmm
+from st_attendance_tracker.api import _to_hhmm, _to_ampm
 
 
 def get_context(context):
@@ -80,10 +80,10 @@ def get_context(context):
         raw_login = frappe.db.get_value(
             "Daily Task Log", morning_log, "login_time"
         ) or ""
-        # FIX: _to_hhmm converts timedelta → 'HH:MM' with leading zero.
+        # FIX: _to_ampm converts timedelta → 'HH:MM AM/PM' with leading zero.
         # The old str(timedelta)[:5] produced '9:30:' (trailing colon) for
         # single-digit hours, breaking both display and recalc().
-        login_time_val = _to_hhmm(raw_login)
+        login_time_val = _to_ampm(raw_login)
         work_location_val = frappe.db.get_value(
             "Daily Task Log", morning_log, "work_location"
         ) or ""
@@ -94,10 +94,10 @@ def get_context(context):
             ["net_hours", "logout_time", "lunch_from", "lunch_to"], as_dict=True
         )
         net_hours_val   = eod_data.net_hours    or ""
-        # FIX: use _to_hhmm for all time fields — timedelta → 'HH:MM'
-        logout_time_val = _to_hhmm(eod_data.logout_time)
-        lunch_from_val  = _to_hhmm(eod_data.lunch_from)
-        lunch_to_val    = _to_hhmm(eod_data.lunch_to)
+        # FIX: use _to_ampm for all time fields — timedelta → 'HH:MM AM/PM'
+        logout_time_val = _to_ampm(eod_data.logout_time)
+        lunch_from_val  = _to_ampm(eod_data.lunch_from)
+        lunch_to_val    = _to_ampm(eod_data.lunch_to)
 
     # Group tasks by project
     projects = {}
