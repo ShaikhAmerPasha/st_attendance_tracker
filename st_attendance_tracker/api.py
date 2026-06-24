@@ -581,6 +581,9 @@ def _get_root_task(task_name):
 # ── Rollover on EOD ────────────────────────────────────────────────────────────
 
 def _rollover_pending_tasks(employee, date):
+    # Lock the employee record to serialize EOD rollovers and prevent duplicate entries
+    frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee,))
+
     next_date = _get_next_working_date(employee, date)
 
     pending = frappe.get_all("Daily Task", filters={
@@ -633,6 +636,9 @@ def _safety_rollover(employee, today_date):
     Catches tasks missed because employee didn't submit EOD.
     Runs silently on morning page load before check-in.
     """
+    # Lock the employee record to serialize page-load safety rollovers and prevent duplicate entries
+    frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee,))
+
     missed = frappe.get_all("Daily Task", filters={
         "employee": employee,
         "task_date": ["<", today_date],
@@ -908,6 +914,9 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
     carried_updates: JSON list of {name, description, estimated_time} edits
     """
     employee = _get_employee()
+    # Lock employee record to serialize check-in processing
+    frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee.name,))
+
     date = today()
 
     if frappe.db.exists("Daily Task Log", {
@@ -1037,6 +1046,8 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
 @frappe.whitelist()
 def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks):
     employee = _get_employee()
+    # Lock employee record to serialize checkout/EOD processing
+    frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee.name,))
     
     # Resolve active date: latest check-in without a checkout, else today
     latest_checkin = frappe.db.get_value("Daily Task Log", {
