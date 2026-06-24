@@ -8,10 +8,10 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <style>
 :root {
-  --primary: #e11d48;
-  --primary-hover: #be123c;
-  --primary-light: #fff1f2;
-  --primary-gradient: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --primary-light: #e0e7ff;
+  --primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
   --success: #10b981;
   --success-bg: #ecfdf5;
   --success-border: #a7f3d0;
@@ -167,9 +167,9 @@ body {
 
 .cols {
   display: grid;
-  grid-template-columns: 240px 1fr 320px;
+  grid-template-columns: 220px 1fr 300px;
   gap: 24px;
-  max-width: 1600px;
+  max-width: 1800px;
   margin: 0 auto;
   padding: 24px;
   width: 100%;
@@ -2120,25 +2120,25 @@ body {
     display: none;
   }
   .trow, .stask {
-    grid-template-columns: 24px 1fr 90px 24px;
-    padding: 12px 14px;
-    gap: 8px;
+    padding: 12px 14px !important;
+    gap: 10px !important;
   }
-  .trow>*:nth-child(4), .trow>*:nth-child(5) {
-    display: none;
+  .trow-meta, .stask-meta {
+    padding-left: 0 !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    padding-top: 10px !important;
   }
-  .trow>*:nth-child(6) {
+  .tmeta-fields {
+    margin-left: 0 !important;
+    width: 100% !important;
     display: flex !important;
-    align-items: center;
-    justify-content: center;
+    justify-content: space-between !important;
+    gap: 8px !important;
   }
-  .stask>*:nth-child(4), .stask>*:nth-child(5) {
-    display: none;
-  }
-  .stask>*:nth-child(6) {
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
+  .tmeta-field input {
+    width: 75px !important;
   }
   .ef-grid {
     grid-template-columns: 1fr;
@@ -2197,6 +2197,238 @@ textarea.adhoc-d {
   box-sizing: border-box;
   max-height: 250px;
 }
+
+
+
+
+/* Premium Modern SaaS Overrides (With Light Colors) */
+body {
+    background: #f8fafc !important; /* Very soft slate background */
+    color: #0f172a !important;
+    font-family: 'Inter', system-ui, sans-serif !important;
+}
+
+/* Base reset with subtle glass feel */
+.tnav, .sidebar, .pg, .dept-card, .dp, .wl-wrap, .sb-card, .hcell {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02) !important;
+}
+
+.tnav { border-bottom: 1px solid #e2e8f0 !important; }
+.tnav-logo {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+}
+
+/* The Hero/Morning Card - Soft Pastel Glow */
+.ph, .hero {
+    background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%),
+                repeating-linear-gradient(45deg, rgba(79, 70, 229, 0.02) 0, rgba(79, 70, 229, 0.02) 1px, transparent 1px, transparent 10px) !important;
+    border: 1px solid #e0e7ff !important;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.05) !important;
+}
+.ph-title, .hero-info .title { color: #1e1b4b !important; }
+.ph-sub, .hero-info .sub { color: #4338ca !important; }
+.ph-time { color: #312e81 !important; }
+.ph-date { color: #4f46e5 !important; }
+
+/* Avatars */
+.ph-av { background: #e0e7ff !important; color: #4338ca !important; border: 1px solid #c7d2fe !important; }
+.sb-av, .tnav-av { background: #e0e7ff !important; color: #4338ca !important; border: 1px solid #c7d2fe !important; }
+
+/* Primary Buttons (Indigo) */
+.btn.red, .fbtn.red {
+    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+    color: #ffffff !important;
+    border: none !important;
+    box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25) !important;
+    font-weight: 500 !important;
+    border-radius: 6px !important;
+}
+.btn.red:hover, .fbtn.red:hover {
+    box-shadow: 0 6px 15px rgba(79, 70, 229, 0.4) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Secondary Buttons */
+.btn, .tnav-btn, .fbtn {
+    background: #ffffff !important;
+    color: #475569 !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02) !important;
+    transition: all 0.2s ease !important;
+}
+.btn:hover, .tnav-btn:hover, .fbtn:hover {
+    background: #f8fafc !important;
+    color: #0f172a !important;
+    border-color: #94a3b8 !important;
+}
+
+/* Inputs */
+.tinp, .tsel, .date-inp, .wl-sel {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+    border-radius: 6px !important;
+}
+.tinp:focus, .tsel:focus, .date-inp:focus, .wl-sel:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2) !important;
+    outline: none !important;
+}
+
+/* Task Rows */
+.trow, .ec {
+    background: #ffffff !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    transition: background 0.15s ease !important;
+}
+.trow:hover, .ec:hover {
+    background: #f8fafc !important;
+}
+
+/* Typography Overrides */
+.sb-lbl, .ch, .tbar-t, .dp-lbl, .tc-l, .hl { color: #64748b !important; }
+.hv { color: #0f172a !important; }
+.sb-name, .dept-name, .dp-name { color: #0f172a !important; }
+.sb-link { color: #475569 !important; }
+.sb-link.on { background: #e0e7ff !important; color: #4338ca !important; border-radius: 6px !important;}
+
+/* Subtle Checkboxes */
+.tck {
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 4px !important;
+}
+.tck:hover { border-color: #6366f1 !important; background: #e0e7ff !important; }
+.tck.dn {
+    background: #10b981 !important;
+    border-color: #10b981 !important;
+}
+.tck.dn i { color: #ffffff !important; }
+
+/* Status Badges */
+.pc-in, .sbb-in { background: #ecfdf5 !important; color: #059669 !important; border: 1px solid #a7f3d0 !important; }
+.pc-ca { background: #fffbeb !important; color: #d97706 !important; border: 1px solid #fde68a !important; }
+.pc-eo, .sbb-eod { background: #eff6ff !important; color: #2563eb !important; border: 1px solid #bfdbfe !important; }
+.sbb-out { background: #f1f5f9 !important; color: #64748b !important; border: 1px solid #cbd5e1 !important; }
+.ttag { background: #f1f5f9 !important; border: 1px solid #e2e8f0 !important; color: #475569 !important; }
+
+/* Global Stats area */
+.gstats { background: #ffffff !important; border: 1px solid #e2e8f0 !important; }
+.gs { border-right: 1px solid #e2e8f0 !important; }
+.gs-n { color: #0f172a !important; }
+.gs-l { color: #64748b !important; }
+
+/* Project Headers */
+.pg-head { background: #f8fafc !important; border-bottom: 1px solid #e2e8f0 !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar-thumb { background: #cbd5e1 !important; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8 !important; }
+
+/* Desktop Grid Header override */
+.col-hdr { display: none !important; }
+
+/* Modern full-width card layout for tasks */
+.trow, .stask {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    padding: 16px 20px !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    margin-bottom: 12px !important;
+    background: #ffffff !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
+    transition: all 0.2s ease !important;
+}
+
+.trow:hover, .stask:hover {
+    border-color: #6366f1 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+}
+
+.trow-main, .stask-main {
+    display: flex !important;
+    align-items: start !important;
+    gap: 12px !important;
+    width: 100% !important;
+}
+
+.tdesc-wrap {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+}
+
+.tdesc-wrap textarea {
+    width: 100% !important;
+    min-height: 38px !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    color: #0f172a !important;
+    resize: vertical !important;
+    outline: none !important;
+    line-height: 1.5 !important;
+}
+
+.tdesc-wrap textarea:focus {
+    box-shadow: none !important;
+    border: none !important;
+}
+
+.trow-meta, .stask-meta {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+    gap: 16px !important;
+    padding-left: 36px !important; /* aligns with description text */
+    border-top: 1px solid #f1f5f9 !important;
+    padding-top: 12px !important;
+}
+
+.tmeta-fields {
+    display: flex !important;
+    align-items: center !important;
+    gap: 16px !important;
+    margin-left: auto !important;
+}
+
+.tmeta-field {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+.tmeta-field label {
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    color: #64748b !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+}
+
+.tmeta-field input {
+    width: 90px !important;
+    padding: 6px 12px !important;
+    font-size: 13px !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
+    background: #ffffff !important;
+}
+
+.tmeta-field input:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15) !important;
+}
+
 </style>
 {% endblock %}
 {% block page_content %}
@@ -2215,12 +2447,15 @@ textarea.adhoc-d {
 <div class="cols">
 <aside class="sidebar">
   <div class="sb-top">
-    <div class="sb-card">
-      <div class="sb-av">{{ employee.employee_name[:2].upper() }}</div>
-      <div><div class="sb-name">{{ employee.employee_name }}</div><div class="sb-dept">{{ employee.department or 'No department' }}</div></div>
-      {% if eod_done %}<span class="sb-badge sbb-eod">EOD done</span>
-      {% elif is_checked_in %}<span class="sb-badge sbb-in">Checked in</span>
-      {% else %}<span class="sb-badge sbb-out">Not checked in</span>{% endif %}
+    <div class="sb-card" style="align-items: flex-start;">
+      <div class="sb-av" style="margin-top: 2px;">{{ employee.employee_name[:2].upper() }}</div>
+      <div style="flex: 1; min-width: 0;">
+        <div class="sb-name" style="word-break: break-word; font-size: 13px; font-weight: 700; color: var(--text-main); line-height: 1.35;">{{ employee.employee_name }}</div>
+        <div class="sb-dept" style="word-break: break-word; font-size: 11px; color: var(--text-muted); margin-top: 2px; margin-bottom: 8px;">{{ employee.department or 'No department' }}</div>
+        {% if eod_done %}<span class="sb-badge sbb-eod" style="margin-left: 0; display: inline-block;">EOD done</span>
+        {% elif is_checked_in %}<span class="sb-badge sbb-in" style="margin-left: 0; display: inline-block;">Checked in</span>
+        {% else %}<span class="sb-badge sbb-out" style="margin-left: 0; display: inline-block;">Not checked in</span>{% endif %}
+      </div>
     </div>
   </div>
   <div class="sb-sec">
@@ -2287,13 +2522,29 @@ textarea.adhoc-d {
   </div>
 </div>
 <div class="body">
+  <!-- Descriptive check-out instructions -->
+  <div style="background: rgba(79, 70, 229, 0.04); border: 1px solid rgba(79, 70, 229, 0.08); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 8px;">
+    <div style="font-weight: 700; color: #4338ca; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+      <i class="ti ti-info-circle"></i> Daily Checkout Steps
+    </div>
+    <div style="font-size: 12px; color: #475569; display: flex; flex-direction: column; gap: 6px; line-height: 1.5;">
+      <div style="display: flex; align-items: center; gap: 6px;"><i class="ti ti-circle-number-1" style="color: #4f46e5;"></i> <span>Confirm your <strong>Logout Time</strong> and optional <strong>Lunch Duration</strong> below.</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><i class="ti ti-circle-number-2" style="color: #4f46e5;"></i> <span>Update statuses of all listed tasks (mark completed ones as <strong>Done</strong>).</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><i class="ti ti-circle-number-3" style="color: #4f46e5;"></i> <span>Fill in the <strong>Actual time</strong> spent on each task (e.g. "2 hrs").</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><i class="ti ti-circle-number-4" style="color: #4f46e5;"></i> <span>Click the black <strong>Check out & submit EOD</strong> button in the footer. Pending tasks will carry forward.</span></div>
+    </div>
+  </div>
+
   <div class="eod-f">
     <div class="ef-hdr"><i class="ti ti-clock" aria-hidden="true"></i>Time details</div>
     <div class="ef-grid">
       <div class="ef-f"><label>Logout time *</label><input type="time" id="logout_time" value="{{ current_time }}" oninput="this.dataset.userSet='1';recalc()"></div>
       <div class="ef-f"><label>Lunch from <span class="opt">optional</span></label><input type="time" id="lunch_from" value="14:00" oninput="recalc()"></div>
       <div class="ef-f"><label>Lunch to <span class="opt">optional</span></label><input type="time" id="lunch_to" value="15:00" oninput="recalc()"></div>
-      
+    </div>
+    <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px; display: flex; align-items: center; gap: 4px; line-height: 1.4;">
+      <i class="ti ti-info-circle" style="color: #6366f1; font-size: 13px;"></i>
+      <span>Note: Time inputs display format (12h AM/PM vs. 24h) is determined by your browser and device system locale settings.</span>
     </div>
   </div>
   <div class="pb-row">
@@ -2305,7 +2556,7 @@ textarea.adhoc-d {
     <span class="tbar-t"><i class="ti ti-list" aria-hidden="true"></i>Update tasks</span>
     <div class="tbar-r" style="display:flex;gap:8px">
       <button class="btn" onclick="addEodProject()"><i class="ti ti-folder-plus" aria-hidden="true"></i>Add project</button>
-      <button class="btn" onclick="addAdhoc()"><i class="ti ti-plus" aria-hidden="true"></i>Ad-hoc task</button>
+      <button class="btn" onclick="addAdhoc()"><i class="ti ti-plus" aria-hidden="true"></i>Additional task</button>
     </div>
   </div>
   {% if total_count > 0 %}
@@ -2323,16 +2574,25 @@ textarea.adhoc-d {
     <div class="pg-body">
       {% for task in ptasks %}
       <div class="trow" data-id="{{ task.name }}">
-        <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
-        <div><textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description }}</textarea>{% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}</div>
-        <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
-        <input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est.">
-        <input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs">
-        <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+        <div class="trow-main">
+          <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
+          <div class="tdesc-wrap">
+            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description }}</textarea>
+            {% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}
+          </div>
+          <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+        </div>
+        <div class="trow-meta">
+          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
+          <div class="tmeta-fields">
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est."></div>
+            <div class="tmeta-field"><label>Actual</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs"></div>
+          </div>
+        </div>
       </div>
       {% endfor %}
       <div class="pg-add" onclick="addAdhocToProj('epg{{ loop.index }}','{{ pname }}')" style="color:#7c3aed;background:#faf5ff;border-top:1px dashed #e9d5ff">
-        <i class="ti ti-zap" aria-hidden="true"></i>Add ad-hoc task to this project
+        <i class="ti ti-zap" aria-hidden="true"></i>Add additional task to this project
       </div>
     </div>
   </div>
@@ -2341,12 +2601,21 @@ textarea.adhoc-d {
   <div><div class="stlbl"><i class="ti ti-minus" aria-hidden="true"></i>Standalone tasks</div>
   {% for task in standalone %}
   <div class="stask {% if task.is_carried %}carried{% endif %}" data-id="{{ task.name }}">
-    <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
-    <div><textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description }}</textarea>{% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}</div>
-    <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
-    <input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est.">
-    <input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs">
-    <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+    <div class="stask-main">
+      <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
+      <div class="tdesc-wrap">
+        <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description }}</textarea>
+        {% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}
+      </div>
+      <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+    </div>
+    <div class="stask-meta">
+      <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
+      <div class="tmeta-fields">
+        <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est."></div>
+        <div class="tmeta-field"><label>Actual</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs"></div>
+      </div>
+    </div>
   </div>
   {% endfor %}
   </div>
@@ -2367,16 +2636,34 @@ textarea.adhoc-d {
       <div class="ph-title">Good morning, {{ employee.employee_name.split()[0] }}</div>
       <div class="ph-sub">{{ employee.department or 'No department' }}&nbsp;&nbsp;{% if carried_count > 0 %}<span class="ph-chip pc-ca">{{ carried_count }} carried</span>{% endif %}</div>
     </div>
-    <div class="ph-right"><div class="ph-time" id="clock">{{ current_time }}</div><div class="ph-date">{{ date }}</div></div>
+    <div class="ph-right"><div class="ph-time" id="clock">{{ current_time_ampm }}</div><div class="ph-date">{{ date }}</div></div>
   </div>
   <div class="hstrip">
-    <div class="hcell"><div class="hl">Login time</div><div class="hv r"><input type="time" id="login_time" value="{{ current_time }}" style="background:none;border:none;outline:none;font-size:18px;font-weight:700;color:var(--primary);font-family:inherit;width:110px"></div></div>
+    <div class="hcell">
+      <div class="hl" style="display: flex; align-items: center; gap: 4px;">Login time <i class="ti ti-pencil" style="font-size: 10px; opacity: 0.7;" title="Click to edit"></i></div>
+      <div class="hv r" style="display: flex; align-items: center; border-bottom: 1px dashed rgba(79, 70, 229, 0.4); width: max-content; padding-bottom: 2px;">
+        <input type="time" id="login_time" value="{{ current_time }}" style="background:none;border:none;outline:none;font-size:18px;font-weight:700;color:var(--primary);font-family:inherit;width:80px;cursor:pointer;" title="Click to edit">
+      </div>
+    </div>
     <div class="hcell"><div class="hl">Date</div><div class="hv" style="font-size:15px">{{ date }}</div></div>
     <div class="hcell"><div class="hl">Tasks queued</div><div class="hv" id="tc-n">{{ carried_count }}</div><div class="hs" id="tc-s">{% if carried_count > 0 %}carried + new{% else %}add below{% endif %}</div></div>
     <div class="hcell"><div class="hl">Status</div><div class="hv" style="font-size:14px;color:#9ca3af">Not checked in</div></div>
   </div>
 </div>
 <div class="body">
+  <!-- Descriptive check-in instructions -->
+  <div style="background: rgba(79, 70, 229, 0.04); border: 1px solid rgba(79, 70, 229, 0.08); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 8px;">
+    <div style="font-weight: 700; color: #4338ca; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+      <i class="ti ti-info-circle"></i> Daily Check-In Steps
+    </div>
+    <div style="font-size: 12px; color: #475569; display: flex; flex-direction: column; gap: 6px; line-height: 1.5;">
+      <div style="display: flex; align-items: center; gap: 6px;"><i class="ti ti-circle-number-1" style="color: #4f46e5;"></i> <span>Verify your <strong>Login Time</strong> above (click the time to adjust if you checked in earlier).</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><i class="ti ti-circle-number-2" style="color: #4f46e5;"></i> <span>Select your <strong>Work Location</strong> below.</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><i class="ti ti-circle-number-3" style="color: #4f46e5;"></i> <span>Plan your tasks for today. You must add/have <strong>at least one task</strong> to check in.</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><i class="ti ti-circle-number-4" style="color: #4f46e5;"></i> <span>Click the purple <strong>Check in & start day</strong> button in the footer to submit.</span></div>
+    </div>
+  </div>
+
   <div class="wl-wrap">
     <label class="wl-lbl"><i class="ti ti-map-pin" aria-hidden="true"></i>Work location</label>
     <select id="wl-sel" class="wl-sel" onchange="onWLChange()"></select>
@@ -2386,10 +2673,10 @@ textarea.adhoc-d {
   <div class="empty">
     <div class="empty-ico"><i class="ti ti-checklist" aria-hidden="true"></i></div>
     <div class="empty-t">Plan your day</div>
-    <p class="empty-s">Add your tasks for today. Group them by project or add individually.</p>
+    <p class="empty-s">Create project folders or add standalone tasks to organize your work schedule today.</p>
     <div class="empty-btns">
-      <button class="btn red" onclick="addPG()"><i class="ti ti-folder-plus" aria-hidden="true"></i>Add project</button>
-      <button class="btn" onclick="addT()"><i class="ti ti-plus" aria-hidden="true"></i>Add task</button>
+      <button class="btn red" onclick="addPG()"><i class="ti ti-folder-plus" aria-hidden="true"></i>Create project folder</button>
+      <button class="btn" onclick="addT()"><i class="ti ti-plus" aria-hidden="true"></i>Add standalone task</button>
     </div>
   </div>
   {% else %}
@@ -2397,37 +2684,55 @@ textarea.adhoc-d {
   <div class="tbar" style="margin-bottom:10px"><span class="tbar-t"><i class="ti ti-history" aria-hidden="true"></i>Carried from previous days</span></div>
   <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Project</div><div class="ch">Estimated</div><div class="ch"></div><div class="ch"></div></div>
   {% for pname, ptasks in projects.items() %}
-  <div class="pg" id="cpg{{ loop.index }}">
+  <div class="pg npg" id="cpg{{ loop.index }}" data-pgid="cpg{{ loop.index }}">
     <div class="pg-head" onclick="togglePG('cpg{{ loop.index }}')">
       <div class="pg-ico pi{{ loop.index0 % 6 }}"><i class="ti ti-folder" aria-hidden="true"></i></div>
       <span class="pg-name">{{ pname }}</span>
       <span class="pg-meta">{{ ptasks|length }} carried</span>
       <i class="ti ti-chevron-down pg-chev" aria-hidden="true"></i>
     </div>
-    <div class="pg-body">
+    <input type="hidden" data-pname="cpg{{ loop.index }}" value="{{ pname }}">
+    <div class="pg-body" data-tc="cpg{{ loop.index }}">
       {% for task in ptasks %}
-      <div class="trow" data-id="{{ task.name }}" style="grid-template-columns:24px 1fr 120px 90px 90px 28px">
-        <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
-        <div><textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div></div>
-        <div style="font-size:12px;color:#9ca3af;padding-top:6px">{{ pname }}</div>
-        <input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est.">
-        <div></div>
-        <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+      <div class="trow" data-id="{{ task.name }}">
+        <div class="trow-main">
+          <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
+          <div class="tdesc-wrap">
+            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>
+          </div>
+          <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+        </div>
+        <div class="trow-meta">
+          <span style="font-size:12px;color:#9ca3af">{{ pname }}</span>
+          <div class="tmeta-fields">
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est."></div>
+          </div>
+        </div>
       </div>
       {% endfor %}
+      <div class="pg-add" onclick="addTaskToPG('cpg{{ loop.index }}')" style="color:#7c3aed;background:#faf5ff;border-top:1px dashed #e9d5ff">
+        <i class="ti ti-plus" aria-hidden="true"></i>Add task to this project
+      </div>
     </div>
   </div>
   {% endfor %}
   {% if standalone %}
   <div style="margin-top:6px"><div class="stlbl"><i class="ti ti-minus" aria-hidden="true"></i>Standalone carried</div>
   {% for task in standalone %}
-  <div class="stask carried" data-id="{{ task.name }}" style="grid-template-columns:24px 1fr 120px 90px 90px 28px">
-    <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
-    <div><textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div></div>
-    <div style="font-size:12px;color:#9ca3af;padding-top:6px">—</div>
-    <input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est.">
-    <div></div>
-    <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+  <div class="stask carried" data-id="{{ task.name }}">
+    <div class="stask-main">
+      <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
+      <div class="tdesc-wrap">
+        <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>
+      </div>
+      <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+    </div>
+    <div class="stask-meta">
+      <span style="font-size:12px;color:#9ca3af">Standalone</span>
+      <div class="tmeta-fields">
+        <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est."></div>
+      </div>
+    </div>
   </div>
   {% endfor %}
   </div>
@@ -2546,7 +2851,17 @@ function toast(msg, type, dur) {
   clearTimeout(t._t); t._t = setTimeout(function(){ t.className=''; }, dur||3500);
 }
 var clk = document.getElementById('clock');
-if (clk) setInterval(function(){ var n=new Date(); clk.textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }, 15000);
+if (clk) setInterval(function(){
+  var n = new Date();
+  var h = n.getHours();
+  var m = n.getMinutes();
+  var ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  h = h ? h : 12;
+  var hStr = String(h).padStart(2, '0');
+  var mStr = String(m).padStart(2, '0');
+  clk.textContent = hStr + ':' + mStr + ' ' + ampm;
+}, 15000);
 // FIX: Auto-update logout_time every minute so stale page-load time is never submitted.
 // Stops once employee manually edits the field (tracked via data-user-set attribute).
 setInterval(function(){
@@ -2696,13 +3011,19 @@ var adC=0;
 function addAdhoc(){
   adC++; var id='ad'+adC;
   var d=document.createElement('div');
-  d.className='stask'; d.style.gridTemplateColumns='24px 1fr 130px 90px 90px 28px'; d.dataset.adhocid=id;
-  d.innerHTML='<div style="display:flex;align-items:center;justify-content:center"><i class="ti ti-zap" style="font-size:13px;color:#7c3aed" aria-hidden="true"></i></div>'+
-    '<div><textarea class="tinp adhoc-d" data-aid="'+id+'" rows="1" placeholder="Ad-hoc task..." style="resize:none;min-height:32px;line-height:1.4;width:100%"></textarea><div class="ttags"><span class="ttag ttag-a">Ad-hoc</span></div></div>'+
+  d.className='stask'; d.dataset.adhocid=id;
+  d.innerHTML='<div class="stask-main">'+
+    '<div style="display:flex;align-items:center;justify-content:center"><i class="ti ti-zap" style="font-size:13px;color:#7c3aed" aria-hidden="true"></i></div>'+
+    '<div class="tdesc-wrap"><textarea class="tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="Additional task..." style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea><div class="ttags"><span class="ttag ttag-a">Additional</span></div></div>'+
+    '<div class="trm adhoc-rm" onclick="this.closest(\'.stask\').remove()" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
+    '</div>'+
+    '<div class="stask-meta">'+
     '<select class="tsel" data-aid="'+id+'"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
-    '<input type="text" class="tinp" placeholder="Est.">'+
-    '<input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="Actual">'+
-    '<div class="trm adhoc-rm" onclick="this.closest(\'.stask\').remove()" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>';
+    '<div class="tmeta-fields">'+
+    '<div class="tmeta-field"><label>Est.</label><input type="text" class="tinp" placeholder="Est."></div>'+
+    '<div class="tmeta-field"><label>Actual</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="Actual"></div>'+
+    '</div>'+
+    '</div>';
   document.getElementById('adhoc-area').appendChild(d);
   var ta = d.querySelector('textarea');
   ta.focus();
@@ -2716,21 +3037,26 @@ function addAdhocToProj(pgId, projName) {
   var body = pgEl.querySelector('.pg-body'); if (!body) return;
   var row = document.createElement('div');
   row.className = 'trow';
-  row.style.gridTemplateColumns = '24px 1fr 130px 90px 90px 28px';
   row.dataset.adhocid = id;
   row.dataset.projName = projName || '';
   
-  var placeholder = projName ? 'Ad-hoc task for ' + projName + '...' : 'Ad-hoc task description...';
+  var placeholder = projName ? 'Additional task for ' + projName + '...' : 'Additional task description...';
   var tagHtml = projName ? '<span class="ttag" style="background:#ede9fe;color:#7c3aed">' + projName + '</span>' : '';
   
   row.innerHTML =
+    '<div class="trow-main">'+
     '<div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-zap" style="font-size:13px;color:#7c3aed" aria-hidden="true"></i></div>'+
-    '<div><textarea class="tinp adhoc-d" data-aid="'+id+'" rows="1" placeholder="'+placeholder+'" style="resize:none;min-height:32px;line-height:1.4;width:100%"></textarea>'+
-    '<div class="ttags"><span class="ttag ttag-a">Ad-hoc</span>' + tagHtml + '</div></div>'+
+    '<div class="tdesc-wrap"><textarea class="tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="'+placeholder+'" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea>'+
+    '<div class="ttags"><span class="ttag ttag-a">Additional</span>' + tagHtml + '</div></div>'+
+    '<div class="trm adhoc-rm" onclick="this.closest(\'[data-adhocid]\').remove()" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
+    '</div>'+
+    '<div class="trow-meta">'+
     '<select class="tsel" data-aid="'+id+'"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
-    '<input type="text" class="tinp" placeholder="Est.">'+
-    '<input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="Actual">'+
-    '<div class="trm adhoc-rm" onclick="this.closest(\'[data-adhocid]\').remove()" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>';
+    '<div class="tmeta-fields">'+
+    '<div class="tmeta-field"><label>Est.</label><input type="text" class="tinp" placeholder="Est."></div>'+
+    '<div class="tmeta-field"><label>Actual</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="Actual"></div>'+
+    '</div>'+
+    '</div>';
   var pgAdd = pgEl.querySelector('.pg-add');
   if (pgAdd) body.insertBefore(row, pgAdd); else body.appendChild(row);
   var ta = row.querySelector('textarea');
@@ -2752,7 +3078,7 @@ function addEodProject() {
     '</div>' +
     '<div class="pg-body" style="display:block">' +
       '<div class="pg-add" onclick="addAdhocToProj(\'' + gid + '\', \'\')" style="color:#7c3aed;background:#faf5ff;border-top:1px dashed #e9d5ff">' +
-        '<i class="ti ti-zap" aria-hidden="true"></i>Add ad-hoc task to this project' +
+        '<i class="ti ti-zap" aria-hidden="true"></i>Add additional task to this project' +
       '</div>' +
     '</div>';
   var adhocArea = document.getElementById('adhoc-area');

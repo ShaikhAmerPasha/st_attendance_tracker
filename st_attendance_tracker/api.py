@@ -112,16 +112,28 @@ def _to_hhmm(t):
         _calc_net_hours silently returns '' → net_hours stored as empty.
       • 'H:MM:SS' / 'HH:MM:SS' — strings with or without leading zero
       • 'HH:MM' — already-clean strings from JavaScript input[type=time]
+      • AM/PM formats like '05:19 pm' or '5:19 PM'
       • None / '' — returns ''
     """
     if isinstance(t, datetime.timedelta):
         secs = int(t.total_seconds())
         return f"{secs // 3600:02d}:{(secs % 3600) // 60:02d}"
-    s = str(t or "").strip()
+    s = str(t or "").strip().lower()
+    if not s:
+        return ""
+    is_pm = "pm" in s
+    is_am = "am" in s
+    s = s.replace("pm", "").replace("am", "").strip()
     parts = s.split(":")
     if len(parts) >= 2:
         try:
-            return f"{int(parts[0]):02d}:{int(parts[1]):02d}"
+            h = int(parts[0])
+            m = int(parts[1])
+            if is_pm and h < 12:
+                h += 12
+            elif is_am and h == 12:
+                h = 0
+            return f"{h:02d}:{m:02d}"
         except Exception:
             pass
     return ""
@@ -556,6 +568,10 @@ def _get_root_task(task_name):
     while depth < 365:
         parent = frappe.db.get_value("Daily Task", current, "rolled_over_from")
         if not parent:
+            return current
+        # Check if the parent task still exists in the database.
+        # If it has been deleted, we treat 'current' as the root/original task.
+        if not frappe.db.exists("Daily Task", parent):
             return current
         current = parent
         depth += 1
@@ -1077,6 +1093,9 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
             ancestor = frappe.db.get_value("Daily Task", name, "rolled_over_from")
             depth = 0
             while ancestor and depth < 365:
+                # If an ancestor task was deleted, stop traversing to prevent issues
+                if not frappe.db.exists("Daily Task", ancestor):
+                    break
                 frappe.db.set_value("Daily Task", ancestor, "status", "Done")
                 ancestor = frappe.db.get_value("Daily Task", ancestor, "rolled_over_from")
                 depth += 1
