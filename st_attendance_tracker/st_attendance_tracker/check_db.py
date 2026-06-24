@@ -1,13 +1,15 @@
 import frappe
 
 def run():
-    print("Error Log fields:")
-    logs = frappe.db.get_all('Error Log', limit=1, fields=['*'])
-    if logs:
-        print(logs[0].keys())
-        # Print logs containing NetHours
-        print("\nSearching logs...")
-        all_logs = frappe.db.get_all('Error Log', order_by='creation desc', limit=100, fields=['name', 'method', 'error'])
-        for l in all_logs:
-            if "NetHours" in str(l.method) or "net" in str(l.error) or "net" in str(l.method) or "NetHours" in str(l.error):
-                print(f"METHOD: {l.method}\nERROR:\n{l.error}\n---")
+    print("Leave Application Fields:")
+    try:
+        meta = frappe.get_meta("Leave Application")
+        fields = [f.fieldname for f in meta.fields]
+        print(", ".join(fields))
+        
+        # Check if there are any Leave Applications in the system
+        apps = frappe.db.get_all("Leave Application", limit=5, fields=["name", "employee", "from_date", "to_date", "half_day", "half_day_date", "status", "docstatus"])
+        for app in apps:
+            print(app)
+    except Exception as e:
+        print(f"Error checking Leave Application: {e}")

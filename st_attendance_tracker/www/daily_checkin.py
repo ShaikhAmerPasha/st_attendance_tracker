@@ -74,6 +74,31 @@ def get_context(context):
     lunch_from_val  = ""
     lunch_to_val    = ""
 
+    # Check if employee has an approved half-day leave today
+    is_half_day_leave = False
+    try:
+        dt = getdate(date)
+        is_half_day_leave = bool(frappe.db.exists("Leave Application", {
+            "employee": employee.name,
+            "status": "Approved",
+            "docstatus": 1,
+            "half_day": 1,
+            "half_day_date": dt
+        }))
+        if not is_half_day_leave:
+            # Also check if within from_date and to_date range
+            is_half_day_leave = bool(frappe.db.exists("Leave Application", {
+                "employee": employee.name,
+                "status": "Approved",
+                "docstatus": 1,
+                "half_day": 1,
+                "from_date": ["<=", dt],
+                "to_date": [">=", dt]
+            }))
+    except Exception:
+        pass
+
+
     # Always load tasks for today — needed for pre-checkin carried display
     tasks = frappe.get_all("Daily Task",
         filters={"employee": employee.name, "task_date": date},
@@ -154,6 +179,7 @@ def get_context(context):
     context.done_count = done_count
     context.total_count = len(tasks)
     context.work_location_config = work_location_config
+    context.is_half_day_leave = is_half_day_leave
     context.title = "Daily Check-In"
 
 

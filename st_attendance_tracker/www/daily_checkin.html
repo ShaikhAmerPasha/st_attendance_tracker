@@ -2492,7 +2492,13 @@ body {
       <div><div class="dg-l">Tasks done</div><div class="dg-v g">{{ dt|length }} / {{ tasks|length }}</div></div>
       <div><div class="dg-l">Carried forward</div><div class="dg-v">{{ pt|length }}</div></div>
       <div><div class="dg-l">Login</div><div class="dg-v">{{ login_time or '—' }}</div></div>
-      
+      <div><div class="dg-l">Logout</div><div class="dg-v">{{ logout_time or '—' }}</div></div>
+      {% if net_hours %}
+      <div style="grid-column: span 2; text-align: center; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
+        <div class="dg-l">Net Working Hours</div>
+        <div class="dg-v g" style="color: var(--success); font-size: 20px;">{{ net_hours }}</div>
+      </div>
+      {% endif %}
     </div>
     <div class="done-links">
       <a href="/my-history" class="dl-btn"><i class="ti ti-history" aria-hidden="true"></i>View history</a>
@@ -2517,7 +2523,7 @@ body {
   <div class="hstrip">
     <div class="hcell"><div class="hl">Login</div><div class="hv r">{{ login_time }}</div><div class="hs">Checked in</div></div>
     <div class="hcell"><div class="hl">Logout</div><div class="hv" id="hs-lo">—</div><div class="hs">Set below</div></div>
-    
+    <div class="hcell"><div class="hl">Net hours</div><div class="hv" id="hs-nh">—</div><div class="hs">Excl. lunch</div></div>
     <div class="hcell"><div class="hl">Tasks</div><div class="hv">{{ done_count }} <span style="font-size:14px;color:#9ca3af;font-weight:400">/ {{ total_count }}</span></div><div class="hs">done</div></div>
   </div>
 </div>
@@ -2545,6 +2551,13 @@ body {
     <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px; display: flex; align-items: center; gap: 4px; line-height: 1.4;">
       <i class="ti ti-info-circle" style="color: #6366f1; font-size: 13px;"></i>
       <span>Note: Time inputs display format (12h AM/PM vs. 24h) is determined by your browser and device system locale settings.</span>
+    </div>
+    <div id="rec-lo-banner" style="margin-top: 12px; padding: 10px 14px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: var(--radius-md); font-size: 12px; color: #4f46e5; display: flex; align-items: center; gap: 8px;">
+      <i class="ti ti-info-circle" style="font-size: 16px;"></i>
+      <span>
+        Based on your login at <strong>{{ login_time }}</strong>{% if is_half_day_leave %} (Half-Day Leave detected){% endif %}, 
+        your recommended logout time is <strong id="rec-lo-val">—</strong>.
+      </span>
     </div>
   </div>
   <div class="pb-row">
@@ -2773,7 +2786,7 @@ body {
       <div class="tc"><div class="tc-l">Login</div><div class="tc-v">{{ login_time or '—' }}</div></div>
       <div class="tc"><div class="tc-l">Logout</div><div class="tc-v" id="rp-lo">{{ logout_time or '—' }}</div></div>
       <div class="tc"><div class="tc-l">Lunch</div><div class="tc-v" id="rp-ln" style="font-size:12px">{% if lunch_from and lunch_to %}{{ lunch_from }}–{{ lunch_to }}{% else %}—{% endif %}</div></div>
-      
+      <div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g" id="rp-nh">{{ net_hours or '—' }}</div></div>
     </div>
   </div>
   {% if projects %}
@@ -2819,6 +2832,7 @@ body {
 <div id="toast" role="status" aria-live="polite"></div>
 <script>
 var LOGIN_TIME = "{{ login_time or current_time }}";
+var IS_HALF_DAY = {{ 'true' if is_half_day_leave else 'false' }};
 var CARRIED = {{ carried_count }};
 var DONE_N  = {{ done_count }};
 var TOTAL_N = {{ total_count }};
@@ -2862,11 +2876,60 @@ if (clk) setInterval(function(){
   var mStr = String(m).padStart(2, '0');
   clk.textContent = hStr + ':' + mStr + ' ' + ampm;
 }, 15000);
-// FIX: Auto-update logout_time every minute so stale page-load time is never submitted.
-// Stops once employee manually edits the field (tracked via data-user-set attribute).
+function parseTimeToMinutes(t) {
+  if (!t) return null;
+  t = String(t).trim();
+  var match = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return null;
+  var h = parseInt(match[1], 10);
+  var m = parseInt(match[2], 10);
+  var ampm = match[3];
+  if (ampm) {
+    ampm = ampm.toUpperCase();
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+  }
+  return h * 60 + m;
+}
+
+function addMinutesToTime(timeStr, minutes) {
+  var min = parseTimeToMinutes(timeStr);
+  if (min === null) return '';
+  var newMin = (min + minutes) % (24 * 60);
+  var h = Math.floor(newMin / 60);
+  var m = newMin % 60;
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
+function getRecommendedLogoutTime() {
+  if (!LOGIN_TIME) return '';
+  var loginMin = parseTimeToMinutes(LOGIN_TIME);
+  if (loginMin === null) return '';
+  if (IS_HALF_DAY) {
+    return addMinutesToTime(LOGIN_TIME, 4 * 60);
+  } else {
+    var lunchMin = 0;
+    var lf = document.getElementById('lunch_from');
+    var lt = document.getElementById('lunch_to');
+    if (lf && lt && lf.value && lt.value) {
+      var lfMin = parseTimeToMinutes(lf.value);
+      var ltMin = parseTimeToMinutes(lt.value);
+      if (lfMin !== null && ltMin !== null) {
+        var lDiff = ltMin - lfMin;
+        if (lDiff < 0) lDiff += 24 * 60;
+        lunchMin = lDiff;
+      }
+    }
+    return addMinutesToTime(LOGIN_TIME, 8 * 60 + lunchMin);
+  }
+}
+
+// Auto-update logout_time every minute so stale page-load time is never submitted,
+// but only if the user hasn't set it and we do not have a recommended logout time.
 setInterval(function(){
   var lo=document.getElementById('logout_time');
   if(!lo||lo.dataset.userSet) return;
+  if(getRecommendedLogoutTime()) return;
   var n=new Date();
   lo.value=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
   recalc();
@@ -2875,11 +2938,54 @@ setInterval(function(){
 function recalc(){
   var lo=document.getElementById('logout_time'), lf=document.getElementById('lunch_from'), lt=document.getElementById('lunch_to');
   if (!lo) return;
+
+  // Prefill logout time with recommended logout time if not edited by user yet
+  if (!lo.dataset.userSet && LOGIN_TIME) {
+    var recVal = getRecommendedLogoutTime();
+    if (recVal) {
+      lo.value = recVal;
+    }
+  }
+
   var lv=lo.value;
   var el=document.getElementById('hs-lo'); if(el) el.textContent=formatTimeAMPM(lv)||'—';
   var el2=document.getElementById('rp-lo'); if(el2) el2.textContent=formatTimeAMPM(lv)||'—';
   if(lf&&lt&&lf.value&&lt.value){
     var rl=document.getElementById('rp-ln'); if(rl) rl.textContent=formatTimeAMPM(lf.value)+'–'+formatTimeAMPM(lt.value);
+  }
+
+  // Update recommended logout banner value
+  var recVal = getRecommendedLogoutTime();
+  var recEl = document.getElementById('rec-lo-val');
+  if (recEl && recVal) recEl.textContent = formatTimeAMPM(recVal);
+
+  // Dynamic Net Hours calculation
+  var loginMin = parseTimeToMinutes(LOGIN_TIME);
+  var logoutMin = parseTimeToMinutes(lv);
+  if (loginMin !== null && logoutMin !== null) {
+    var diff = logoutMin - loginMin;
+    if (diff < 0) diff += 24 * 60; // handle midnight wrap
+
+    var lunchMin = 0;
+    if (lf && lt && lf.value && lt.value) {
+      var lfMin = parseTimeToMinutes(lf.value);
+      var ltMin = parseTimeToMinutes(lt.value);
+      if (lfMin !== null && ltMin !== null) {
+        var lDiff = ltMin - lfMin;
+        if (lDiff < 0) lDiff += 24 * 60;
+        lunchMin = lDiff;
+      }
+    }
+
+    var netMin = diff - lunchMin;
+    if (netMin < 0) netMin = 0;
+
+    var nh = Math.floor(netMin / 60);
+    var nm = netMin % 60;
+    var netStr = nh + " hr" + (nh !== 1 ? "s" : "") + (nm > 0 ? " " + nm + " min" : "");
+
+    var rpNh = document.getElementById('rp-nh'); if (rpNh) rpNh.textContent = netStr;
+    var hsNh = document.getElementById('hs-nh'); if (hsNh) hsNh.textContent = netStr;
   }
 }
 recalc();

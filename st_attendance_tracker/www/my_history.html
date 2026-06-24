@@ -806,7 +806,7 @@ function renderLog(log) {
   var metas = [];
   if (log.login_time)  metas.push('<span class="dm"><i class="ti ti-login" aria-hidden="true"></i>' + formatTimeHM(log.login_time) + '</span>');
   if (log.logout_time) metas.push('<span class="dm"><i class="ti ti-logout" aria-hidden="true"></i>' + formatTimeHM(log.logout_time) + '</span>');
-  // if (log.net_hours)   metas.push('<span class="dm"><i class="ti ti-clock" aria-hidden="true"></i>' + log.net_hours + '</span>');
+  if (log.net_hours)   metas.push('<span class="dm"><i class="ti ti-clock" aria-hidden="true"></i>' + log.net_hours + '</span>');
 
   return '<div class="day-card" data-date="' + log.date + '" onclick="toggleDay(this)">' +
     '<div class="day-head">' +
@@ -850,8 +850,8 @@ function loadDayDetail(date) {
       var timeHtml =
         '<div class="time-row">' +
           '<div class="tc"><div class="tc-l">Login</div><div class="tc-v">' + (ml.login_time ? formatTimeHM(ml.login_time) : '—') + (ml.is_late ? ' <span style="color:#d97706;font-size:10px">Late</span>' : '') + '</div></div>' +
-          '<div class="tc"><div class="tc-l">Logout</div><div class="tc-v">' + (el.logout_time ? formatTimeHM(el.logout_time) : '—') + '</div></div>'/* +
-          '<div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g">' + (el.net_hours || '—') + '</div></div>'*/ +
+          '<div class="tc"><div class="tc-l">Logout</div><div class="tc-v">' + (el.logout_time ? formatTimeHM(el.logout_time) : '—') + '</div></div>' +
+          '<div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g">' + (el.net_hours || '—') + '</div></div>' +
         '</div>';
 
       var tasksHtml = '';

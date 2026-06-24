@@ -925,6 +925,7 @@ body {
 .sb-lbl, .ch, .tbar-t, .dp-lbl, .tc-l, .hl { color: #64748b !important; }
 .hv { color: #0f172a !important; }
 .sb-name, .dept-name, .dp-name { color: #0f172a !important; }
+.dp-hero .dp-name { color: #ffffff !important; }
 .sb-link { color: #475569 !important; }
 .sb-link.on { background: #e0e7ff !important; color: #4338ca !important; border-radius: 6px !important;}
 
@@ -951,6 +952,10 @@ body {
 .gstats { background: #ffffff !important; border: 1px solid #e2e8f0 !important; }
 .gs { border-right: 1px solid #e2e8f0 !important; }
 .gs-n { color: #0f172a !important; }
+.gs-n.g { color: #047857 !important; }
+.gs-n.r { color: #b91c1c !important; }
+.gs-n.a { color: #b45309 !important; }
+.gs-n.b { color: #1d4ed8 !important; }
 .gs-l { color: #64748b !important; }
 
 /* Project Headers */
@@ -1004,8 +1009,21 @@ body {
       </div>
       <div id="dept-list"><div id="loading"><i class="ti ti-loader" style="font-size:22px;animation:spin .7s linear infinite" aria-hidden="true"></i><br><br>Loading...</div></div>
     </div>
-    <div>
-      <div class="dp" id="detail-panel">
+    <div style="position: sticky; top: 84px; display: flex; flex-direction: column; gap: 20px;">
+      <div class="dp" id="leaderboard-panel" style="position: static;">
+        <div class="dp-hero" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <i class="ti ti-trophy" style="font-size: 20px; color: #fbbf24;"></i>
+            <div class="dp-name" style="font-size: 15px;">Hours Leaderboard</div>
+          </div>
+          <div class="dp-dept" style="color: rgba(255, 255, 255, 0.7); margin-top: 4px;">Employees ranked by net hours worked</div>
+        </div>
+        <div class="dp-body" id="leaderboard-body" style="max-height: 320px; overflow-y: auto; padding: 16px;">
+          <div style="text-align: center; color: var(--text-light); font-size: 12px; padding: 16px 0;">No EOD logs submitted yet for this date.</div>
+        </div>
+      </div>
+
+      <div class="dp" id="detail-panel" style="position: static;">
         <div class="dp-body">
           <div class="empty-dp"><i class="ti ti-user-search" aria-hidden="true"></i><p>Click any employee to view their tasks and time details</p></div>
         </div>
@@ -1137,8 +1155,8 @@ function renderDetail(data){
         '<div class="tg">'+
           '<div class="tc"><div class="tc-l">Login</div><div class="tc-v">'+(ml.login_time?formatTimeHM(ml.login_time):'—')+(ml.is_late?' <span style="color:#d97706;font-size:10px">Late</span>':'')+'</div></div>'+
           '<div class="tc"><div class="tc-l">Logout</div><div class="tc-v">'+(el.logout_time?formatTimeHM(el.logout_time):'—')+'</div></div>'+
-          '<div class="tc"><div class="tc-l">Lunch</div><div class="tc-v" style="font-size:12px">'+(el.lunch_from?formatTimeHM(el.lunch_from)+'–'+formatTimeHM(el.lunch_to):'—')+'</div></div>'/*+
-          '<div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g">'+(el.net_hours||'—')+'</div></div>'*/+
+          '<div class="tc"><div class="tc-l">Lunch</div><div class="tc-v" style="font-size:12px">'+(el.lunch_from?formatTimeHM(el.lunch_from)+'–'+formatTimeHM(el.lunch_to):'—')+'</div></div>' +
+          '<div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g">'+(el.net_hours||'—')+'</div></div>' +
         '</div>'+
       '</div>'+
       '<div class="dp-sec">'+
@@ -1146,6 +1164,51 @@ function renderDetail(data){
         taskRows+
       '</div>'+
     '</div>';
+}
+
+function renderLeaderboard(rankings){
+  var body = document.getElementById('leaderboard-body');
+  if(!body) return;
+  if(!rankings || !rankings.length){
+    body.innerHTML = '<div style="text-align: center; color: var(--text-light); font-size: 12px; padding: 16px 0;">No EOD logs submitted yet for this date.</div>';
+    return;
+  }
+
+  body.innerHTML = rankings.map(function(r, idx){
+    var rankNum = idx + 1;
+    var rankBadge = '<div style="width: 24px; height: 24px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #475569;">#' + rankNum + '</div>';
+    if(rankNum === 1) rankBadge = '<div style="width: 24px; height: 24px; border-radius: 50%; background: #fef3c7; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #d97706;"><i class="ti ti-trophy" style="font-size:12px;color:#d97706" aria-hidden="true"></i></div>';
+    else if(rankNum === 2) rankBadge = '<div style="width: 24px; height: 24px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #475569;"><i class="ti ti-medal" style="font-size:12px;color:#475569" aria-hidden="true"></i></div>';
+    else if(rankNum === 3) rankBadge = '<div style="width: 24px; height: 24px; border-radius: 50%; background: #ffedd5; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #ea580c;"><i class="ti ti-medal" style="font-size:12px;color:#ea580c" aria-hidden="true"></i></div>';
+
+    var hoursStr = r.net_hours;
+    var otBadge = '';
+    if(r.net_minutes > 480) {
+      var otMin = r.net_minutes - 480;
+      var oth = Math.floor(otMin / 60);
+      var otm = otMin % 60;
+      var otStr = '+' + oth + 'h' + (otm > 0 ? ' ' + otm + 'm' : '') + ' OT';
+      otBadge = '<span class="day-badge db-full" style="font-size: 8px; padding: 2px 6px; margin-top: 4px; display: inline-block;">' + otStr + '</span>';
+    } else if (r.is_half_day) {
+      otBadge = '<span class="day-badge db-part" style="font-size: 8px; padding: 2px 6px; margin-top: 4px; display: inline-block;">Half-Day</span>';
+    } else {
+      otBadge = '<span class="day-badge db-no" style="font-size: 8px; padding: 2px 6px; margin-top: 4px; display: inline-block; background:#f1f5f9; color:#475569; border-color:#cbd5e1;">Regular</span>';
+    }
+
+    var timeRange = r.login_time + ' – ' + r.logout_time;
+
+    return '<div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f1f5f9;">' +
+      rankBadge +
+      '<div style="flex: 1; min-width: 0;">' +
+        '<div style="font-size: 13px; font-weight: 600; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + r.employee_name + '</div>' +
+        '<div style="font-size: 11px; color: #64748b;">' + timeRange + '</div>' +
+      '</div>' +
+      '<div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end;">' +
+        '<div style="font-size: 13px; font-weight: 700; color: #047857;">' + hoursStr + '</div>' +
+        otBadge +
+      '</div>' +
+    '</div>';
+  }).join('');
 }
 
 function updateGlobal(summary){
@@ -1179,6 +1242,7 @@ function loadAll(date){
       if(!r.message) return;
       ALL_DEPTS = r.message.departments||[];
       updateGlobal(r.message.summary);
+      if(r.message.rankings) renderLeaderboard(r.message.rankings);
       renderDepts();
     }
   });

@@ -244,6 +244,7 @@ def _send_employee_eod_email(employee_name, employee_display_name,
         <div style="font-family:'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 12px;">
           <div style="font-size: 16px; font-weight: bold; color: #15803d; margin-bottom: 4px;">Login: {login_hm}</div>
           <div style="font-size: 16px; font-weight: bold; color: #dc2626; margin-bottom: 4px;">Logout: {logout_hm}</div>
+          {f'<div style="font-size: 16px; font-weight: bold; color: #2563eb; margin-bottom: 4px;">Net Working Hours: {net_hours}</div>' if net_hours else ''}
           <div style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin-bottom: 16px;">Today's Work Summary:</div>
           <div>
             {task_table_html}
@@ -622,6 +623,7 @@ def _rollover_pending_tasks(employee, date):
         new_task.project_name     = task.project_name or ""
         new_task.remarks = f"[Carried from {task.origin_date or date}]"
         new_task.insert(ignore_permissions=True)
+        frappe.db.set_value("Daily Task", task.name, "status", "Rolled Over")
         rolled += 1
 
     if rolled:
@@ -674,6 +676,7 @@ def _safety_rollover(employee, today_date):
         new_task.project_name    = task.project_name or ""
         new_task.remarks = f"[Auto-carried from {task.origin_date or task.task_date}]"
         new_task.insert(ignore_permissions=True)
+        frappe.db.set_value("Daily Task", task.name, "status", "Rolled Over")
 
     frappe.db.commit()
 
@@ -1266,9 +1269,73 @@ def get_management_dashboard(date=None):
         "status": "Approved", "docstatus": 1,
     }, pluck="employee")
 
+    # Calculate rankings based on completed EOD logs for this date
+    def _parse_time_to_minutes(time_str):
+        if not time_str:
+            return 0
+        s = str(time_str).strip().lower()
+        if 'h' in s or 'm' in s:
+            h = m = 0
+            try:
+                if 'h' in s:
+                    parts = s.split('h')
+                    h = int(float(parts[0].strip()))
+                    s = parts[1]
+                if 'm' in s:
+                    parts = s.split('m')
+                    m = int(float(parts[0].strip()))
+                return h * 60 + m
+            except Exception:
+                pass
+        hhmm = _to_hhmm(time_str)
+        if not hhmm:
+            return 0
+        try:
+            parts = hhmm.split(":")
+            return int(parts[0]) * 60 + int(parts[1])
+        except Exception:
+            return 0
+
+    eod_logs = frappe.db.get_all("Daily Task Log", filters={
+        "date": date,
+        "log_type": "End of Day",
+        "docstatus": 1
+    }, fields=["employee", "employee_name", "net_hours", "logout_time"])
+
+    checkin_logs = frappe.db.get_all("Daily Task Log", filters={
+        "date": date,
+        "log_type": "Morning Check-In",
+        "docstatus": 1
+    }, fields=["employee", "login_time"])
+
+    login_map = {c.employee: c.login_time for c in checkin_logs}
+
+    half_day_leaves = frappe.db.get_all("Leave Application", filters={
+        "from_date": ["<=", date], "to_date": [">=", date],
+        "status": "Approved", "half_day": 1, "docstatus": 1
+    }, pluck="employee")
+
+    rankings = []
+    for log in eod_logs:
+        net_min = _parse_time_to_minutes(log.net_hours)
+        login_val = login_map.get(log.employee)
+        rankings.append({
+            "employee": log.employee,
+            "employee_name": log.employee_name,
+            "net_hours": log.net_hours or "00:00",
+            "net_minutes": net_min,
+            "login_time": _to_ampm(login_val) if login_val else "—",
+            "logout_time": _to_ampm(log.logout_time) if log.logout_time else "—",
+            "is_half_day": log.employee in half_day_leaves
+        })
+
+    # Sort rankings descending by net minutes
+    rankings.sort(key=lambda x: x["net_minutes"], reverse=True)
+
     return {
         "departments": result,
         "date": date,
+        "rankings": rankings,
         "summary": {
             "total":      len(all_employees),
             "checked_in": len(set(checked_in)),
@@ -1415,6 +1482,18 @@ def delete_carried_task(name):
     task_employee = frappe.db.get_value("Daily Task", name, "employee")
     if task_employee != employee.name:
         frappe.throw("Not authorised to delete this task.", frappe.PermissionError)
+
+    # Clean up ancestors to prevent safety/EOD rollover from resurrecting the task
+    root = _get_root_task(name)
+    if root:
+        frappe.db.sql("""
+            UPDATE `tabDaily Task`
+            SET status = 'Rolled Over'
+            WHERE employee = %s
+              AND (name = %s OR rolled_over_from = %s)
+              AND status IN ('Pending', 'In Progress')
+        """, (employee.name, root, root))
+
     frappe.delete_doc("Daily Task", name, ignore_permissions=True, force=True)
     frappe.db.commit()
     return {"success": True}
