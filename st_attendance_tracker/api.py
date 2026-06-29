@@ -209,6 +209,9 @@ def _send_employee_checkin_email(employee_name, employee_display_name,
             if t.get("estimated_time") and t["estimated_time"].replace("hr","").replace("h","").strip().isdigit()
         )
 
+        carried_span = f'<span>🔄 <strong style="color:#92400e">{carried_count}</strong> carried</span>' if carried_count else ""
+        est_span = f'<span>⏱ <strong style="color:#111">{est_total}h</strong> estimated</span>' if est_total else ""
+
         no_tasks_msg = '<p style="font-size:13px;color:#9ca3af;font-style:italic">No tasks added yet.</p>' if not tasks else ""
 
         login_hm = _to_hhmm(login_time)
@@ -239,8 +242,8 @@ def _send_employee_checkin_email(employee_name, employee_display_name,
             <div style="background:#f9fafb;border-radius:8px;padding:10px 14px;
                         display:flex;gap:16px;font-size:12px;color:#6b7280">
               <span>📊 <strong style="color:#111">{total_tasks}</strong> tasks planned</span>
-              {"<span>🔄 <strong style=\"color:#92400e\">" + str(carried_count) + "</strong> carried</span>" if carried_count else ""}
-              {"<span>⏱ <strong style=\"color:#111\">" + str(est_total) + "h</strong> estimated</span>" if est_total else ""}
+             {carried_span}
+              {est_span}
             </div>
           </div>
           <p style="font-size:11px;color:#aaa;text-align:center;margin-top:8px">
