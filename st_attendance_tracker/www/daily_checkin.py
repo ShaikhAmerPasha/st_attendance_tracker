@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils import today, now_datetime, getdate
+from st_attendance_tracker.api import _to_hhmm
 
 
 def get_context(context):
@@ -50,10 +51,12 @@ def get_context(context):
         "log_type": "End of Day", "docstatus": 1,
     })
 
-    login_time_val = ""
-    net_hours_val = ""
+    login_time_val  = ""
+    net_hours_val   = ""
     logout_time_val = ""
     work_location_val = ""
+    lunch_from_val  = ""
+    lunch_to_val    = ""
 
     # Always load tasks for today — needed for pre-checkin carried display
     tasks = frappe.get_all("Daily Task",
@@ -74,9 +77,13 @@ def get_context(context):
             task["days_pending"] = 0
 
     if morning_log:
-        login_time_val = frappe.db.get_value(
+        raw_login = frappe.db.get_value(
             "Daily Task Log", morning_log, "login_time"
         ) or ""
+        # FIX: _to_hhmm converts timedelta → 'HH:MM' with leading zero.
+        # The old str(timedelta)[:5] produced '9:30:' (trailing colon) for
+        # single-digit hours, breaking both display and recalc().
+        login_time_val = _to_hhmm(raw_login)
         work_location_val = frappe.db.get_value(
             "Daily Task Log", morning_log, "work_location"
         ) or ""
@@ -84,10 +91,13 @@ def get_context(context):
     if eod_log:
         eod_data = frappe.db.get_value(
             "Daily Task Log", eod_log,
-            ["net_hours", "logout_time"], as_dict=True
+            ["net_hours", "logout_time", "lunch_from", "lunch_to"], as_dict=True
         )
-        net_hours_val  = eod_data.net_hours   or ""
-        logout_time_val = str(eod_data.logout_time or "")[:5]
+        net_hours_val   = eod_data.net_hours    or ""
+        # FIX: use _to_hhmm for all time fields — timedelta → 'HH:MM'
+        logout_time_val = _to_hhmm(eod_data.logout_time)
+        lunch_from_val  = _to_hhmm(eod_data.lunch_from)
+        lunch_to_val    = _to_hhmm(eod_data.lunch_to)
 
     # Group tasks by project
     projects = {}
@@ -117,9 +127,11 @@ def get_context(context):
     context.projects = projects
     context.standalone = standalone
     context.carried_count = sum(1 for t in tasks if t.get("is_carried"))
-    context.login_time = str(login_time_val)[:5] if login_time_val else ""
+    context.login_time = login_time_val
     context.logout_time = logout_time_val
     context.net_hours = net_hours_val
+    context.lunch_from = lunch_from_val
+    context.lunch_to   = lunch_to_val
     context.work_location = work_location_val
     context.is_team_leader = is_team_leader
     context.done_count = done_count

@@ -163,7 +163,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#111827;f
 .eod-f{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-bottom:14px}
 .ef-hdr{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #f3f4f6;font-size:13px;font-weight:500;color:#111}
 .ef-hdr i{font-size:16px;color:#374151}
-.ef-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.ef-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .ef-f label{display:block;font-size:10px;font-weight:500;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
 .ef-f .opt{font-size:10px;color:#9ca3af;font-weight:400;text-transform:none;letter-spacing:0}
 .ef-f input[type=time]{width:100%;border:1px solid #e5e7eb;border-radius:6px;padding:7px 10px;font-size:13px;font-weight:500;color:#111;font-family:inherit;outline:none}
@@ -246,7 +246,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#111827;f
 .wfh-mb{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 16px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none;border:none;width:100% ;font-family:inherit}
 .wfh-mb.pr{background:#EE1C29;color:#fff}.wfh-mb.pr:hover{background:#dc1a27}
 .wfh-mb.sc{background:#f3f4f6;color:#374151}.wfh-mb.sc:hover{background:#e5e7eb}
-/* #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(80px);background:#111;color:#fff;padding:11px 20px;border-radius:8px;font-size:13px;font-weight:500;z-index:9999;transition:transform .3s;max-width:360px;text-align:center;pointer-events:none} */
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(80px);background:#111;color:#fff;padding:11px 20px;border-radius:8px;font-size:13px;font-weight:500;z-index:9999;transition:transform .3s;max-width:360px;text-align:center;pointer-events:none}
 #toast.show{transform:translateX(-50%) translateY(0)}
 #toast.err{background:#EE1C29}
 #toast.ok{background:#15803d}
@@ -309,7 +309,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#111827;f
     <div class="sb-lbl">Today's hours</div>
     <div class="sb-row"><span class="sb-dot d-g"></span><span class="sb-rlbl">Login</span><span class="sb-rn">{{ login_time or '—' }}</span></div>
     <div class="sb-row"><span class="sb-dot d-x"></span><span class="sb-rlbl">Logout</span><span class="sb-rn">{{ logout_time or '—' }}</span></div>
-    <div class="sb-row"><span class="sb-dot d-g"></span><span class="sb-rlbl">Net hours</span><span class="sb-rn" style="color:#15803d">{{ net_hours or '—' }}</span></div>
+    
   </div>
 </aside>
 <main class="main">
@@ -318,7 +318,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#111827;f
   <div class="ph-row">
     <div class="ph-av gr"><i class="ti ti-check" aria-hidden="true"></i></div>
     <div class="ph-info"><div class="ph-title">Day complete — well done!</div><div class="ph-sub">{{ employee.department or '' }}&nbsp;&nbsp;<span class="ph-chip pc-eo">EOD submitted</span></div></div>
-    <div class="ph-right"><div class="ph-time">{{ net_hours or '—' }}</div><div class="ph-date">net hours</div></div>
+    
   </div>
 </div>
 <div class="done-wrap">
@@ -332,7 +332,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#111827;f
       <div><div class="dg-l">Tasks done</div><div class="dg-v g">{{ dt|length }} / {{ tasks|length }}</div></div>
       <div><div class="dg-l">Carried forward</div><div class="dg-v">{{ pt|length }}</div></div>
       <div><div class="dg-l">Login</div><div class="dg-v">{{ login_time or '—' }}</div></div>
-      <div><div class="dg-l">Net hours</div><div class="dg-v g">{{ net_hours or '—' }}</div></div>
+      
     </div>
     <div class="done-links">
       <a href="/my-history" class="dl-btn"><i class="ti ti-history" aria-hidden="true"></i>View history</a>
@@ -352,12 +352,12 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#111827;f
         {% if work_location %}<span class="ph-chip" style="background:#f3f4f6;color:#374151">{{ work_location }}</span>{% endif %}
       </div>
     </div>
-    <div class="ph-right"><div class="ph-time" id="live-net">—</div><div class="ph-date">net hours</div></div>
+    
   </div>
   <div class="hstrip">
     <div class="hcell"><div class="hl">Login</div><div class="hv r">{{ login_time }}</div><div class="hs">Checked in</div></div>
     <div class="hcell"><div class="hl">Logout</div><div class="hv" id="hs-lo">—</div><div class="hs">Set below</div></div>
-    <div class="hcell"><div class="hl">Net hours</div><div class="hv g" id="hs-net">—</div><div class="hs" id="hs-lunch">No lunch</div></div>
+    
     <div class="hcell"><div class="hl">Tasks</div><div class="hv">{{ done_count }} <span style="font-size:14px;color:#9ca3af;font-weight:400">/ {{ total_count }}</span></div><div class="hs">done</div></div>
   </div>
 </div>
@@ -365,10 +365,10 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#111827;f
   <div class="eod-f">
     <div class="ef-hdr"><i class="ti ti-clock" aria-hidden="true"></i>Time details</div>
     <div class="ef-grid">
-      <div class="ef-f"><label>Logout time *</label><input type="time" id="logout_time" value="{{ current_time }}" oninput="recalc()"></div>
+      <div class="ef-f"><label>Logout time *</label><input type="time" id="logout_time" value="{{ current_time }}" oninput="this.dataset.userSet='1';recalc()"></div>
       <div class="ef-f"><label>Lunch from <span class="opt">optional</span></label><input type="time" id="lunch_from" value="14:00" oninput="recalc()"></div>
       <div class="ef-f"><label>Lunch to <span class="opt">optional</span></label><input type="time" id="lunch_to" value="15:00" oninput="recalc()"></div>
-      <div class="ef-f"><label>Net hours</label><input type="text" id="net_disp" class="ro" readonly placeholder="Auto-calculated"></div>
+      
     </div>
   </div>
   <div class="pb-row">
@@ -538,8 +538,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#111827;f
     <div class="tg">
       <div class="tc"><div class="tc-l">Login</div><div class="tc-v">{{ login_time or '—' }}</div></div>
       <div class="tc"><div class="tc-l">Logout</div><div class="tc-v" id="rp-lo">{{ logout_time or '—' }}</div></div>
-      <div class="tc"><div class="tc-l">Lunch</div><div class="tc-v" id="rp-ln" style="font-size:12px">—</div></div>
-      <div class="tc"><div class="tc-l">Net hours</div><div class="tc-v g" id="rp-net">{{ net_hours or '—' }}</div></div>
+      <div class="tc"><div class="tc-l">Lunch</div><div class="tc-v" id="rp-ln" style="font-size:12px">{% if lunch_from and lunch_to %}{{ lunch_from }}–{{ lunch_to }}{% else %}—{% endif %}</div></div>
+      
     </div>
   </div>
   {% if projects %}
@@ -592,8 +592,6 @@ var WLC = {};
 try { WLC = {{ work_location_config | tojson }}; } catch(e) { WLC = {value:'Office',readonly:false,options:['Office','WFH'],validate:true,note:'Select work location.'}; }
 var SEL_WL = WLC.value || 'Office';
 function wlLabel(o) {
-  // Show a friendlier label for WFH on a hybrid employee's routine (non-office) day,
-  // without changing the underlying value sent to the server.
   if (o === 'WFH' && WLC.hybrid_routine_day) return 'Hybrid (WFH)';
   return o;
 }
@@ -620,26 +618,25 @@ function toast(msg, type, dur) {
 }
 var clk = document.getElementById('clock');
 if (clk) setInterval(function(){ var n=new Date(); clk.textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }, 15000);
-function toMin(s){ if(!s) return 0; var p=String(s).split(':'); return parseInt(p[0]||0)*60+parseInt(p[1]||0); }
-function fmtMin(m){ m=Math.max(0,m); return Math.floor(m/60)+'h '+(m%60)+'m'; }
+// FIX: Auto-update logout_time every minute so stale page-load time is never submitted.
+// Stops once employee manually edits the field (tracked via data-user-set attribute).
+setInterval(function(){
+  var lo=document.getElementById('logout_time');
+  if(!lo||lo.dataset.userSet) return;
+  var n=new Date();
+  lo.value=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+  recalc();
+},60000);
+
 function recalc(){
-  var lo=document.getElementById('logout_time'), lf=document.getElementById('lunch_from'), lt=document.getElementById('lunch_to'), nd=document.getElementById('net_disp');
+  var lo=document.getElementById('logout_time'), lf=document.getElementById('lunch_from'), lt=document.getElementById('lunch_to');
   if (!lo) return;
   var lv=lo.value;
   var el=document.getElementById('hs-lo'); if(el) el.textContent=lv||'—';
   var el2=document.getElementById('rp-lo'); if(el2) el2.textContent=lv||'—';
-  if (!lv||!LOGIN_TIME){ if(nd) nd.value=''; return; }
-  var tot=toMin(lv)-toMin(LOGIN_TIME), lun=0;
   if(lf&&lt&&lf.value&&lt.value){
-    lun=Math.max(0,toMin(lt.value)-toMin(lf.value));
     var rl=document.getElementById('rp-ln'); if(rl) rl.textContent=lf.value.slice(0,5)+'–'+lt.value.slice(0,5);
-    var hl=document.getElementById('hs-lunch'); if(hl) hl.textContent=lf.value.slice(0,5)+'–'+lt.value.slice(0,5);
   }
-  var net=tot-lun, label=fmtMin(net);
-  if(nd) nd.value=label;
-  var en=document.getElementById('hs-net'); if(en) en.textContent=label;
-  var rn=document.getElementById('rp-net'); if(rn) rn.textContent=label;
-  var ln=document.getElementById('live-net'); if(ln) ln.textContent=label;
 }
 recalc();
 function updProg(){
@@ -819,8 +816,7 @@ async function submitEOD(){
   try{
     var r=await frappe.call({method:'st_attendance_tracker.api.submit_eod_log',args:{lunch_from:lfv,lunch_to:ltv,logout_time:logout,task_updates:JSON.stringify(tu),adhoc_tasks:JSON.stringify(at)}});
     if(r.message&&r.message.success){
-      var p=r.message.pending_count, nh=r.message.net_hours, msg='Checked out at '+r.message.logout_time;
-      if(nh) msg+=' · '+nh+' worked';
+      var p=r.message.pending_count, msg='Checked out at '+r.message.logout_time;
       if(p>0) msg+=' · '+p+' task'+(p>1?'s':'')+' carried to tomorrow';
       toast(msg,'ok',2000); setTimeout(function(){ window.location.href=window.location.href.split('?')[0]; },1800);
     }

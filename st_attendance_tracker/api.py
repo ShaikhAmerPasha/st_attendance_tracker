@@ -14,6 +14,11 @@ Fixes:
   - Working hours auto-calculated
   - Carried tasks fully editable before check-in
   - Submit allowed with only carried tasks
+  - [FIX] _to_hhmm() normalises timedelta/string before get_datetime() call —
+    str(timedelta(seconds=34200)) = '9:30:00' and '9:30:00'[:5] = '9:30:'
+    (trailing colon) which dateutil cannot parse, causing net_hours = ''.
+  - [FIX] lunch_from/lunch_to display in right panel after EOD submit
+    (moved from JS-only to server-rendered in get_context / template)
 """
 
 import frappe
@@ -91,6 +96,35 @@ def _make_checkin(employee, log_type, time_value=None):
             f"Checkin failed for {employee} ({log_type}): {e}",
             "ST Attendance Tracker"
         )
+
+
+# ── Time normalisation helper ──────────────────────────────────────────────────
+
+def _to_hhmm(t):
+    """
+    Safely convert any time value to 'HH:MM' string.
+
+    Handles:
+      • datetime.timedelta  — returned by Frappe DB for Time fields.
+        str(timedelta(seconds=34200)) = '9:30:00'.
+        '9:30:00'[:5] = '9:30:' (trailing colon) which
+        frappe.utils.get_datetime / dateutil CANNOT parse → exception →
+        _calc_net_hours silently returns '' → net_hours stored as empty.
+      • 'H:MM:SS' / 'HH:MM:SS' — strings with or without leading zero
+      • 'HH:MM' — already-clean strings from JavaScript input[type=time]
+      • None / '' — returns ''
+    """
+    if isinstance(t, datetime.timedelta):
+        secs = int(t.total_seconds())
+        return f"{secs // 3600:02d}:{(secs % 3600) // 60:02d}"
+    s = str(t or "").strip()
+    parts = s.split(":")
+    if len(parts) >= 2:
+        try:
+            return f"{int(parts[0]):02d}:{int(parts[1]):02d}"
+        except Exception:
+            pass
+    return ""
 
 
 # ── Notification helper ────────────────────────────────────────────────────────
@@ -175,16 +209,9 @@ def _send_employee_checkin_email(employee_name, employee_display_name,
             if t.get("estimated_time") and t["estimated_time"].replace("hr","").replace("h","").strip().isdigit()
         )
 
-        # no_tasks_msg = '<p style="font-size:13px;color:#9ca3af;font-style:italic">No tasks added yet.</p>' if not tasks else ""
         no_tasks_msg = '<p style="font-size:13px;color:#9ca3af;font-style:italic">No tasks added yet.</p>' if not tasks else ""
 
-        carried_span = (
-            '<span>🔄 <strong style="color:#92400e">' + str(carried_count) + '</strong> carried</span>'
-        ) if carried_count else ""
-        est_span = (
-            '<span>⏱ <strong style="color:#111">' + str(est_total) + 'h</strong> estimated</span>'
-        ) if est_total else ""
-
+        login_hm = _to_hhmm(login_time)
 
         html = f"""
         <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
@@ -201,7 +228,7 @@ def _send_employee_checkin_email(employee_name, employee_display_name,
               Hi <strong>{employee_display_name}</strong>,
             </p>
             <p style="font-size:13px;color:#6b7280;margin:0 0 18px;line-height:1.5">
-              Your check-in has been recorded at <strong>{str(login_time)[:5]}</strong>.
+              Your check-in has been recorded at <strong>{login_hm}</strong>.
               Here's your plan for today:
             </p>
 
@@ -209,18 +236,11 @@ def _send_employee_checkin_email(employee_name, employee_display_name,
               {task_html or no_tasks_msg}
             </div>
 
-            # <div style="background:#f9fafb;border-radius:8px;padding:10px 14px;
-            #             display:flex;gap:16px;font-size:12px;color:#6b7280">
-            #   <span>📊 <strong style="color:#111">{total_tasks}</strong> tasks planned</span>
-            #   {"<span>🔄 <strong style=\"color:#92400e\">" + str(carried_count) + "</strong> carried</span>" if carried_count else ""}
-            #   {"<span>⏱ <strong style=\"color:#111\">" + str(est_total) + "h</strong> estimated</span>" if est_total else ""}
-            # </div>
-
             <div style="background:#f9fafb;border-radius:8px;padding:10px 14px;
                         display:flex;gap:16px;font-size:12px;color:#6b7280">
               <span>📊 <strong style="color:#111">{total_tasks}</strong> tasks planned</span>
-              {carried_span}
-              {est_span}
+              {"<span>🔄 <strong style=\"color:#92400e\">" + str(carried_count) + "</strong> carried</span>" if carried_count else ""}
+              {"<span>⏱ <strong style=\"color:#111\">" + str(est_total) + "h</strong> estimated</span>" if est_total else ""}
             </div>
           </div>
           <p style="font-size:11px;color:#aaa;text-align:center;margin-top:8px">
@@ -230,7 +250,7 @@ def _send_employee_checkin_email(employee_name, employee_display_name,
 
         frappe.sendmail(
             recipients=[emp_email],
-            subject=f"Checked in at {str(login_time)[:5]} — Your plan for {date}",
+            subject=f"Checked in at {login_hm} — Your plan for {date}",
             message=html,
             now=True,
         )
@@ -297,6 +317,8 @@ def _send_employee_eod_email(employee_name, employee_display_name,
         pct = int(len(done_tasks) / len(tasks) * 100) if tasks else 0
         bar_color = "#15803d" if pct >= 80 else "#d97706" if pct >= 50 else "#EE1C29"
 
+        logout_hm = _to_hhmm(logout_time)
+
         html = f"""
         <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
           <div style="background:#0f172a;padding:18px 22px;border-radius:6px 6px 0 0">
@@ -312,7 +334,7 @@ def _send_employee_eod_email(employee_name, employee_display_name,
               Hi <strong>{employee_display_name}</strong>,
             </p>
             <p style="font-size:13px;color:#6b7280;margin:0 0 16px;line-height:1.5">
-              You checked out at <strong>{str(logout_time)[:5]}</strong>.
+              You checked out at <strong>{logout_hm}</strong>.
               Here's your day summary:
             </p>
 
@@ -610,7 +632,6 @@ def _safety_rollover(employee, today_date):
         new_task.origin_date   = task.origin_date or task.task_date
         new_task.rolled_over_from = root
         new_task.estimated_time   = task.estimated_time or ""
-        new_task.project_name     = task.project_name or ""
         new_task.project_name    = task.project_name or ""
         new_task.remarks = f"[Auto-carried from {task.origin_date or task.task_date}]"
         new_task.insert(ignore_permissions=True)
@@ -624,46 +645,75 @@ def _calc_net_hours(login_time, logout_time, lunch_from, lunch_to, date_str):
     """
     Calculates net working hours = (logout - login) - lunch duration.
 
-    IMPORTANT: uses total_seconds(), not .seconds. timedelta.seconds only
-    returns the seconds *within the current day component* and silently
-    wraps/corrupts whenever the delta is negative (e.g. logout time stored
-    a moment earlier than login due to timezone drift, stray date strings,
-    or an empty-but-not-None lunch field) — producing nonsensical results
-    like a 22-23 hour "workday" instead of erroring out.
+    All time arguments are normalised through _to_hhmm() before being
+    passed to get_datetime(). This fixes the core bug where Frappe's DB
+    returns Time fields as datetime.timedelta objects, and
+    str(timedelta(seconds=34200)) = '9:30:00' whose first 5 chars are
+    '9:30:' (trailing colon) — an unparseable string that silently raised
+    an exception and caused net_hours to be stored as ''.
     """
+    # Diagnostic log — captures raw inputs so any future discrepancy
+    # can be confirmed in Frappe Error Log (filter title "ST NetHours Debug")
+    frappe.log_error(
+        f"raw inputs → login={login_time!r}({type(login_time).__name__}) "
+        f"logout={logout_time!r} lunch={lunch_from!r}-{lunch_to!r} date={date_str}",
+        "ST NetHours Debug"
+    )
     try:
+        login_hm  = _to_hhmm(login_time)
+        logout_hm = _to_hhmm(logout_time)
+
+        if not login_hm or not logout_hm:
+            frappe.log_error(
+                f"_to_hhmm returned empty: login_hm={login_hm!r} logout_hm={logout_hm!r}",
+                "ST NetHours Debug"
+            )
+            return ""
+
         base = str(date_str) + " "
-        login_dt  = get_datetime(base + str(login_time))
-        logout_dt = get_datetime(base + str(logout_time))
+        login_dt  = get_datetime(base + login_hm)
+        logout_dt = get_datetime(base + logout_hm)
         total_mins = int((logout_dt - login_dt).total_seconds() / 60)
 
         lunch_mins = 0
+        lf_hm = lt_hm = ""
         if lunch_from and lunch_to:
-            lf = get_datetime(base + str(lunch_from))
-            lt = get_datetime(base + str(lunch_to))
-            lunch_mins = int((lt - lf).total_seconds() / 60)
-            # Invalid/reversed lunch entry — ignore rather than let it corrupt net hours
-            if lunch_mins < 0 or lunch_mins > 240:
-                lunch_mins = 0
+            lf_hm = _to_hhmm(lunch_from)
+            lt_hm = _to_hhmm(lunch_to)
+            if lf_hm and lt_hm:
+                lf = get_datetime(base + lf_hm)
+                lt = get_datetime(base + lt_hm)
+                lunch_mins = int((lt - lf).total_seconds() / 60)
+                # Invalid/reversed lunch entry — ignore rather than corrupt net hours
+                if lunch_mins < 0 or lunch_mins > 240:
+                    lunch_mins = 0
 
         net = total_mins - lunch_mins
 
         # Sanity ceiling — a workday can't sensibly exceed 18 hours.
-        # If it does, something upstream (bad time string, day mismatch) is
-        # wrong; surface that as empty rather than display a misleading number.
         if net < 0 or net > 18 * 60:
             frappe.log_error(
-                f"Suspicious net hours calc: login={login_time} logout={logout_time} "
-                f"lunch_from={lunch_from} lunch_to={lunch_to} date={date_str} "
-                f"-> total_mins={total_mins} lunch_mins={lunch_mins} net={net}",
+                f"Suspicious net hours calc: login={login_hm} logout={logout_hm} "
+                f"lunch_from={lf_hm} lunch_to={lt_hm} date={date_str} "
+                f"total_mins={total_mins} lunch_mins={lunch_mins} net={net}",
                 "ST Attendance Tracker — net hours sanity check"
             )
             return ""
 
-        return f"{net // 60}h {net % 60}m"
-    except Exception:
+        result = f"{net // 60}h {net % 60}m"
+        frappe.log_error(
+            f"result → login={login_hm} logout={logout_hm} "
+            f"total={total_mins} lunch={lunch_mins} net={net} → {result}",
+            "ST NetHours Debug"
+        )
+        return result
+    except Exception as e:
+        frappe.log_error(
+            f"exception: {e} | login={login_time!r} logout={logout_time!r} "
+            f"lunch={lunch_from!r}-{lunch_to!r}",
+            "ST NetHours Debug"
+        )
         return ""
-
 
 
 # ── WFH validation ─────────────────────────────────────────────────────────────
@@ -706,8 +756,6 @@ def validate_wfh_request():
     if weekday_num == 5:
         return {"valid": True, "message": "Saturday — WFH approved for all."}
 
-    # Hybrid employees have routine WFH days (every day except their
-    # configured office days). No Attendance Request needed on those days.
     work_type = frappe.db.get_value("Employee", employee, "work_type") or "Office"
     if work_type == "Hybrid":
         hybrid_office_days = _get_hybrid_office_days()
@@ -810,7 +858,9 @@ def get_page_state():
         "eod_done":       bool(eod_log),
         "tasks":          tasks,
         "current_time":   now_datetime().strftime("%H:%M"),
-        "login_time":     str(login_time_val)[:5] if login_time_val else "",
+        # FIX: use _to_hhmm so single-digit-hour timedeltas (e.g. 9:30:00)
+        # don't produce a trailing colon after [:5] slicing
+        "login_time":     _to_hhmm(login_time_val),
         "is_team_leader": _is_team_leader(employee.name),
     }
 
@@ -838,10 +888,6 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
     weekday_num = getdate(date).weekday()
     is_saturday = weekday_num == 5
 
-    # Hybrid employees have routine WFH days (every day except their
-    # configured office days, e.g. Tue/Thu). On those days WFH is expected
-    # and does NOT require an Attendance Request — same rule as the
-    # check-in page (_get_work_location_config in daily_checkin.py).
     work_type = frappe.db.get_value("Employee", employee.name, "work_type") or "Office"
     is_hybrid_routine_day = False
     if work_type == "Hybrid" and not is_saturday:
@@ -936,7 +982,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         employee.name,
         employee.employee_name,
         "checkin",
-        f"{employee.employee_name} checked in at {str(actual_login)[:5]}{late_text}{wfh_text} on {date}.",
+        f"{employee.employee_name} checked in at {_to_hhmm(actual_login)}{late_text}{wfh_text} on {date}.",
         tasks=all_tasks,
     )
 
@@ -950,7 +996,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         date,
     )
 
-    return {"success": True, "login_time": str(actual_login)[:5]}
+    return {"success": True, "login_time": _to_hhmm(actual_login)}
 
 
 # ── EOD submit ─────────────────────────────────────────────────────────────────
@@ -1001,6 +1047,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         task_doc.origin_date = date
         task_doc.actual_time = t.get("actual_time", "")
         task_doc.remarks     = t.get("remarks", "")
+        task_doc.project_name = (t.get("project_name") or "").strip()
         task_doc.insert(ignore_permissions=True)
 
     # Get login time for net hours calculation
@@ -1008,15 +1055,18 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         "employee": employee.name, "date": date,
         "log_type": "Morning Check-In", "docstatus": 1,
     }, "name")
-    login_time = ""
+    login_time_raw = ""
     if morning_log_name:
-        login_time = frappe.db.get_value(
+        login_time_raw = frappe.db.get_value(
             "Daily Task Log", morning_log_name, "login_time"
         ) or ""
 
+    # FIX: normalise all time values through _to_hhmm before calc
+    # Frappe DB returns Time fields as datetime.timedelta; JS sends 'HH:MM' strings.
+    # _calc_net_hours now handles both, but normalising here is belt-and-suspenders.
     net_hours = _calc_net_hours(
-        login_time, logout_time, lunch_from, lunch_to, date
-    ) if login_time else ""
+        login_time_raw, logout_time, lunch_from, lunch_to, date
+    ) if login_time_raw else ""
 
     log = frappe.new_doc("Daily Task Log")
     log.employee    = employee.name
@@ -1052,7 +1102,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         employee.name,
         employee.employee_name,
         "checkout",
-        f"{employee.employee_name} submitted EOD at {str(logout_time)[:5]}. "
+        f"{employee.employee_name} submitted EOD at {_to_hhmm(logout_time)}. "
         f"{done_count}/{total_count} tasks done. Net hours: {net_hours or '—'}.",
         tasks=all_tasks,
     )
@@ -1071,7 +1121,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         "success":       True,
         "pending_count": pending_count,
         "net_hours":     net_hours,
-        "logout_time":   str(logout_time)[:5],
+        "logout_time":   _to_hhmm(logout_time),
     }
 
 
@@ -1354,10 +1404,11 @@ def _build_team_data(employees, date):
             "department":    emp.department,
             "designation":   emp.get("designation", ""),
             "status":        status,
-            "login_time":    str(morning.login_time)[:5]  if morning and morning.login_time  else "",
-            "logout_time":   str(eod.logout_time)[:5]     if eod     and eod.logout_time     else "",
-            "net_hours":     eod.net_hours                if eod                              else "",
-            "is_late":       bool(morning.is_late)        if morning                          else False,
+            # FIX: _to_hhmm prevents trailing-colon from single-digit-hour timedeltas
+            "login_time":    _to_hhmm(morning.login_time)  if morning and morning.login_time  else "",
+            "logout_time":   _to_hhmm(eod.logout_time)     if eod     and eod.logout_time     else "",
+            "net_hours":     eod.net_hours                  if eod                              else "",
+            "is_late":       bool(morning.is_late)          if morning                          else False,
             "tasks":         tasks,
             "done_tasks":    done,
             "total_tasks":   len(tasks),
