@@ -720,6 +720,54 @@ body {
 ::-webkit-scrollbar-thumb { background: #cbd5e1 !important; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8 !important; }
 
+/* Hide Frappe default headers and footers */
+.web-header, footer.web-footer, .web-footer, .navbar, .page-footer {
+    display: none !important;
+}
+body {
+    padding-top: 0 !important;
+    background: #f8fafc !important;
+}
+
+/* Custom Dropdown Profile Menu */
+.profile-dropdown {
+  position: absolute;
+  top: 54px;
+  right: 24px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  display: none;
+  flex-direction: column;
+  min-width: 170px;
+  z-index: 1000;
+  overflow: hidden;
+}
+.profile-dropdown.show {
+  display: flex;
+}
+.pd-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  text-decoration: none;
+  transition: background 0.15s;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+}
+.pd-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.pd-item i {
+  font-size: 15px;
+  color: #64748b;
+}
 </style>
 {% endblock %}
 {% block page_content %}
@@ -728,8 +776,13 @@ body {
   <span class="tnav-sep"></span>
   <span class="tnav-bc">My History</span>
   <div class="tnav-r">
-    <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-check" aria-hidden="true"></i>Today</a>
-    <div class="tnav-av">{{ employee.employee_name[:2].upper() }}</div>
+    <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-arrow-left" aria-hidden="true"></i>Back to Dashboard</a>
+    <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
+    <div class="profile-dropdown" id="profile-dropdown">
+      <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
+      <a href="/app" class="pd-item"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Switch to Desk</a>
+      <a href="/?cmd=web_logout" class="pd-item"><i class="ti ti-logout" aria-hidden="true"></i>Logout</a>
+    </div>
   </div>
 </nav>
 <div class="wrap">
@@ -924,5 +977,22 @@ function loadHistory(reset) {
 }
 
 frappe.ready(function(){ loadHistory(true); });
+
+function toggleProfileDropdown(e) {
+  if (e) e.stopPropagation();
+  var dd = document.getElementById('profile-dropdown');
+  if (dd) {
+    dd.classList.toggle('show');
+  }
+}
+
+document.addEventListener('click', function(e) {
+  var dd = document.getElementById('profile-dropdown');
+  if (dd && dd.classList.contains('show')) {
+    if (!dd.contains(e.target)) {
+      dd.classList.remove('show');
+    }
+  }
+});
 </script>
 {% endblock %}

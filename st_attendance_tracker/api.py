@@ -89,6 +89,16 @@ def _make_checkin(employee, log_type, time_value=None):
         else:
             checkin.time = now_datetime()
         checkin.device_id = "ST Daily Checkin"
+        
+        # Integrate with active HRMS Shift Assignment
+        try:
+            from hrms.hr.doctype.shift_assignment.shift_assignment import get_employee_shift
+            shift = get_employee_shift(employee, checkin.time, consider_default_shift=True)
+            if shift:
+                checkin.shift = shift.shift_type.name
+        except Exception:
+            pass
+
         checkin.insert(ignore_permissions=True)
         frappe.db.commit()
     except Exception as e:
@@ -716,6 +726,15 @@ def _calc_net_hours(login_time, logout_time, lunch_from, lunch_to, date_str):
         login_dt  = get_datetime(base + login_hm)
         logout_dt = get_datetime(base + logout_hm)
         total_mins = int((logout_dt - login_dt).total_seconds() / 60)
+        # Handle overnight/night-shift (logout < login crosses midnight)
+        if total_mins < 0:
+            total_mins += 24 * 60
+        elif total_mins == 0:
+            # If the calendar date of checkout is the same as the check-in date, consider it 0
+            if today() == str(date_str):
+                total_mins = 0
+            else:
+                total_mins = 24 * 60 # 24-hour workday
 
         lunch_mins = 0
         lf_hm = lt_hm = ""
@@ -723,17 +742,37 @@ def _calc_net_hours(login_time, logout_time, lunch_from, lunch_to, date_str):
             lf_hm = _to_hhmm(lunch_from)
             lt_hm = _to_hhmm(lunch_to)
             if lf_hm and lt_hm:
-                lf = get_datetime(base + lf_hm)
-                lt = get_datetime(base + lt_hm)
-                lunch_mins = int((lt - lf).total_seconds() / 60)
-                # Invalid/reversed lunch entry — ignore rather than corrupt net hours
-                if lunch_mins < 0 or lunch_mins > 240:
-                    lunch_mins = 0
+                # Convert all to minutes to check offsets (same as daily_task_log.py validation)
+                def time_to_mins(t_str):
+                    parts = t_str.split(":")
+                    return int(parts[0]) * 60 + int(parts[1])
+
+                login_mins = time_to_mins(login_hm)
+                logout_mins = time_to_mins(logout_hm)
+                lf_mins = time_to_mins(lf_hm)
+                lt_mins = time_to_mins(lt_hm)
+
+                shift_len = (logout_mins - login_mins) if logout_mins >= login_mins \
+                            else (logout_mins + 24 * 60 - login_mins)
+
+                lf_abs = (lf_mins - login_mins) if lf_mins >= login_mins \
+                         else (lf_mins + 24 * 60 - login_mins)
+                lt_abs = (lt_mins - login_mins) if lt_mins >= login_mins \
+                         else (lt_mins + 24 * 60 - login_mins)
+
+                if lt_abs < lf_abs:
+                    lt_abs += 24 * 60
+
+                lunch_duration = lt_abs - lf_abs
+
+                # Only deduct lunch if it is valid and falls completely within the work shift
+                if 0 < lunch_duration <= 60 and lf_abs >= 0 and lt_abs <= shift_len:
+                    lunch_mins = lunch_duration
 
         net = total_mins - lunch_mins
 
-        # Sanity ceiling — a workday can't sensibly exceed 18 hours.
-        if net < 0 or net > 18 * 60:
+        # Sanity ceiling — a workday can't exceed 24 hours.
+        if net < 0 or net > 24 * 60:
             frappe.log_error(
                 f"Suspicious net hours calc: login={login_hm} logout={logout_hm} "
                 f"lunch_from={lf_hm} lunch_to={lt_hm} date={date_str} "
@@ -893,6 +932,41 @@ def get_page_state():
             "Daily Task Log", morning_log, "login_time"
         ) or ""
 
+    # Fetch active employee shift & leave status
+    shift_info = None
+    try:
+        from hrms.hr.doctype.shift_assignment.shift_assignment import get_employee_shift
+        shift_details = get_employee_shift(employee.name, consider_default_shift=True)
+        if shift_details:
+            shift_info = {
+                "name": shift_details.shift_type.name,
+                "start_time": _to_hhmm(shift_details.shift_type.start_time),
+                "end_time": _to_hhmm(shift_details.shift_type.end_time),
+                "start_time_ampm": _to_ampm(shift_details.shift_type.start_time),
+                "end_time_ampm": _to_ampm(shift_details.shift_type.end_time),
+            }
+    except Exception:
+        pass
+
+    leave_today = None
+    try:
+        leave_today = frappe.db.get_value("Leave Application", {
+            "employee": employee.name,
+            "from_date": ["<=", date],
+            "to_date": [">=", date],
+            "status": "Approved",
+            "docstatus": 1
+        }, "leave_type")
+    except Exception:
+        pass
+
+    has_reset_today = bool(frappe.db.exists("Daily Task Log", {
+        "employee": employee.name,
+        "date": date,
+        "log_type": "Morning Check-In",
+        "docstatus": 2
+    }))
+
     return {
         "employee":       employee,
         "date":           date,
@@ -900,10 +974,13 @@ def get_page_state():
         "eod_done":       bool(eod_log),
         "tasks":          tasks,
         "current_time":   now_datetime().strftime("%H:%M"),
-        # FIX: use _to_hhmm so single-digit-hour timedeltas (e.g. 9:30:00)
+        # FIX: use _to_ampm so single-digit-hour timedeltas (e.g. 9:30:00)
         # don't produce a trailing colon after [:5] slicing
         "login_time":     _to_ampm(login_time_val),
         "is_team_leader": _is_team_leader(employee.name),
+        "shift_info":     shift_info,
+        "leave_today":    leave_today,
+        "has_reset_today": has_reset_today,
     }
 
 
@@ -921,6 +998,9 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
     frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee.name,))
 
     date = today()
+
+    # Safety rollover to catch and carry forward any pending tasks from previous days
+    _safety_rollover(employee.name, date)
 
     if frappe.db.exists("Daily Task Log", {
         "employee": employee.name, "date": date,
@@ -976,6 +1056,8 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
             update["description"] = c["description"].strip()
         if c.get("estimated_time") is not None:
             update["estimated_time"] = c.get("estimated_time", "")
+        if c.get("project_name") is not None:
+            update["project_name"] = c.get("project_name", "").strip()
         if update:
             frappe.db.set_value("Daily Task", task_name, update)
 
@@ -1006,6 +1088,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
     log.login_time     = actual_login
     log.work_location  = work_location
     log.insert(ignore_permissions=True)
+    log.flags.ignore_permissions = True
     log.submit()
 
     _make_checkin(employee.name, "IN", actual_login)
@@ -1104,6 +1187,17 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         frappe.db.set_value("Daily Task", name, update_fields)
 
         if t.get("status") == "Done":
+            root = _get_root_task(name)
+            if root:
+                # Find all future tasks rolled over from this root and delete them
+                future_tasks = frappe.get_all("Daily Task", filters={
+                    "rolled_over_from": root,
+                    "task_date": [">", date],
+                    "status": ["in", ["Pending", "In Progress", "Rolled Over"]]
+                }, fields=["name"])
+                for ft in future_tasks:
+                    frappe.delete_doc("Daily Task", ft.name, ignore_permissions=True, force=True)
+
             ancestor = frappe.db.get_value("Daily Task", name, "rolled_over_from")
             depth = 0
             while ancestor and depth < 365:
@@ -1160,6 +1254,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     log.logout_time = logout_time
     log.net_hours   = net_hours
     log.insert(ignore_permissions=True)
+    log.flags.ignore_permissions = True
     log.submit()
 
     _make_checkin(employee.name, "OUT", logout_time)
@@ -1479,9 +1574,17 @@ def get_history_day_detail(date):
 def delete_carried_task(name):
     """Delete a carried task. Employee can only delete their own tasks."""
     employee = _get_employee()
-    task_employee = frappe.db.get_value("Daily Task", name, "employee")
+    task_employee, task_date = frappe.db.get_value("Daily Task", name, ["employee", "task_date"])
     if task_employee != employee.name:
         frappe.throw("Not authorised to delete this task.", frappe.PermissionError)
+
+    if frappe.db.exists("Daily Task Log", {
+        "employee": employee.name,
+        "date": task_date,
+        "log_type": "End of Day",
+        "docstatus": 1
+    }):
+        frappe.throw("Cannot delete tasks after End of Day is submitted.", frappe.ValidationError)
 
     # Clean up ancestors to prevent safety/EOD rollover from resurrecting the task
     root = _get_root_task(name)
@@ -1497,6 +1600,44 @@ def delete_carried_task(name):
     frappe.delete_doc("Daily Task", name, ignore_permissions=True, force=True)
     frappe.db.commit()
     return {"success": True}
+
+
+@frappe.whitelist()
+def delete_carried_project(project_name, task_date):
+    """Delete all tasks belonging to a project for a specific date."""
+    employee = _get_employee()
+
+    if frappe.db.exists("Daily Task Log", {
+        "employee": employee.name,
+        "date": task_date,
+        "log_type": "End of Day",
+        "docstatus": 1
+    }):
+        frappe.throw("Cannot delete project tasks after End of Day is submitted.", frappe.ValidationError)
+
+    # Find all tasks for this employee, date, and project name
+    tasks = frappe.get_all("Daily Task", filters={
+        "employee": employee.name,
+        "task_date": task_date,
+        "project_name": project_name
+    }, fields=["name"])
+
+    for t in tasks:
+        # Clean up ancestors to prevent safety/EOD rollover from resurrecting the task
+        root = _get_root_task(t.name)
+        if root:
+            frappe.db.sql("""
+                UPDATE `tabDaily Task`
+                SET status = 'Rolled Over'
+                WHERE employee = %s
+                  AND (name = %s OR rolled_over_from = %s)
+                  AND status IN ('Pending', 'In Progress')
+            """, (employee.name, root, root))
+        frappe.delete_doc("Daily Task", t.name, ignore_permissions=True, force=True)
+
+    frappe.db.commit()
+    return {"success": True}
+
 
 
 @frappe.whitelist()
@@ -1538,17 +1679,32 @@ def reset_morning_checkin():
     if eod_exists:
         frappe.throw(f"Cannot reset check-in because End of Day has already been submitted for {date}.")
 
+    # Restrict reset check-in to only once per day (bypassed in developer_mode or for System Managers/Administrator for testing)
+    has_cancelled = frappe.db.exists("Daily Task Log", {
+        "employee": employee.name,
+        "date": date,
+        "log_type": "Morning Check-In",
+        "docstatus": 2
+    })
+    is_testing = frappe.conf.get("developer_mode") or "System Manager" in frappe.get_roles() or frappe.session.user == "Administrator"
+    if has_cancelled and not is_testing:
+        frappe.throw(f"You can only reset your check-in once per day for {date}.", title="Reset Locked")
+
     # 2. Get Morning Check-In log name
     morning_log = frappe.db.get_value("Daily Task Log", {
         "employee": employee.name,
         "date": date,
         "log_type": "Morning Check-In",
+        "docstatus": 1,
     })
     if not morning_log:
         frappe.throw(f"You have not checked in on {date}.")
 
-    # 3. Delete Morning Check-In log
-    frappe.db.delete("Daily Task Log", {"name": morning_log})
+    # 3. Cancel Morning Check-In log (sets docstatus = 2)
+    morning_doc = frappe.get_doc("Daily Task Log", morning_log)
+    morning_doc.flags.ignore_permissions = True
+    if morning_doc.docstatus == 1:
+        morning_doc.cancel()
 
     # 4. Delete Employee Checkin created by ST Daily Checkin today
     frappe.db.delete("Employee Checkin", {
@@ -1558,20 +1714,13 @@ def reset_morning_checkin():
         "time": ["between", [date + " 00:00:00", date + " 23:59:59"]],
     })
 
-    # 5. Delete newly planned tasks created today (not rolled over)
-    frappe.db.delete("Daily Task", {
-        "employee": employee.name,
-        "task_date": date,
-        "task_type": "Planned",
-        "rolled_over_from": ["is", "not set"],
-    })
-
-    # 6. Revert carried-forward tasks back to Pending status so they are ready to check in again
-    frappe.db.set_value("Daily Task", {
-        "employee": employee.name,
-        "task_date": date,
-        "rolled_over_from": ["is", "set"],
-    }, "status", "Pending", update_modified=False)
+    # 5. Revert ALL tasks back to Pending so they are preserved for re-check-in.
+    #    Previously this deleted planned tasks, causing user work loss.
+    frappe.db.sql("""
+        UPDATE `tabDaily Task`
+        SET status = 'Pending'
+        WHERE employee = %s AND task_date = %s AND status != 'Pending'
+    """, (employee.name, date))
 
     frappe.db.commit()
     return {"success": True}

@@ -19,6 +19,14 @@ class DailyTaskLog(Document):
                 }, "login_time")
                 if morning_login:
                     self.login_time = morning_login
+            
+            if not self.login_time:
+                frappe.throw(
+                    "Morning Check-In is required before submitting End of Day.",
+                    frappe.ValidationError
+                )
+            # FIX 2: validate AFTER login_time is resolved from DB
+            self._validate_lunch_hours()
             self._calculate_net_hours()
         self._check_late()
 
@@ -26,6 +34,7 @@ class DailyTaskLog(Document):
         if self.log_type == "End of Day":
             if not self.logout_time:
                 frappe.throw("Logout Time is required for End of Day log.")
+            self._validate_lunch_hours()
             self._calculate_net_hours()
             self.db_update()
 
@@ -84,21 +93,77 @@ class DailyTaskLog(Document):
         except Exception:
             pass
 
+    def _validate_lunch_hours(self):
+        """Reject reversed, zero-duration, >4h, or out-of-shift lunch intervals."""
+        if not (self.login_time and self.logout_time and self.lunch_from and self.lunch_to):
+            return
+
+        login_mins  = self._time_to_mins(self.login_time)
+        logout_mins = self._time_to_mins(self.logout_time)
+        lf_mins     = self._time_to_mins(self.lunch_from)
+        lt_mins     = self._time_to_mins(self.lunch_to)
+
+        # Handle overnight shift: if logout < login, treat shift as wrapping midnight
+        shift_len = (logout_mins - login_mins) if logout_mins >= login_mins \
+                    else (logout_mins + 24 * 60 - login_mins)
+
+        # Relative positions of lunch within shift (offset from login)
+        lf_abs = (lf_mins - login_mins) if lf_mins >= login_mins \
+                 else (lf_mins + 24 * 60 - login_mins)
+        lt_abs = (lt_mins - login_mins) if lt_mins >= login_mins \
+                 else (lt_mins + 24 * 60 - login_mins)
+
+        # If lt is before lf in absolute terms, wrap it to the next day
+        if lt_abs < lf_abs:
+            lt_abs += 24 * 60
+
+        lunch_duration = lt_abs - lf_abs
+
+        if lunch_duration <= 0:
+            frappe.throw(
+                f"Lunch duration cannot be zero or negative. "
+                f"Selected interval: {self.lunch_from} \u2192 {self.lunch_to}."
+            )
+
+        if lunch_duration > 60:
+            frappe.throw(
+                f"Lunch break is too long ({lunch_duration} minutes). "
+                f"Maximum allowed is 1 hour (60 minutes)."
+            )
+
+        if lf_abs < 0 or lt_abs > shift_len:
+            frappe.throw(
+                f"Lunch interval ({self.lunch_from} \u2192 {self.lunch_to}) must fall "
+                f"completely within your shift ({self.login_time} \u2192 {self.logout_time})."
+            )
+
     def _calculate_net_hours(self):
         if not self.login_time or not self.logout_time:
             return
         try:
-            login_mins = self._time_to_mins(self.login_time)
+            login_mins  = self._time_to_mins(self.login_time)
             logout_mins = self._time_to_mins(self.logout_time)
-            total_mins = logout_mins - login_mins
+            total_mins  = logout_mins - login_mins
+            # Handle overnight / night-shift (midnight wrap)
             if total_mins < 0:
-                return
+                total_mins += 24 * 60
+            elif total_mins == 0:
+                from frappe.utils import today
+                if today() == str(self.date):
+                    total_mins = 0
+                else:
+                    total_mins = 24 * 60 # 24-hour workday
 
             lunch_mins = 0
             if self.lunch_from and self.lunch_to:
                 lf_mins = self._time_to_mins(self.lunch_from)
                 lt_mins = self._time_to_mins(self.lunch_to)
-                lunch_mins = max(0, lt_mins - lf_mins)
+                d = lt_mins - lf_mins
+                if d < 0:
+                    d += 24 * 60
+                # Only subtract valid lunch (already validated upstream)
+                if 0 < d <= 60:
+                    lunch_mins = d
 
             net_mins = max(0, total_mins - lunch_mins)
             hours = net_mins // 60

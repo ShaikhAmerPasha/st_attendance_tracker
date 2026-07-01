@@ -48,15 +48,18 @@ def get_context(context):
     # ── Work location configuration ───────────────────────────────────────
     work_location_config = _get_work_location_config(employee, date_obj)
 
-    # ── Morning log ───────────────────────────────────────────────────────
-    # Safety rollover on morning page load — moves missed tasks to today
-    existing_morning = frappe.db.exists("Daily Task Log", {
-        "employee": employee.name, "date": date,
+    # ── Safety rollover — ALWAYS runs against today() ─────────────────────
+    # Even if the page renders an older open check-in date, we must still
+    # carry forward any missed Pending/In-Progress tasks to today's date.
+    actual_today = today()
+    existing_morning_today = frappe.db.exists("Daily Task Log", {
+        "employee": employee.name, "date": actual_today,
         "log_type": "Morning Check-In", "docstatus": 1,
     })
-    if not existing_morning:
+    if not existing_morning_today:
         from st_attendance_tracker.api import _safety_rollover
-        _safety_rollover(employee.name, date)
+        _safety_rollover(employee.name, actual_today)
+
 
     morning_log = frappe.db.exists("Daily Task Log", {
         "employee": employee.name, "date": date,
@@ -158,6 +161,41 @@ def get_context(context):
 
     done_count = sum(1 for t in tasks if t.get("status") == "Done")
 
+    # ── Fetch Active Shift, Leaves & Reset Status ─────────────────────
+    shift_info = None
+    try:
+        from hrms.hr.doctype.shift_assignment.shift_assignment import get_employee_shift
+        shift_details = get_employee_shift(employee.name, consider_default_shift=True)
+        if shift_details:
+            shift_info = {
+                "name": shift_details.shift_type.name,
+                "start_time": _to_hhmm(shift_details.shift_type.start_time),
+                "end_time": _to_hhmm(shift_details.shift_type.end_time),
+                "start_time_ampm": _to_ampm(shift_details.shift_type.start_time),
+                "end_time_ampm": _to_ampm(shift_details.shift_type.end_time),
+            }
+    except Exception:
+        pass
+
+    leave_today = None
+    try:
+        leave_today = frappe.db.get_value("Leave Application", {
+            "employee": employee.name,
+            "from_date": ["<=", date],
+            "to_date": [">=", date],
+            "status": "Approved",
+            "docstatus": 1
+        }, "leave_type")
+    except Exception:
+        pass
+
+    has_reset_today = bool(frappe.db.exists("Daily Task Log", {
+        "employee": employee.name,
+        "date": date,
+        "log_type": "Morning Check-In",
+        "docstatus": 2
+    }))
+
     context.no_cache = 1
     context.employee = employee
     context.date = date
@@ -180,6 +218,9 @@ def get_context(context):
     context.total_count = len(tasks)
     context.work_location_config = work_location_config
     context.is_half_day_leave = is_half_day_leave
+    context.shift_info = shift_info
+    context.leave_today = leave_today
+    context.has_reset_today = has_reset_today
     context.title = "Daily Check-In"
 
 

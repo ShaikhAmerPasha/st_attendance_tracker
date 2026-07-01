@@ -2,7 +2,7 @@ app_name = "st_attendance_tracker"
 app_title = "ST Attendance Tracker"
 app_publisher = "StandardTouch e-Solutions"
 app_description = "Daily Attendance & Task Management for ERPNext v15"
-app_email = "tech@standardtouch.com"
+app_email = "ameer@standardtouch.com"
 app_license = "MIT"
 
 # ── Custom fields on Employee doctype ─────────────────────────────────────────
