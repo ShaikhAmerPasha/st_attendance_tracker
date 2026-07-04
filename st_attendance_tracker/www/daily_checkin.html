@@ -1015,6 +1015,10 @@ body {
   padding: 16px 24px;
 }
 
+.col-hdr {
+  display: none !important;
+}
+
 /* ── DENSE TABLE / LIST LAYOUT FOR TASKS ── */
 .trow, .stask {
   display: flex;
@@ -2567,6 +2571,17 @@ body > .container { padding-top: 0 !important; }
       </div>
     </div>
   </div>
+  
+  <!-- Total Task Hours Card -->
+  <div class="tb-card">
+    <div class="tb-icon purple"><i class="ti ti-checklist" aria-hidden="true"></i></div>
+    <div class="tb-content">
+      <div class="tb-label">Total Task Hours</div>
+      <div class="tb-value" style="color:var(--primary)" id="top-th">
+        —
+      </div>
+    </div>
+  </div>
 
   <!-- Leave / Work Mode Card -->
   {% if leave_today %}
@@ -2602,9 +2617,10 @@ body > .container { padding-top: 0 !important; }
     <div class="done-s">Your work is logged. Pending tasks moved to the next working day.</div>
     {% set dt = tasks|selectattr("status","equalto","Done")|list %}
     {% set pt = tasks|selectattr("status","in",["Pending","In Progress"])|list %}
-    <div class="done-grid" style="grid-template-columns: repeat(2, 1fr);">
+    <div class="done-grid" style="grid-template-columns: repeat(3, 1fr);">
       <div><div class="dg-l">Tasks done</div><div class="dg-v g">{{ dt|length }} / {{ tasks|length }}</div></div>
       <div><div class="dg-l">Carried forward</div><div class="dg-v">{{ pt|length }}</div></div>
+      <div><div class="dg-l">Working Hours</div><div class="dg-v" style="color:var(--primary)">{{ working_hours or 0 }} hrs</div></div>
     </div>
     <div class="done-links">
       <a href="/my-history" class="dl-btn"><i class="ti ti-history" aria-hidden="true"></i>View history</a>
@@ -2623,7 +2639,7 @@ body > .container { padding-top: 0 !important; }
     </div>
 
     <div class="ef-grid">
-      <div class="ef-f"><label>Logout time *</label><input type="time" id="logout_time" value="{{ current_time }}" oninput="this.dataset.userSet='1';recalc()"></div>
+      <div class="ef-f"><label>Logout time *</label><input type="time" id="logout_time" value="{{ current_time }}" readonly></div>
       <div class="ef-f lunch-fields-container hidden"><label>Lunch from <span class="opt">optional</span></label><input type="time" id="lunch_from" value="14:00" oninput="recalc()"></div>
       <div class="ef-f lunch-fields-container hidden"><label>Lunch to <span class="opt">optional</span></label><input type="time" id="lunch_to" value="15:00" oninput="recalc()"></div>
     </div>
@@ -2918,22 +2934,10 @@ function toast(msg, type, dur) {
   t.textContent = msg; t.className = 'show '+(type||'');
   clearTimeout(t._t); t._t = setTimeout(function(){ t.className=''; }, dur||3500);
 }
-var clk = document.getElementById('clock');
-if (clk) setInterval(function(){
-  var n = new Date();
-  var h = n.getHours();
-  var m = n.getMinutes();
-  var ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12;
-  h = h ? h : 12;
-  var hStr = String(h).padStart(2, '0');
-  var mStr = String(m).padStart(2, '0');
-  clk.textContent = hStr + ':' + mStr + ' ' + ampm;
-}, 15000);
 function parseTimeToMinutes(t) {
   if (!t) return null;
   t = String(t).trim();
-  var match = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  var match = t.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
   if (!match) return null;
   var h = parseInt(match[1], 10);
   var m = parseInt(match[2], 10);
@@ -2945,6 +2949,45 @@ function parseTimeToMinutes(t) {
   }
   return h * 60 + m;
 }
+
+var serverTimeStr = "{{ current_time }}";
+var serverMin = parseTimeToMinutes(serverTimeStr);
+var pageLoadPerformanceMs = performance.now();
+
+function getServerSyncedTime() {
+  if (serverMin === null) {
+    var now = new Date();
+    return String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  }
+  var elapsedMs = performance.now() - pageLoadPerformanceMs;
+  var elapsedMin = elapsedMs / 60000.0;
+  var syncedMin = Math.floor((serverMin + elapsedMin) % (24 * 60));
+  var h = Math.floor(syncedMin / 60);
+  var m = syncedMin % 60;
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
+function updateClockAndLogoutTime() {
+  var newVal = getServerSyncedTime();
+  var clk = document.getElementById('clock');
+  if (clk) {
+    var parts = newVal.split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12;
+    h12 = h12 ? h12 : 12;
+    var hStr = String(h12).padStart(2, '0');
+    var mStr = String(m).padStart(2, '0');
+    clk.textContent = hStr + ':' + mStr + ' ' + ampm;
+  }
+  var lo = document.getElementById('logout_time');
+  if (lo && lo.value !== newVal) {
+    lo.value = newVal;
+    recalc();
+  }
+}
+
 
 function addMinutesToTime(timeStr, minutes) {
   var min = parseTimeToMinutes(timeStr);
@@ -2959,45 +3002,71 @@ function getRecommendedLogoutTime() {
   if (!LOGIN_TIME) return '';
   var loginMin = parseTimeToMinutes(LOGIN_TIME);
   if (loginMin === null) return '';
-  if (IS_HALF_DAY) {
-    return addMinutesToTime(LOGIN_TIME, 4 * 60);
-  }
-  // Use actual shift duration if available, else default 9h (8h work + 1h lunch)
-  var shiftDuration = 9 * 60; // default 9 hours
-  if (SHIFT_START_TIME && SHIFT_END_TIME) {
-    var ssMin = parseTimeToMinutes(SHIFT_START_TIME);
-    var seMin = parseTimeToMinutes(SHIFT_END_TIME);
-    if (ssMin !== null && seMin !== null) {
-      shiftDuration = seMin - ssMin;
-      if (shiftDuration < 0) shiftDuration += 24 * 60;
+  
+  var expectedNetWork = IS_HALF_DAY ? (4 * 60) : (8 * 60);
+
+  // Calculate actual lunch duration
+  var actualLunch = 0;
+  var chk = document.getElementById('include_lunch');
+  var lf = document.getElementById('lunch_from');
+  var lt = document.getElementById('lunch_to');
+  if (chk && chk.checked && lf && lt && lf.value && lt.value) {
+    var lfMin = parseTimeToMinutes(lf.value);
+    var ltMin = parseTimeToMinutes(lt.value);
+    if (lfMin !== null && ltMin !== null) {
+      var lfAbs = lfMin - loginMin;
+      if (lfAbs < 0) lfAbs += 24 * 60;
+      var ltAbs = ltMin - loginMin;
+      if (ltAbs < 0) ltAbs += 24 * 60;
+      if (ltAbs < lfAbs) ltAbs += 24 * 60;
+      var lDiff = ltAbs - lfAbs;
+      if (lDiff >= 0) {
+        actualLunch = lDiff;
+      }
     }
   }
-  // Shift duration includes lunch break, so recommended = login + shift duration
-  return addMinutesToTime(LOGIN_TIME, shiftDuration);
+
+  // Recommended logout time = LOGIN_TIME + expectedNetWork + actualLunch
+  var totalDuration = expectedNetWork + actualLunch;
+  return addMinutesToTime(LOGIN_TIME, totalDuration);
 }
 
-// Auto-update logout_time every minute so stale page-load time is never submitted,
-// but only if the user hasn't set it and we do not have a recommended logout time.
-setInterval(function(){
-  var lo=document.getElementById('logout_time');
-  if(!lo||lo.dataset.userSet) return;
-  if(getRecommendedLogoutTime()) return;
-  var n=new Date();
-  lo.value=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
-  recalc();
-},60000);
+// Auto-update clock and logout_time every 5 seconds to match server-synced monotonic time
+updateClockAndLogoutTime();
+setInterval(updateClockAndLogoutTime, 5000);
+
+function parseTimeToHoursJs(s) {
+  if (!s) return 0;
+  s = String(s).trim().toLowerCase();
+  var num = parseFloat(s);
+  if (!isNaN(num) && String(num) === s) {
+    return num;
+  }
+  s = s.replace(/hours|hour|hrs|hr/g, 'h');
+  s = s.replace(/minutes|minute|mins|min/g, 'm');
+  var h = 0;
+  var m = 0;
+  if (s.indexOf('h') !== -1) {
+    var parts = s.split('h');
+    var val = parseFloat(parts[0].trim());
+    if (!isNaN(val)) h = val;
+    s = parts[1];
+  }
+  if (s.indexOf('m') !== -1) {
+    var parts = s.split('m');
+    var val = parseFloat(parts[0].trim());
+    if (!isNaN(val)) m = val;
+  }
+  if (h === 0 && m === 0) {
+    var val = parseFloat(s);
+    if (!isNaN(val)) return val;
+  }
+  return h + (m / 60);
+}
 
 function recalc(){
   var lo=document.getElementById('logout_time'), lf=document.getElementById('lunch_from'), lt=document.getElementById('lunch_to');
   if (!lo) return;
-
-  // Prefill logout time with recommended logout time if not edited by user yet
-  if (!lo.dataset.userSet && LOGIN_TIME) {
-    var recVal = getRecommendedLogoutTime();
-    if (recVal) {
-      lo.value = recVal;
-    }
-  }
 
   var lv=lo.value;
   var el=document.getElementById('hs-lo'); if(el) el.textContent=formatTimeAMPM(lv)||'—';
@@ -3052,9 +3121,6 @@ function recalc(){
           // Reversed lunch: from > to (e.g. 2pm to 1pm)
           if (lunchWarn) { lunchWarn.style.display = 'flex'; lunchWarn.textContent = '⚠ Lunch "from" time must be before "to" time. Lunch ignored.'; }
           lDiff = 0;
-        } else if (lDiff > 60) {
-          if (lunchWarn) { lunchWarn.style.display = 'flex'; lunchWarn.textContent = '⚠ Lunch duration exceeds 1 hour. Lunch ignored.'; }
-          lDiff = 0;
         } else if (lfAbs < 0 || ltAbs > shiftLen) {
           // Lunch is outside working shift boundaries
           if (lunchWarn) {
@@ -3079,6 +3145,22 @@ function recalc(){
     var netStr = nh + 'h ' + nm + 'm';
 
     var topNh = document.getElementById('top-nh'); if (topNh) topNh.textContent = netStr;
+
+    // Sum task actual hours dynamically
+    var totalActualMin = 0;
+    document.querySelectorAll('.act-in').forEach(function(inp) {
+      var hrs = parseTimeToHoursJs(inp.value);
+      totalActualMin += Math.round(hrs * 60);
+    });
+    document.querySelectorAll('.adhoc-act').forEach(function(inp) {
+      var hrs = parseTimeToHoursJs(inp.value);
+      totalActualMin += Math.round(hrs * 60);
+    });
+    var topTh = document.getElementById('top-th');
+    if (topTh) {
+      var thVal = Math.round(totalActualMin / 60.0);
+      topTh.textContent = thVal + ' hrs';
+    }
   }
 }
 
@@ -3316,7 +3398,6 @@ function addAdhoc(){
     '<div class="stask-meta">'+
     '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
     '<div class="tmeta-fields">'+
-    '<div class="tmeta-field"><label>Est.</label><input type="text" class="tinp" placeholder="Est."></div>'+
     '<div class="tmeta-field"><label>Actual</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="Actual"></div>'+
     '</div>'+
     '</div>';
@@ -3350,7 +3431,6 @@ function addAdhocToProj(pgId, projName) {
     '<div class="trow-meta">'+
     '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
     '<div class="tmeta-fields">'+
-    '<div class="tmeta-field"><label>Est.</label><input type="text" class="tinp" placeholder="Est."></div>'+
     '<div class="tmeta-field"><label>Actual</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="Actual"></div>'+
     '</div>'+
     '</div>';
@@ -3396,7 +3476,23 @@ async function submitEOD(){
     ltv = lt?lt.value:'';
   }
   if(!logout){ toast('Please enter your logout time.','err'); if(lo) lo.focus(); return; }
-  if(chk && chk.checked && lfv && ltv && lfv>=ltv){ toast('Lunch end must be after lunch start.','err'); return; }
+  if (chk && chk.checked && lfv && ltv) {
+    var loginMin = parseTimeToMinutes(LOGIN_TIME);
+    var lfMin = parseTimeToMinutes(lfv);
+    var ltMin = parseTimeToMinutes(ltv);
+    if (loginMin !== null && lfMin !== null && ltMin !== null) {
+      var lfAbs = lfMin - loginMin;
+      if (lfAbs < 0) lfAbs += 24 * 60;
+      var ltAbs = ltMin - loginMin;
+      if (ltAbs < 0) ltAbs += 24 * 60;
+      if (ltAbs < lfAbs) ltAbs += 24 * 60;
+      var lDiff = ltAbs - lfAbs;
+      if (lDiff <= 0) {
+        toast('Lunch end must be after lunch start.','err');
+        return;
+      }
+    }
+  }
   var tu=[];
   var hasErrors=false;
   document.querySelectorAll('[data-id]').forEach(function(row){
@@ -3569,6 +3665,9 @@ document.addEventListener('input', function(e) {
     e.target.classList.contains('adhoc-d')
   )) {
     autoResizeTextarea(e.target);
+  }
+  if (e.target.classList.contains('act-in') || e.target.classList.contains('adhoc-act')) {
+    recalc();
   }
 });
 async function resetCheckin() {

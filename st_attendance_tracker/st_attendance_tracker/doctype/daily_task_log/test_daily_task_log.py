@@ -220,8 +220,8 @@ class TestQACheckinFull(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             log.save(ignore_permissions=True)
 
-    def test_2_2_lunch_exceeding_4h_blocked(self):
-        """TC-2.2: Lunch break > 4 hours is blocked."""
+    def test_2_2_lunch_exceeding_4h_allowed(self):
+        """TC-2.2: Lunch break > 4 hours is allowed."""
         log = frappe.new_doc("Daily Task Log")
         log.employee = self.emp_name
         log.date = today()
@@ -230,8 +230,9 @@ class TestQACheckinFull(FrappeTestCase):
         log.logout_time = "18:00:00"
         log.lunch_from = "10:00:00"
         log.lunch_to = "15:00:00"  # 5 hours
-        with self.assertRaises(frappe.ValidationError):
-            log.save(ignore_permissions=True)
+        log.insert(ignore_permissions=True)
+        self.assertEqual(log.net_hours, "4h 0m")
+        log.delete()
 
     def test_2_3_lunch_outside_shift_blocked(self):
         """TC-2.3: Lunch interval outside work shift boundaries is blocked."""
@@ -616,8 +617,8 @@ class TestQACheckinFull(FrappeTestCase):
         )
         self.assertTrue(r.get("success"))
 
-    def test_4_9_eod_more_than_4h_lunch_blocked(self):
-        """TC-4.9: EOD submission with lunch duration exceeding 4 hours is blocked."""
+    def test_4_9_eod_more_than_4h_lunch_allowed(self):
+        """TC-4.9: EOD submission with lunch duration exceeding 4 hours is allowed."""
         frappe.set_user(self.emp_user)
         frappe.db.sql("DELETE FROM `tabDaily Task Log` WHERE employee=%s AND date=%s", (self.emp_name, today()))
         frappe.db.sql("DELETE FROM `tabDaily Task` WHERE employee=%s AND task_date=%s", (self.emp_name, today()))
@@ -628,11 +629,11 @@ class TestQACheckinFull(FrappeTestCase):
             work_location="Office"
         )
         # 09:00 -> 18:00, lunch 12:00 -> 16:01 (4h 1m / 241 mins)
-        with self.assertRaises(frappe.ValidationError):
-            submit_eod_log(
-                lunch_from="12:00", lunch_to="16:01", logout_time="18:00",
-                task_updates="[]", adhoc_tasks="[]"
-            )
+        r = submit_eod_log(
+            lunch_from="12:00", lunch_to="16:01", logout_time="18:00",
+            task_updates="[]", adhoc_tasks="[]"
+        )
+        self.assertTrue(r.get("success"))
 
     def test_4_10_midnight_wrap_exact_midnight_logout(self):
         """TC-4.10: Night shift wrapping midnight with logout exactly at 00:00:00 calculates correct net hours."""

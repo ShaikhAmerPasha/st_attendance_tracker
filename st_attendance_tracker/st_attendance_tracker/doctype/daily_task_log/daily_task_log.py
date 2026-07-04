@@ -28,6 +28,7 @@ class DailyTaskLog(Document):
             # FIX 2: validate AFTER login_time is resolved from DB
             self._validate_lunch_hours()
             self._calculate_net_hours()
+            self._calculate_working_hours()
         self._check_late()
 
     def on_submit(self):
@@ -36,6 +37,7 @@ class DailyTaskLog(Document):
                 frappe.throw("Logout Time is required for End of Day log.")
             self._validate_lunch_hours()
             self._calculate_net_hours()
+            self._calculate_working_hours()
             self.db_update()
 
     def _validate_no_duplicate(self):
@@ -94,7 +96,7 @@ class DailyTaskLog(Document):
             pass
 
     def _validate_lunch_hours(self):
-        """Reject reversed, zero-duration, >4h, or out-of-shift lunch intervals."""
+        """Reject reversed, zero-duration, or out-of-shift lunch intervals."""
         if not (self.login_time and self.logout_time and self.lunch_from and self.lunch_to):
             return
 
@@ -123,12 +125,6 @@ class DailyTaskLog(Document):
             frappe.throw(
                 f"Lunch duration cannot be zero or negative. "
                 f"Selected interval: {self.lunch_from} \u2192 {self.lunch_to}."
-            )
-
-        if lunch_duration > 60:
-            frappe.throw(
-                f"Lunch break is too long ({lunch_duration} minutes). "
-                f"Maximum allowed is 1 hour (60 minutes)."
             )
 
         if lf_abs < 0 or lt_abs > shift_len:
@@ -162,7 +158,7 @@ class DailyTaskLog(Document):
                 if d < 0:
                     d += 24 * 60
                 # Only subtract valid lunch (already validated upstream)
-                if 0 < d <= 60:
+                if 0 < d:
                     lunch_mins = d
 
             net_mins = max(0, total_mins - lunch_mins)
@@ -171,3 +167,14 @@ class DailyTaskLog(Document):
             self.net_hours = f"{hours}h {mins}m"
         except Exception:
             pass
+
+    def _calculate_working_hours(self):
+        if self.log_type != "End of Day":
+            self.working_hours = 0
+            return
+        total_actual_hours = frappe.db.get_value(
+            "Daily Task",
+            {"employee": self.employee, "task_date": self.date},
+            "sum(actual_time)"
+        ) or 0.0
+        self.working_hours = int(round(total_actual_hours))

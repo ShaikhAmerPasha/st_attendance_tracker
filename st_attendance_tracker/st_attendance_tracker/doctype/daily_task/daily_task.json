@@ -86,7 +86,7 @@
    "fieldtype": "Data",
    "label": "Project Name",
    "in_list_view": 1,
-   "description": "Optional \u2014 group tasks under a project"
+   "description": "Optional — group tasks under a project"
   },
   {
    "fieldname": "description",
@@ -107,13 +107,13 @@
   },
   {
    "fieldname": "estimated_time",
-   "fieldtype": "Data",
+   "fieldtype": "Float",
    "label": "Estimated Time",
    "description": "e.g. 2 hrs, 30 mins"
   },
   {
    "fieldname": "actual_time",
-   "fieldtype": "Data",
+   "fieldtype": "Float",
    "label": "Actual Time",
    "description": "e.g. 2 hrs, 30 mins"
   },

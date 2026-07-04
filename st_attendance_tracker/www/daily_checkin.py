@@ -132,16 +132,18 @@ def get_context(context):
             "Daily Task Log", morning_log, "work_location"
         ) or ""
 
+    working_hours_val = 0
     if eod_log:
         eod_data = frappe.db.get_value(
             "Daily Task Log", eod_log,
-            ["net_hours", "logout_time", "lunch_from", "lunch_to"], as_dict=True
+            ["net_hours", "logout_time", "lunch_from", "lunch_to", "working_hours"], as_dict=True
         )
         net_hours_val   = eod_data.net_hours    or ""
         # FIX: use _to_ampm for all time fields — timedelta → 'HH:MM AM/PM'
         logout_time_val = _to_ampm(eod_data.logout_time)
         lunch_from_val  = _to_ampm(eod_data.lunch_from)
         lunch_to_val    = _to_ampm(eod_data.lunch_to)
+        working_hours_val = eod_data.working_hours or 0
 
     # Group tasks by project
     projects = {}
@@ -221,6 +223,7 @@ def get_context(context):
     context.shift_info = shift_info
     context.leave_today = leave_today
     context.has_reset_today = has_reset_today
+    context.working_hours = working_hours_val
     context.title = "Daily Check-In"
 
 

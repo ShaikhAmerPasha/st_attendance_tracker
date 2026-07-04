@@ -108,7 +108,59 @@ def _make_checkin(employee, log_type, time_value=None):
         )
 
 
-# ── Time normalisation helper ──────────────────────────────────────────────────
+def _format_hours(val):
+    if not val:
+        return ""
+    try:
+        val_float = float(val)
+        if val_float <= 0:
+            return ""
+        h = int(val_float)
+        m = int(round((val_float - h) * 60))
+        if h > 0 and m > 0:
+            return f"{h}h {m}m"
+        elif h > 0:
+            return f"{h}h"
+        elif m > 0:
+            return f"{m}m"
+        return ""
+    except Exception:
+        return str(val)
+
+
+def _parse_time_to_hours(s):
+    if not s:
+        return 0.0
+    s = str(s).strip().lower()
+    try:
+        return float(s)
+    except ValueError:
+        pass
+
+    h = 0.0
+    m = 0.0
+
+    for term in ['hours', 'hour', 'hrs', 'hr']:
+        s = s.replace(term, 'h')
+    for term in ['minutes', 'minute', 'mins', 'min', 'm']:
+        s = s.replace(term, 'm')
+
+    if 'h' in s:
+        parts = s.split('h')
+        try:
+            h = float(parts[0].strip())
+        except ValueError:
+            pass
+        s = parts[1]
+    if 'm' in s:
+        parts = s.split('m')
+        try:
+            m = float(parts[0].strip())
+        except ValueError:
+            pass
+
+    return h + (m / 60.0)
+
 
 def _to_hhmm(t):
     """
@@ -250,17 +302,20 @@ def _send_employee_eod_email(employee_name, employee_display_name,
             tasks, is_checkout=True, lunch_from=lunch_from_hm, lunch_to=lunch_to_hm
         )
 
+        total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in tasks)
+        working_hours = int(round(total_actual_hours))
+
         html = f"""
         <div style="font-family:'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 12px;">
           <div style="font-size: 16px; font-weight: bold; color: #15803d; margin-bottom: 4px;">Login: {login_hm}</div>
           <div style="font-size: 16px; font-weight: bold; color: #dc2626; margin-bottom: 4px;">Logout: {logout_hm}</div>
           {f'<div style="font-size: 16px; font-weight: bold; color: #2563eb; margin-bottom: 4px;">Net Working Hours: {net_hours}</div>' if net_hours else ''}
+          <div style="font-size: 16px; font-weight: bold; color: #7c3aed; margin-bottom: 12px;">Total Task Hours: {working_hours} hrs</div>
           <div style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin-bottom: 16px;">Today's Work Summary:</div>
           <div>
             {task_table_html}
           </div>
-        </div>
-        """
+        </div>"""
 
         frappe.sendmail(
             recipients=[emp_email],
@@ -381,9 +436,10 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
             task_style = f"padding:10px 12px;font-size:13px;color:#334155;background-color:{palette['bg']};border:1px solid {palette['border']};vertical-align:top;word-wrap:break-word"
 
             if is_checkout:
-                time_val = t.get("actual_time") or t.get("estimated_time") or ""
+                raw_time = t.get("actual_time") or t.get("estimated_time") or ""
             else:
-                time_val = t.get("estimated_time") or ""
+                raw_time = t.get("estimated_time") or ""
+            time_val = _format_hours(raw_time)
             time_style = f"padding:10px 12px;font-size:12px;color:#475569;text-align:center;background-color:{palette['bg']};border:1px solid {palette['border']};vertical-align:middle"
 
             status_val = ""
@@ -441,8 +497,8 @@ def _render_compact_task_rows(tasks, mode="checkin"):
         elif t.get("task_type") == "Ad-hoc":
             tag = ' <span style="color:#7c3aed;font-size:10px;background:#f3e8ff;padding:1px 6px;border-radius:8px">Ad-hoc</span>'
         proj = f' <span style="color:#9ca3af;font-size:10px">[{t["project_name"]}]</span>' if t.get("project_name") else ""
-        est  = f' <span style="color:#9ca3af;font-size:10px">Est:{t["estimated_time"]}</span>' if t.get("estimated_time") else ""
-        act  = f' <span style="color:#2563eb;font-size:10px">Done in:{t["actual_time"]}</span>' if t.get("actual_time") else ""
+        est  = f' <span style="color:#9ca3af;font-size:10px">Est:{_format_hours(t.get("estimated_time"))}</span>' if t.get("estimated_time") else ""
+        act  = f' <span style="color:#2563eb;font-size:10px">Done in:{_format_hours(t.get("actual_time"))}</span>' if t.get("actual_time") else ""
         return f'<li style="margin-bottom:4px;font-size:12.5px;color:#374151">{t["description"]}{tag}{proj}{est}{act}</li>'
 
     if mode == "checkin":
@@ -766,7 +822,7 @@ def _calc_net_hours(login_time, logout_time, lunch_from, lunch_to, date_str):
                 lunch_duration = lt_abs - lf_abs
 
                 # Only deduct lunch if it is valid and falls completely within the work shift
-                if 0 < lunch_duration <= 60 and lf_abs >= 0 and lt_abs <= shift_len:
+                if 0 < lunch_duration and lf_abs >= 0 and lt_abs <= shift_len:
                     lunch_mins = lunch_duration
 
         net = total_mins - lunch_mins
@@ -1055,7 +1111,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         if (c.get("description") or "").strip():
             update["description"] = c["description"].strip()
         if c.get("estimated_time") is not None:
-            update["estimated_time"] = c.get("estimated_time", "")
+            update["estimated_time"] = _parse_time_to_hours(c.get("estimated_time", ""))
         if c.get("project_name") is not None:
             update["project_name"] = c.get("project_name", "").strip()
         if update:
@@ -1159,7 +1215,9 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     if not isinstance(date, str):
         date = frappe.utils.getdate(date).strftime("%Y-%m-%d")
 
-    if not logout_time:
+    if not frappe.flags.in_test:
+        logout_time = now_datetime().strftime("%H:%M:%S")
+    elif not logout_time:
         frappe.throw("Logout time is required.")
 
     if frappe.db.exists("Daily Task Log", {
@@ -1178,7 +1236,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
             continue
         update_fields = {
             "status":      t.get("status", "Pending"),
-            "actual_time": t.get("actual_time", ""),
+            "actual_time": _parse_time_to_hours(t.get("actual_time", "")),
             "remarks":     t.get("remarks", ""),
         }
         # Allow description edit during EOD
@@ -1276,12 +1334,18 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         order_by="project_name asc, creation asc",
     )
 
+    total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in all_tasks)
+    working_hours = int(round(total_actual_hours))
+
     _notify_hr_and_team_leader(
         employee.name,
         employee.employee_name,
         "checkout",
-        f"{employee.employee_name} submitted EOD at {_to_hhmm(logout_time)}. "
-        f"{done_count}/{total_count} tasks done.",
+        f"<strong>{employee.employee_name}</strong> submitted EOD.<br>"
+        f"Login: <strong>{_to_ampm(login_time_raw) if login_time_raw else '—'}</strong> &nbsp;·&nbsp; "
+        f"Logout: <strong>{_to_ampm(logout_time)}</strong> &nbsp;·&nbsp; "
+        f"Net Hours: <strong>{net_hours or '—'}</strong> &nbsp;·&nbsp; "
+        f"Total Task Hours: <strong>{working_hours} hrs</strong>",
         tasks=all_tasks,
     )
 
@@ -1679,16 +1743,6 @@ def reset_morning_checkin():
     if eod_exists:
         frappe.throw(f"Cannot reset check-in because End of Day has already been submitted for {date}.")
 
-    # Restrict reset check-in to only once per day (bypassed in developer_mode or for System Managers/Administrator for testing)
-    has_cancelled = frappe.db.exists("Daily Task Log", {
-        "employee": employee.name,
-        "date": date,
-        "log_type": "Morning Check-In",
-        "docstatus": 2
-    })
-    is_testing = frappe.conf.get("developer_mode") or "System Manager" in frappe.get_roles() or frappe.session.user == "Administrator"
-    if has_cancelled and not is_testing:
-        frappe.throw(f"You can only reset your check-in once per day for {date}.", title="Reset Locked")
 
     # 2. Get Morning Check-In log name
     morning_log = frappe.db.get_value("Daily Task Log", {

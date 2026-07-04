@@ -8,7 +8,7 @@
   "employee","employee_name","department","date",
   "col_break_1","log_type","work_location","is_late",
   "section_break_times","login_time","lunch_from","col_break_times","logout_time","lunch_to",
-  "section_break_hours","net_hours",
+  "section_break_hours","net_hours","working_hours",
   "section_break_remarks","remarks"
  ],
  "fields": [
@@ -28,6 +28,7 @@
   {"fieldname":"lunch_to","fieldtype":"Time","label":"Lunch To"},
   {"fieldname":"section_break_hours","fieldtype":"Section Break","label":"Hours Summary"},
   {"fieldname":"net_hours","fieldtype":"Data","label":"Net Hours Worked","read_only":1},
+  {"fieldname":"working_hours","fieldtype":"Int","label":"Working Hours","read_only":1},
   {"fieldname":"section_break_remarks","fieldtype":"Section Break","label":"Remarks"},
   {"fieldname":"remarks","fieldtype":"Small Text","label":"Remarks"}
  ],
