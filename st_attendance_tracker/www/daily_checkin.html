@@ -89,12 +89,21 @@ body {
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 32px;
-  gap: 16px;
   position: sticky;
   top: 0;
   z-index: 100;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
+}
+
+.tnav-con {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 32px;
+  gap: 16px;
+  height: 100%;
 }
 
 .tnav-logo {
@@ -125,6 +134,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
 }
 
 .tnav-date {
@@ -2163,9 +2173,10 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
   display: none !important;
 }
 
-.layout-main-section-wrapper, .layout-main-section, .page-content {
+.layout-main-section-wrapper, .layout-main-section, .page-content, main {
   padding: 0 !important;
   max-width: 100% !important;
+  margin: 0 !important;
 }
 
 .mob-nav {
@@ -2184,7 +2195,7 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
 }
 
 @media(max-width: 900px) {
-  .tnav {
+  .tnav-con {
     padding: 0 20px;
   }
   .cols {
@@ -2326,8 +2337,8 @@ body {
 /* Custom Dropdown Profile Menu */
 .profile-dropdown {
   position: absolute;
-  top: 54px;
-  right: 24px;
+  top: 42px;
+  right: 0;
   background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -2488,18 +2499,20 @@ body > .container { padding-top: 0 !important; }
 {% block page_content %}
 <div class="app">
 <nav class="tnav">
-  <span class="tnav-logo">ST Tracker</span>
-  <span class="tnav-sep"></span>
-  <span class="tnav-bc">{% if eod_done %}Day Complete{% elif is_checked_in %}Working{% else %}Check-In{% endif %}</span>
-  <div class="tnav-r">
-    <span class="tnav-date">{{ date }}</span>
-    <a href="/my-history" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
-    {% if is_team_leader %}<a href="/team-dashboard" class="tnav-btn"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
-    <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
-    <div class="profile-dropdown" id="profile-dropdown">
-      <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
-      <a href="/app" class="pd-item"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Switch to Desk</a>
-      <a href="/?cmd=web_logout" class="pd-item"><i class="ti ti-logout" aria-hidden="true"></i>Logout</a>
+  <div class="tnav-con">
+    <span class="tnav-logo">ST Tracker</span>
+    <span class="tnav-sep"></span>
+    <span class="tnav-bc">{% if eod_done %}Day Complete{% elif is_checked_in %}Working{% else %}Check-In{% endif %}</span>
+    <div class="tnav-r">
+      <span class="tnav-date">{{ date }}</span>
+      <a href="/my-history" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
+      {% if is_team_leader %}<a href="/team-dashboard" class="tnav-btn"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
+      <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
+      <div class="profile-dropdown" id="profile-dropdown">
+        <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
+        <a href="/app" class="pd-item"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Switch to Desk</a>
+        <a href="/?cmd=web_logout" class="pd-item"><i class="ti ti-logout" aria-hidden="true"></i>Logout</a>
+      </div>
     </div>
   </div>
 </nav>

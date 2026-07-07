@@ -73,11 +73,20 @@ body {
   border-bottom: 1px solid rgba(226, 232, 240, 0.8);
   display: flex;
   align-items: center;
-  padding: 0 24px;
-  gap: 16px;
   position: sticky;
   top: 0;
   z-index: 100;
+}
+
+.tnav-con {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 24px;
+  gap: 16px;
+  height: 100%;
 }
 
 .tnav-logo {
@@ -107,6 +116,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
 }
 
 .tnav-btn {
@@ -732,8 +742,8 @@ body {
 /* Custom Dropdown Profile Menu */
 .profile-dropdown {
   position: absolute;
-  top: 54px;
-  right: 24px;
+  top: 38px;
+  right: 0;
   background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -768,20 +778,29 @@ body {
   font-size: 15px;
   color: #64748b;
 }
+
+/* Layout overrides to force full-width view */
+.layout-main-section-wrapper, .layout-main-section, .page-content, main {
+  padding: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+}
 </style>
 {% endblock %}
 {% block page_content %}
 <nav class="tnav">
-  <span class="tnav-logo">ST Tracker</span>
-  <span class="tnav-sep"></span>
-  <span class="tnav-bc">My History</span>
-  <div class="tnav-r">
-    <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-arrow-left" aria-hidden="true"></i>Back to Dashboard</a>
-    <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
-    <div class="profile-dropdown" id="profile-dropdown">
-      <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
-      <a href="/app" class="pd-item"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Switch to Desk</a>
-      <a href="/?cmd=web_logout" class="pd-item"><i class="ti ti-logout" aria-hidden="true"></i>Logout</a>
+  <div class="tnav-con">
+    <span class="tnav-logo">ST Tracker</span>
+    <span class="tnav-sep"></span>
+    <span class="tnav-bc">My History</span>
+    <div class="tnav-r">
+      <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-arrow-left" aria-hidden="true"></i>Back to Dashboard</a>
+      <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
+      <div class="profile-dropdown" id="profile-dropdown">
+        <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
+        <a href="/app" class="pd-item"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Switch to Desk</a>
+        <a href="/?cmd=web_logout" class="pd-item"><i class="ti ti-logout" aria-hidden="true"></i>Logout</a>
+      </div>
     </div>
   </div>
 </nav>

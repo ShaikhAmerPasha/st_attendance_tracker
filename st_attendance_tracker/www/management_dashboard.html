@@ -73,11 +73,20 @@ body {
   border-bottom: 1px solid rgba(226, 232, 240, 0.8);
   display: flex;
   align-items: center;
-  padding: 0 24px;
-  gap: 16px;
   position: sticky;
   top: 0;
   z-index: 100;
+}
+
+.tnav-con {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 24px;
+  gap: 16px;
+  height: 100%;
 }
 
 .tnav-logo {
@@ -107,6 +116,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
 }
 
 .tnav-btn {
@@ -824,10 +834,54 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Hide Frappe default footer */
-footer.web-footer, .web-footer, footer[class*="footer"], .footer, .subscribe-section,
+/* Hide Frappe default headers and footers */
+.web-header, .navbar, footer.web-footer, .web-footer, footer[class*="footer"], .footer, .subscribe-section,
 form.row.mt-2, .mt-2.row:has(input[placeholder="Your email address..."]) {
   display: none !important;
+}
+body {
+  padding-top: 0 !important;
+  background: #f8fafc !important;
+}
+
+/* Custom Dropdown Profile Menu */
+.profile-dropdown {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  display: none;
+  flex-direction: column;
+  min-width: 170px;
+  z-index: 1000;
+  overflow: hidden;
+}
+.profile-dropdown.show {
+  display: flex;
+}
+.pd-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  text-decoration: none;
+  transition: background 0.15s;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+}
+.pd-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.pd-item i {
+  font-size: 15px;
+  color: #64748b;
 }
 
 
@@ -967,16 +1021,31 @@ body {
 ::-webkit-scrollbar-thumb { background: #cbd5e1 !important; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8 !important; }
 
+/* Layout overrides to force full-width view */
+.layout-main-section-wrapper, .layout-main-section, .page-content, main {
+  padding: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+}
 </style>
 {% endblock %}
 {% block page_content %}
 <nav class="tnav">
-  <span class="tnav-logo">ST Tracker</span>
-  <span class="tnav-sep"></span>
-  <span class="tnav-bc">Management</span>
-  <div class="tnav-r">
-    <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-user" aria-hidden="true"></i>My check-in</a>
-    <div class="tnav-av">A</div>
+  <div class="tnav-con">
+    <span class="tnav-logo">ST Tracker</span>
+    <span class="tnav-sep"></span>
+    <span class="tnav-bc">Management</span>
+    <div class="tnav-r">
+      <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-user" aria-hidden="true"></i>My check-in</a>
+      <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
+      <div class="profile-dropdown" id="profile-dropdown">
+        {% if employee.name %}
+        <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
+        {% endif %}
+        <a href="/app" class="pd-item"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Switch to Desk</a>
+        <a href="/?cmd=web_logout" class="pd-item"><i class="ti ti-logout" aria-hidden="true"></i>Logout</a>
+      </div>
+    </div>
   </div>
 </nav>
 <div class="wrap">
@@ -1251,5 +1320,22 @@ function loadAll(date){
 }
 
 frappe.ready(function(){ loadAll('{{ date }}'); });
+
+function toggleProfileDropdown(e) {
+  if (e) e.stopPropagation();
+  var dd = document.getElementById('profile-dropdown');
+  if (dd) {
+    dd.classList.toggle('show');
+  }
+}
+
+document.addEventListener('click', function(e) {
+  var dd = document.getElementById('profile-dropdown');
+  if (dd && dd.classList.contains('show')) {
+    if (!dd.contains(e.target)) {
+      dd.classList.remove('show');
+    }
+  }
+});
 </script>
 {% endblock %}

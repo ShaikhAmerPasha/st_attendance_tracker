@@ -12,6 +12,19 @@ def get_context(context):
         frappe.local.flags.redirect_location = "/daily-checkin"
         raise frappe.Redirect
 
+    employee = frappe.db.get_value(
+        "Employee", {"user_id": frappe.session.user},
+        ["name", "employee_name", "department"], as_dict=True,
+    )
+    if not employee:
+        full_name = frappe.db.get_value("User", frappe.session.user, "full_name") or "HR Manager"
+        employee = frappe._dict({
+            "name": "",
+            "employee_name": full_name,
+            "department": ""
+        })
+
     context.no_cache = 1
+    context.employee = employee
     context.date = today()
     context.title = "Management Dashboard"
