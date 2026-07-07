@@ -28,7 +28,7 @@
   {"fieldname":"lunch_to","fieldtype":"Time","label":"Lunch To"},
   {"fieldname":"section_break_hours","fieldtype":"Section Break","label":"Hours Summary"},
   {"fieldname":"net_hours","fieldtype":"Data","label":"Net Hours Worked","read_only":1},
-  {"fieldname":"working_hours","fieldtype":"Int","label":"Working Hours","read_only":1},
+  {"fieldname":"working_hours","fieldtype":"Float","label":"Working Hours","read_only":1},
   {"fieldname":"section_break_remarks","fieldtype":"Section Break","label":"Remarks"},
   {"fieldname":"remarks","fieldtype":"Small Text","label":"Remarks"}
  ],

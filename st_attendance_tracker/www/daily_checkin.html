@@ -2620,7 +2620,7 @@ body > .container { padding-top: 0 !important; }
     <div class="done-grid" style="grid-template-columns: repeat(3, 1fr);">
       <div><div class="dg-l">Tasks done</div><div class="dg-v g">{{ dt|length }} / {{ tasks|length }}</div></div>
       <div><div class="dg-l">Carried forward</div><div class="dg-v">{{ pt|length }}</div></div>
-      <div><div class="dg-l">Working Hours</div><div class="dg-v" style="color:var(--primary)">{{ working_hours or 0 }} hrs</div></div>
+      <div><div class="dg-l">Working Hours</div><div class="dg-v" style="color:var(--primary)">{{ working_hours }}</div></div>
     </div>
     <div class="done-links">
       <a href="/my-history" class="dl-btn"><i class="ti ti-history" aria-hidden="true"></i>View history</a>
@@ -2667,7 +2667,7 @@ body > .container { padding-top: 0 !important; }
     </div>
   </div>
   {% if total_count > 0 %}
-  <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Status</div><div class="ch">Estimated</div><div class="ch">Actual</div><div class="ch"></div></div>
+  <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Status</div><div class="ch">Estimated</div><div class="ch">Time taken for task completion</div><div class="ch"></div></div>
   {% endif %}
   {% set pico = ['pi0','pi1','pi2','pi3','pi4','pi5'] %}
   {% for pname, ptasks in projects.items() %}
@@ -2693,7 +2693,7 @@ body > .container { padding-top: 0 !important; }
           <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
           <div class="tmeta-fields">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est."></div>
-            <div class="tmeta-field"><label>Actual</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs"></div>
+            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs"></div>
           </div>
         </div>
       </div>
@@ -2722,7 +2722,7 @@ body > .container { padding-top: 0 !important; }
           <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
           <div class="tmeta-fields">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est."></div>
-            <div class="tmeta-field"><label>Actual</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs"></div>
+            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs"></div>
           </div>
         </div>
       </div>
@@ -3064,6 +3064,20 @@ function parseTimeToHoursJs(s) {
   return h + (m / 60);
 }
 
+function formatMinsToHoursMins(totalMins) {
+  if (!totalMins || totalMins <= 0) return "—";
+  var h = Math.floor(totalMins / 60);
+  var m = Math.round(totalMins % 60);
+  if (h > 0 && m > 0) {
+    return h + "h " + m + "m";
+  } else if (h > 0) {
+    return h + "h";
+  } else if (m > 0) {
+    return m + "m";
+  }
+  return "—";
+}
+
 function recalc(){
   var lo=document.getElementById('logout_time'), lf=document.getElementById('lunch_from'), lt=document.getElementById('lunch_to');
   if (!lo) return;
@@ -3158,8 +3172,8 @@ function recalc(){
     });
     var topTh = document.getElementById('top-th');
     if (topTh) {
-      var thVal = Math.round(totalActualMin / 60.0);
-      topTh.textContent = thVal + ' hrs';
+      var thVal = formatMinsToHoursMins(totalActualMin);
+      topTh.textContent = thVal;
     }
   }
 }
@@ -3398,7 +3412,7 @@ function addAdhoc(){
     '<div class="stask-meta">'+
     '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
     '<div class="tmeta-fields">'+
-    '<div class="tmeta-field"><label>Actual</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="Actual"></div>'+
+    '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 2 hrs"></div>'+
     '</div>'+
     '</div>';
   document.getElementById('adhoc-area').appendChild(d);
@@ -3431,7 +3445,7 @@ function addAdhocToProj(pgId, projName) {
     '<div class="trow-meta">'+
     '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
     '<div class="tmeta-fields">'+
-    '<div class="tmeta-field"><label>Actual</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="Actual"></div>'+
+    '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 2 hrs"></div>'+
     '</div>'+
     '</div>';
   var pgAdd = pgEl.querySelector('.pg-add');
@@ -3534,7 +3548,7 @@ async function submitEOD(){
     if(!desc.trim() && proj.trim()) desc = "No description added";
     if(desc.trim()) at.push({description:desc.trim(),status:stat,estimated_time:est,actual_time:act,remarks:'',project_name:proj});
   });
-  if(hasErrors){ toast('Please provide actual time for all completed tasks.', 'err'); return; }
+  if(hasErrors){ toast('Please provide time taken for task completion for all completed tasks.', 'err'); return; }
   var btn=document.getElementById('btn-eod');
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> Submitting...';
   try{

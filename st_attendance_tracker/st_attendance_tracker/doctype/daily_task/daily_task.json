@@ -114,7 +114,7 @@
   {
    "fieldname": "actual_time",
    "fieldtype": "Float",
-   "label": "Actual Time",
+   "label": "Time Taken for Task Completion",
    "description": "e.g. 2 hrs, 30 mins"
   },
   {

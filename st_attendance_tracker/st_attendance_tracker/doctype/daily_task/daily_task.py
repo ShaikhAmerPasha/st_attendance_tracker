@@ -17,6 +17,8 @@ class DailyTask(Document):
         self._check_ownership()
         self._check_eod_submitted()
         self._parse_time_fields()
+        if self.status == "Done" and not self.actual_time:
+            frappe.throw("Time Taken for Task Completion is mandatory for completed tasks.")
 
     def _parse_time_fields(self):
         self.estimated_time = self._parse_time_to_hours(self.estimated_time)

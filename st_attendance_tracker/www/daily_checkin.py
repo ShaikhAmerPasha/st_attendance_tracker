@@ -1,6 +1,6 @@
 import frappe
 from frappe.utils import today, now_datetime, getdate
-from st_attendance_tracker.api import _to_hhmm, _to_ampm
+from st_attendance_tracker.api import _to_hhmm, _to_ampm, _format_hours
 
 
 def get_context(context):
@@ -132,7 +132,7 @@ def get_context(context):
             "Daily Task Log", morning_log, "work_location"
         ) or ""
 
-    working_hours_val = 0
+    working_hours_val = ""
     if eod_log:
         eod_data = frappe.db.get_value(
             "Daily Task Log", eod_log,
@@ -143,7 +143,7 @@ def get_context(context):
         logout_time_val = _to_ampm(eod_data.logout_time)
         lunch_from_val  = _to_ampm(eod_data.lunch_from)
         lunch_to_val    = _to_ampm(eod_data.lunch_to)
-        working_hours_val = eod_data.working_hours or 0
+        working_hours_val = _format_hours(eod_data.working_hours) or "0h"
 
     # Group tasks by project
     projects = {}

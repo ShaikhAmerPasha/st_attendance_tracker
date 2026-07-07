@@ -177,4 +177,4 @@ class DailyTaskLog(Document):
             {"employee": self.employee, "task_date": self.date},
             "sum(actual_time)"
         ) or 0.0
-        self.working_hours = int(round(total_actual_hours))
+        self.working_hours = float(total_actual_hours)

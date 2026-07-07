@@ -303,14 +303,14 @@ def _send_employee_eod_email(employee_name, employee_display_name,
         )
 
         total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in tasks)
-        working_hours = int(round(total_actual_hours))
+        working_hours_str = _format_hours(total_actual_hours) or "0h"
 
         html = f"""
         <div style="font-family:'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 12px;">
           <div style="font-size: 16px; font-weight: bold; color: #15803d; margin-bottom: 4px;">Login: {login_hm}</div>
           <div style="font-size: 16px; font-weight: bold; color: #dc2626; margin-bottom: 4px;">Logout: {logout_hm}</div>
           {f'<div style="font-size: 16px; font-weight: bold; color: #2563eb; margin-bottom: 4px;">Net Working Hours: {net_hours}</div>' if net_hours else ''}
-          <div style="font-size: 16px; font-weight: bold; color: #7c3aed; margin-bottom: 12px;">Total Task Hours: {working_hours} hrs</div>
+          <div style="font-size: 16px; font-weight: bold; color: #7c3aed; margin-bottom: 12px;">Total Task Hours: {working_hours_str}</div>
           <div style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin-bottom: 16px;">Today's Work Summary:</div>
           <div>
             {task_table_html}
@@ -1234,9 +1234,13 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         name = t.get("name")
         if not name:
             continue
+        status = t.get("status", "Pending")
+        actual_time = t.get("actual_time", "")
+        if status == "Done" and not _parse_time_to_hours(actual_time):
+            frappe.throw(f"Please provide time taken for task completion for the completed task: '{t.get('description') or name}'")
         update_fields = {
-            "status":      t.get("status", "Pending"),
-            "actual_time": _parse_time_to_hours(t.get("actual_time", "")),
+            "status":      status,
+            "actual_time": _parse_time_to_hours(actual_time),
             "remarks":     t.get("remarks", ""),
         }
         # Allow description edit during EOD
@@ -1335,7 +1339,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     )
 
     total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in all_tasks)
-    working_hours = int(round(total_actual_hours))
+    working_hours_str = _format_hours(total_actual_hours) or "0h"
 
     _notify_hr_and_team_leader(
         employee.name,
@@ -1345,7 +1349,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         f"Login: <strong>{_to_ampm(login_time_raw) if login_time_raw else '—'}</strong> &nbsp;·&nbsp; "
         f"Logout: <strong>{_to_ampm(logout_time)}</strong> &nbsp;·&nbsp; "
         f"Net Hours: <strong>{net_hours or '—'}</strong> &nbsp;·&nbsp; "
-        f"Total Task Hours: <strong>{working_hours} hrs</strong>",
+        f"Total Task Hours: <strong>{working_hours_str}</strong>",
         tasks=all_tasks,
     )
 

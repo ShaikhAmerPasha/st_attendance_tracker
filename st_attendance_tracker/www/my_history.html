@@ -914,7 +914,7 @@ function loadDayDetail(date) {
         tasksHtml = tasks.map(function(t) {
           var pills = '';
           if (t.estimated_time) pills += '<span class="tp"><i class="ti ti-clock" aria-hidden="true"></i>Est: ' + t.estimated_time + '</span>';
-          if (t.actual_time)    pills += '<span class="tp"><i class="ti ti-check" aria-hidden="true"></i>Actual: ' + t.actual_time + '</span>';
+          if (t.actual_time)    pills += '<span class="tp"><i class="ti ti-check" aria-hidden="true"></i>Time taken for task completion: ' + t.actual_time + '</span>';
           if (t.project_name)   pills += '<span class="tp"><i class="ti ti-folder" aria-hidden="true"></i>' + t.project_name + '</span>';
           if (t.is_carried)     pills += '<span class="tp"><i class="ti ti-history" aria-hidden="true"></i>Carried</span>';
           return '<div class="task-row">' +
