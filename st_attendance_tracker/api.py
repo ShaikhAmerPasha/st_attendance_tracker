@@ -32,7 +32,7 @@ from frappe.utils import today, now_datetime, getdate, add_days, get_datetime
 def _get_employee():
     emp = frappe.db.get_value(
         "Employee",
-        {"user_id": frappe.session.user},
+        {"user_id": frappe.session.user, "status": "Active"},
         ["name", "employee_name", "department", "reports_to", "designation"],
         as_dict=True,
     )
@@ -43,6 +43,39 @@ def _get_employee():
             frappe.PermissionError,
         )
     return emp
+
+
+def _assert_task_owner(task_name, employee_name):
+    """Block cross-employee task mutation via db.set_value (BOLA guard)."""
+    task_employee = frappe.db.get_value("Daily Task", task_name, "employee")
+    if task_employee != employee_name:
+        frappe.throw("Not authorised to edit this task.", frappe.PermissionError)
+
+
+def _is_half_day_leave_today(employee_name, date):
+    """True if employee has an approved half-day Leave Application covering `date`."""
+    dt = getdate(date)
+    exact = frappe.db.exists("Leave Application", {
+        "employee": employee_name, "status": "Approved", "docstatus": 1,
+        "half_day": 1, "half_day_date": dt,
+    })
+    if exact:
+        return True
+    return bool(frappe.db.exists("Leave Application", {
+        "employee": employee_name, "status": "Approved", "docstatus": 1,
+        "half_day": 1, "from_date": ["<=", dt], "to_date": [">=", dt],
+    }))
+
+
+def _resolve_half_day_session(employee_name, date, raw_value):
+    """Validate + persist a half-day session choice. Informational only —
+    never blocks check-in either way, just refuses to store nonsense."""
+    value = (raw_value or "").strip()
+    if value not in ("First Half", "Second Half"):
+        return ""
+    if not _is_half_day_leave_today(employee_name, date):
+        return ""
+    return value
 
 
 # ── Team leader check ──────────────────────────────────────────────────────────
@@ -351,7 +384,7 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
     if not tasks:
         return '<p style="font-size:13px;color:#9ca3af;font-style:italic;margin:6px 0">No tasks added yet.</p>'
 
-    # Group tasks by project
+    # Group tasks by project, preserving the order projects were first entered in
     groups = {}
     for t in tasks:
         pname = (t.get("project_name") or "").strip()
@@ -359,8 +392,7 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
             pname = "General"
         groups.setdefault(pname, []).append(t)
 
-    # Sort groups: General first, then alphabetically
-    sorted_group_names = sorted(groups.keys(), key=lambda x: (x != "General", x.lower()))
+    sorted_group_names = list(groups.keys())
 
     palettes = [
         {"bg": "#eff6ff", "border": "#bfdbfe", "text": "#1e40af"}, # Blue (General)
@@ -645,6 +677,13 @@ def _get_root_task(task_name):
     return current
 
 
+def _next_sequence(employee, task_date):
+    """Next entry-order value for a new Daily Task on this employee/date."""
+    return (frappe.db.get_value(
+        "Daily Task", {"employee": employee, "task_date": task_date}, "max(sequence)"
+    ) or 0)
+
+
 # ── Rollover on EOD ────────────────────────────────────────────────────────────
 
 def _rollover_pending_tasks(employee, date):
@@ -688,6 +727,7 @@ def _rollover_pending_tasks(employee, date):
         new_task.estimated_time   = task.estimated_time or ""
         new_task.project_name     = task.project_name or ""
         new_task.remarks = f"[Carried from {task.origin_date or date}]"
+        new_task.sequence = _next_sequence(employee, next_date) + 1
         new_task.insert(ignore_permissions=True)
         frappe.db.set_value("Daily Task", task.name, "status", "Rolled Over")
         rolled += 1
@@ -741,6 +781,7 @@ def _safety_rollover(employee, today_date):
         new_task.estimated_time   = task.estimated_time or ""
         new_task.project_name    = task.project_name or ""
         new_task.remarks = f"[Auto-carried from {task.origin_date or task.task_date}]"
+        new_task.sequence = _next_sequence(employee, today_date) + 1
         new_task.insert(ignore_permissions=True)
         frappe.db.set_value("Daily Task", task.name, "status", "Rolled Over")
 
@@ -882,7 +923,7 @@ def validate_wfh_request():
     with reason = Work From Home for today.
     """
     employee = frappe.db.get_value(
-        "Employee", {"user_id": frappe.session.user}, "name"
+        "Employee", {"user_id": frappe.session.user, "status": "Active"}, "name"
     )
     if not employee:
         return {"valid": False, "message": "Employee record not found."}
@@ -971,7 +1012,7 @@ def get_page_state():
             fields=["name", "description", "status", "task_type",
                     "origin_date", "rolled_over_from", "remarks",
                     "estimated_time", "actual_time"],
-            order_by="task_type asc, creation asc",
+            order_by="sequence asc",
         )
         for task in tasks:
             task["is_carried"] = bool(task.get("rolled_over_from"))
@@ -1043,11 +1084,13 @@ def get_page_state():
 # ── Morning submit ─────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
-def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_location=None):
+def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_location=None, half_day_session=None):
     """
-    new_tasks:       JSON list of {description, estimated_time}
-    login_time:      optional HH:MM override
-    carried_updates: JSON list of {name, description, estimated_time} edits
+    new_tasks:        JSON list of {description, estimated_time}
+    login_time:       optional HH:MM override
+    carried_updates:  JSON list of {name, description, estimated_time} edits
+    half_day_session: "First Half"/"Second Half", only kept if employee is
+                      actually on approved half-day leave today
     """
     employee = _get_employee()
     # Lock employee record to serialize check-in processing
@@ -1107,6 +1150,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         task_name = c.get("name")
         if not task_name:
             continue
+        _assert_task_owner(task_name, employee.name)
         update = {}
         if (c.get("description") or "").strip():
             update["description"] = c["description"].strip()
@@ -1117,8 +1161,9 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         if update:
             frappe.db.set_value("Daily Task", task_name, update)
 
-    # Insert new tasks
-    for t in tasks:
+    # Insert new tasks, preserving the order the employee entered them in
+    sequence_base = _next_sequence(employee.name, date)
+    for i, t in enumerate(tasks):
         desc = (t.get("description") or "").strip()
         if not desc:
             continue
@@ -1131,6 +1176,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         task_doc.origin_date    = date
         task_doc.estimated_time = t.get("estimated_time", "")
         task_doc.project_name = (t.get("project_name") or "").strip()
+        task_doc.sequence = sequence_base + i + 1
         task_doc.insert(ignore_permissions=True)
 
     actual_login = login_time or now_datetime().strftime("%H:%M:%S")
@@ -1138,11 +1184,12 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         actual_login = str(actual_login) + ":00"
 
     log = frappe.new_doc("Daily Task Log")
-    log.employee       = employee.name
-    log.date           = date
-    log.log_type       = "Morning Check-In"
-    log.login_time     = actual_login
-    log.work_location  = work_location
+    log.employee          = employee.name
+    log.date              = date
+    log.log_type          = "Morning Check-In"
+    log.login_time        = actual_login
+    log.work_location     = work_location
+    log.half_day_session  = _resolve_half_day_session(employee.name, date, half_day_session)
     log.insert(ignore_permissions=True)
     log.flags.ignore_permissions = True
     log.submit()
@@ -1155,7 +1202,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         filters={"employee": employee.name, "task_date": date},
         fields=["name", "description", "status", "task_type",
                 "estimated_time", "project_name", "rolled_over_from"],
-        order_by="project_name asc, creation asc",
+        order_by="sequence asc",
     )
 
     # Notification — includes today's tasks + carried-forward tasks
@@ -1234,6 +1281,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         name = t.get("name")
         if not name:
             continue
+        _assert_task_owner(name, employee.name)
         status = t.get("status", "Pending")
         actual_time = t.get("actual_time", "")
         if status == "Done" and not _parse_time_to_hours(actual_time):
@@ -1270,8 +1318,9 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
                 ancestor = frappe.db.get_value("Daily Task", ancestor, "rolled_over_from")
                 depth += 1
 
-    # Insert ad-hoc tasks
-    for t in adhocs:
+    # Insert ad-hoc tasks, preserving the order the employee entered them in
+    sequence_base = _next_sequence(employee.name, date)
+    for i, t in enumerate(adhocs):
         desc = (t.get("description") or "").strip()
         if not desc:
             continue
@@ -1286,6 +1335,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         task_doc.actual_time = t.get("actual_time", "")
         task_doc.remarks     = t.get("remarks", "")
         task_doc.project_name = (t.get("project_name") or "").strip()
+        task_doc.sequence = sequence_base + i + 1
         task_doc.insert(ignore_permissions=True)
 
     # Get login time for net hours calculation
@@ -1294,9 +1344,13 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         "log_type": "Morning Check-In", "docstatus": 1,
     }, "name")
     login_time_raw = ""
+    half_day_session = ""
     if morning_log_name:
         login_time_raw = frappe.db.get_value(
             "Daily Task Log", morning_log_name, "login_time"
+        ) or ""
+        half_day_session = frappe.db.get_value(
+            "Daily Task Log", morning_log_name, "half_day_session"
         ) or ""
 
     # FIX: normalise all time values through _to_hhmm before calc
@@ -1335,11 +1389,12 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         filters={"employee": employee.name, "task_date": date},
         fields=["name", "description", "status", "task_type",
                 "estimated_time", "actual_time", "project_name", "rolled_over_from"],
-        order_by="project_name asc, creation asc",
+        order_by="sequence asc",
     )
 
     total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in all_tasks)
     working_hours_str = _format_hours(total_actual_hours) or "0h"
+    half_day_text = f" &nbsp;·&nbsp; Half-Day: <strong>{half_day_session}</strong>" if half_day_session else ""
 
     _notify_hr_and_team_leader(
         employee.name,
@@ -1349,7 +1404,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         f"Login: <strong>{_to_ampm(login_time_raw) if login_time_raw else '—'}</strong> &nbsp;·&nbsp; "
         f"Logout: <strong>{_to_ampm(logout_time)}</strong> &nbsp;·&nbsp; "
         f"Net Hours: <strong>{net_hours or '—'}</strong> &nbsp;·&nbsp; "
-        f"Total Task Hours: <strong>{working_hours_str}</strong>",
+        f"Total Task Hours: <strong>{working_hours_str}</strong>{half_day_text}",
         tasks=all_tasks,
     )
 
@@ -1542,7 +1597,7 @@ def get_employee_task_detail(employee_name, date=None):
         "employee": employee_name, "task_date": date,
     }, fields=["name", "description", "status", "task_type",
                "estimated_time", "actual_time", "rolled_over_from", "origin_date"],
-    order_by="task_type asc, creation asc")
+    order_by="sequence asc")
 
     for task in tasks:
         task["is_carried"] = bool(task.get("rolled_over_from"))
@@ -1615,7 +1670,7 @@ def get_history_day_detail(date):
     }, fields=["name", "description", "status", "task_type",
                "estimated_time", "actual_time", "rolled_over_from",
                "origin_date", "remarks", "project_name"],
-    order_by="task_type asc, creation asc")
+    order_by="sequence asc")
 
     for task in tasks:
         task["is_carried"] = bool(task.get("rolled_over_from"))

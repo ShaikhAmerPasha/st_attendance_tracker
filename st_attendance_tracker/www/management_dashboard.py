@@ -13,7 +13,7 @@ def get_context(context):
         raise frappe.Redirect
 
     employee = frappe.db.get_value(
-        "Employee", {"user_id": frappe.session.user},
+        "Employee", {"user_id": frappe.session.user, "status": "Active"},
         ["name", "employee_name", "department"], as_dict=True,
     )
     if not employee:

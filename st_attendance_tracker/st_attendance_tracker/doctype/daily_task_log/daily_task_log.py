@@ -6,6 +6,7 @@ from frappe.utils import now_datetime, get_datetime, time_diff_in_hours
 class DailyTaskLog(Document):
 
     def validate(self):
+        self._check_ownership()
         self._validate_no_duplicate()
         if self.log_type == "Morning Check-In" and not self.login_time:
             self.login_time = now_datetime().strftime("%H:%M:%S")
@@ -39,6 +40,22 @@ class DailyTaskLog(Document):
             self._calculate_net_hours()
             self._calculate_working_hours()
             self.db_update()
+
+    def _check_ownership(self):
+        """Block logging attendance for another employee (BOLA guard)."""
+        if frappe.session.user in ("Administrator", "Guest"):
+            return
+        allowed_roles = {"HR Manager", "Team Lead", "System Manager"}
+        if allowed_roles & set(frappe.get_roles(frappe.session.user)):
+            return
+        current_employee = frappe.db.get_value(
+            "Employee", {"user_id": frappe.session.user}, "name"
+        )
+        if self.employee != current_employee:
+            frappe.throw(
+                "You are not allowed to create or edit another employee's attendance log.",
+                frappe.PermissionError,
+            )
 
     def _validate_no_duplicate(self):
         existing = frappe.db.exists("Daily Task Log", {

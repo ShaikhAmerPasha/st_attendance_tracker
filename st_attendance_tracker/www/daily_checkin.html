@@ -2546,8 +2546,8 @@ body > .container { padding-top: 0 !important; }
       <div class="tb-label">Active Shift</div>
       <div class="tb-value">
         {% if shift_info %}
-          {{ shift_info.name }}
-          <div class="tb-subtext">{{ shift_info.start_time_ampm }} - {{ shift_info.end_time_ampm }}</div>
+          <span id="shift-name-val">{{ shift_info.name }}</span>
+          <div class="tb-subtext" id="shift-time-val">{{ shift_info.start_time_ampm }} - {{ shift_info.end_time_ampm }}</div>
         {% else %}
           No shift assigned
         {% endif %}
@@ -2611,7 +2611,7 @@ body > .container { padding-top: 0 !important; }
     <div class="tb-content">
       <div class="tb-label">Work Mode</div>
       <div class="tb-value">
-        {% if is_checked_in and work_location %}
+        {% if work_location %}
           {{ work_location }}
         {% else %}
           Active Day
@@ -2762,6 +2762,15 @@ body > .container { padding-top: 0 !important; }
       <label class="wl-lbl" style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;"><i class="ti ti-map-pin" aria-hidden="true"></i>Work location</label>
       <select id="wl-sel" class="wl-sel" onchange="onWLChange()" style="width: 100%; height: 38px;"></select>
     </div>
+    {% if is_half_day_leave %}
+    <div>
+      <label class="wl-lbl" style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;"><i class="ti ti-clock-hour-4" aria-hidden="true"></i>Half-day session</label>
+      <select id="hd-session-sel" class="wl-sel" onchange="onHDSessionChange()" style="width: 100%; height: 38px;">
+        <option value="First Half">First Half</option>
+        <option value="Second Half">Second Half</option>
+      </select>
+    </div>
+    {% endif %}
     <div style="grid-column: 1 / -1; margin-top: -8px;">
       <span id="wl-note" class="wl-note"></span>
     </div>
@@ -2920,7 +2929,13 @@ var SHIFT_START_TIME = "{{ shift_info.start_time if shift_info else '' }}";
 var DONE_N  = {{ done_count }};
 var TOTAL_N = {{ total_count }};
 var WLC = {};
-try { WLC = {{ work_location_config | tojson }}; } catch(e) { WLC = {value:'Office',readonly:false,options:['Office','WFH'],validate:true,note:'Select work location.'}; }
+try {
+  var _raw = '{{ work_location_config | tojson | e }}';
+  _raw = _raw.replace(/&#34;/g, '"').replace(/&quot;/g, '"');
+  WLC = JSON.parse(_raw);
+} catch(e) {
+  WLC = {value:'Office',readonly:false,options:['Office','WFH'],validate:true,note:'Select work location.'};
+}
 var SEL_WL = WLC.value || 'Office';
 function wlLabel(o) {
   if (o === 'WFH' && WLC.hybrid_routine_day) return 'Hybrid (WFH)';
@@ -2935,6 +2950,39 @@ function initWL() {
   sel.disabled = !!WLC.readonly;
   if (note && WLC.note) { note.className = 'wl-note'+(WLC.hybrid_office_day?' warn':''); note.textContent = WLC.note; }
 }
+// Populate the work-location dropdown immediately, right after it's defined —
+// don't wait until the end of this script block. An unrelated error anywhere
+// later in this file would otherwise abort execution before the original
+// end-of-file initWL() call was ever reached, leaving the select empty.
+try { initWL(); } catch (e) {}
+
+var SEL_HD_SESSION = 'First Half';
+function minutesToHHMM(min) {
+  var h = Math.floor(min / 60), m = min % 60;
+  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+function previewHalfDayShift() {
+  // Only meaningful pre-checkin: this selector only exists in the morning
+  // form. Once checked in, the server has already truncated SHIFT_START_TIME/
+  // SHIFT_END_TIME to the persisted half — re-truncating here would double it.
+  var sessionSel = document.getElementById('hd-session-sel');
+  var timeEl = document.getElementById('shift-time-val');
+  if (!sessionSel || !timeEl || !SHIFT_START_TIME || !SHIFT_END_TIME) return;
+  var s = parseTimeToMinutes(SHIFT_START_TIME), e = parseTimeToMinutes(SHIFT_END_TIME);
+  if (s === null || e === null) return;
+  var dur = e - s; if (dur <= 0) dur += 24 * 60;
+  var mid = (s + Math.floor(dur / 2)) % (24 * 60);
+  var rs = SEL_HD_SESSION === 'Second Half' ? mid : s;
+  var re = SEL_HD_SESSION === 'Second Half' ? e   : mid;
+  timeEl.textContent = formatTimeAMPM(minutesToHHMM(rs)) + ' - ' + formatTimeAMPM(minutesToHHMM(re));
+}
+function onHDSessionChange() {
+  var sel = document.getElementById('hd-session-sel');
+  SEL_HD_SESSION = sel ? sel.value : 'First Half';
+  previewHalfDayShift();
+}
+try { if (IS_HALF_DAY) previewHalfDayShift(); } catch (e) {}
+
 function onWLChange() {
   var sel = document.getElementById('wl-sel'); if (!sel) return;
   SEL_WL = sel.value;
@@ -3011,12 +3059,24 @@ function addMinutesToTime(timeStr, minutes) {
   return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
 }
 
+function getShiftDurationMinutes() {
+  var s = parseTimeToMinutes(SHIFT_START_TIME), e = parseTimeToMinutes(SHIFT_END_TIME);
+  if (s === null || e === null) return null;
+  var d = e - s;
+  if (d <= 0) d += 24 * 60;
+  return d;
+}
 function getRecommendedLogoutTime() {
   if (!LOGIN_TIME) return '';
   var loginMin = parseTimeToMinutes(LOGIN_TIME);
   if (loginMin === null) return '';
-  
-  var expectedNetWork = IS_HALF_DAY ? (4 * 60) : (8 * 60);
+
+  // SHIFT_START_TIME/END are already truncated to the half-day window
+  // server-side when a half-day session was chosen at check-in, so this
+  // naturally yields the correct ~4h target with no IS_HALF_DAY branching.
+  // Falls back to the legacy hardcode only when no shift is assigned at all.
+  var shiftDur = getShiftDurationMinutes();
+  var expectedNetWork = shiftDur !== null ? shiftDur : (IS_HALF_DAY ? 4 * 60 : 8 * 60);
 
   // Calculate actual lunch duration
   var actualLunch = 0;
@@ -3402,7 +3462,8 @@ async function submitMorning() {
   var btn=document.getElementById('btn-ci');
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> Checking in...';
   try{
-    var r=await frappe.call({method:'st_attendance_tracker.api.submit_morning_log',args:{new_tasks:JSON.stringify(newTasks),login_time:loginVal,work_location:curWL,carried_updates:JSON.stringify(cUp)}});
+    var hdSessionVal=(document.getElementById('hd-session-sel')||{}).value||'';
+    var r=await frappe.call({method:'st_attendance_tracker.api.submit_morning_log',args:{new_tasks:JSON.stringify(newTasks),login_time:loginVal,work_location:curWL,carried_updates:JSON.stringify(cUp),half_day_session:hdSessionVal}});
     if(r.message&&r.message.success){ 
       localStorage.removeItem('st_morning_draft');
       toast('Checked in at '+r.message.login_time+'. Have a great day!','ok',2000); 
@@ -3724,7 +3785,6 @@ window.addEventListener('load', initTextareaResizer);
 setTimeout(initTextareaResizer, 100);
 setTimeout(initTextareaResizer, 500);
 setTimeout(initTextareaResizer, 1500);
-initWL();
 
 /* --- NEW UX FEATURES --- */
 document.addEventListener('keydown', function(e) {

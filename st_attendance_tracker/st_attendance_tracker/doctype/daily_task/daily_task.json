@@ -22,7 +22,8 @@
   "section_break_meta",
   "origin_date",
   "rolled_over_from",
-  "daily_task_log"
+  "daily_task_log",
+  "sequence"
  ],
  "fields": [
   {
@@ -140,6 +141,14 @@
    "fieldtype": "Link",
    "label": "Daily Task Log",
    "options": "Daily Task Log",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Sequence",
    "read_only": 1
   }
  ],

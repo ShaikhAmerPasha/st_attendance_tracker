@@ -1,6 +1,6 @@
 import frappe
-from frappe.utils import today, now_datetime, getdate
-from st_attendance_tracker.api import _to_hhmm, _to_ampm, _format_hours
+from frappe.utils import today, now_datetime, getdate, get_datetime
+from st_attendance_tracker.api import _to_hhmm, _to_ampm, _format_hours, _is_half_day_leave_today
 
 
 def get_context(context):
@@ -16,7 +16,7 @@ def get_context(context):
 
     employee = frappe.db.get_value(
         "Employee",
-        {"user_id": frappe.session.user},
+        {"user_id": frappe.session.user, "status": "Active"},
         ["name", "employee_name", "department", "reports_to", "work_type"],
         as_dict=True,
     )
@@ -76,30 +76,13 @@ def get_context(context):
     work_location_val = ""
     lunch_from_val  = ""
     lunch_to_val    = ""
+    half_day_session_val = ""
 
     # Check if employee has an approved half-day leave today
-    is_half_day_leave = False
     try:
-        dt = getdate(date)
-        is_half_day_leave = bool(frappe.db.exists("Leave Application", {
-            "employee": employee.name,
-            "status": "Approved",
-            "docstatus": 1,
-            "half_day": 1,
-            "half_day_date": dt
-        }))
-        if not is_half_day_leave:
-            # Also check if within from_date and to_date range
-            is_half_day_leave = bool(frappe.db.exists("Leave Application", {
-                "employee": employee.name,
-                "status": "Approved",
-                "docstatus": 1,
-                "half_day": 1,
-                "from_date": ["<=", dt],
-                "to_date": [">=", dt]
-            }))
+        is_half_day_leave = _is_half_day_leave_today(employee.name, date)
     except Exception:
-        pass
+        is_half_day_leave = False
 
 
     # Always load tasks for today — needed for pre-checkin carried display
@@ -108,7 +91,7 @@ def get_context(context):
         fields=["name", "description", "status", "task_type",
                 "origin_date", "rolled_over_from", "remarks",
                 "estimated_time", "actual_time", "project_name"],
-        order_by="project_name asc, creation asc",
+        order_by="sequence asc",
     )
     for task in tasks:
         task["is_carried"] = bool(task.get("rolled_over_from"))
@@ -130,7 +113,12 @@ def get_context(context):
         login_time_val = _to_ampm(raw_login)
         work_location_val = frappe.db.get_value(
             "Daily Task Log", morning_log, "work_location"
+        ) or "Office"
+        half_day_session_val = frappe.db.get_value(
+            "Daily Task Log", morning_log, "half_day_session"
         ) or ""
+    else:
+        work_location_val = work_location_config.get("value", "Office")
 
     working_hours_val = ""
     if eod_log:
@@ -164,20 +152,37 @@ def get_context(context):
     done_count = sum(1 for t in tasks if t.get("status") == "Done")
 
     # ── Fetch Active Shift, Leaves & Reset Status ─────────────────────
+    # Uses HRMS's own get_shifts_for_date (date-only match, correctly handles
+    # midnight-spanning shifts via its prev/next-day margin window) instead of
+    # a hand-rolled query. NOTE: deliberately NOT get_employee_shift() — that
+    # helper is time-of-day sensitive (checks the current moment against shift
+    # start/end + grace margins) and would go blank outside shift hours, which
+    # is wrong for an all-day informational display like this one.
     shift_info = None
     try:
-        from hrms.hr.doctype.shift_assignment.shift_assignment import get_employee_shift
-        shift_details = get_employee_shift(employee.name, consider_default_shift=True)
-        if shift_details:
-            shift_info = {
-                "name": shift_details.shift_type.name,
-                "start_time": _to_hhmm(shift_details.shift_type.start_time),
-                "end_time": _to_hhmm(shift_details.shift_type.end_time),
-                "start_time_ampm": _to_ampm(shift_details.shift_type.start_time),
-                "end_time_ampm": _to_ampm(shift_details.shift_type.end_time),
-            }
-    except Exception:
-        pass
+        from hrms.hr.doctype.shift_assignment.shift_assignment import get_shifts_for_date
+        shifts = get_shifts_for_date(employee.name, get_datetime(date))
+        shift_name = shifts[0].shift_type if shifts else None
+
+        if not shift_name:
+            shift_name = frappe.db.get_value("Employee", employee.name, "default_shift")
+
+        if shift_name:
+            shift_doc = frappe.get_cached_value("Shift Type", shift_name,
+                ["name", "start_time", "end_time"], as_dict=True)
+            if shift_doc:
+                shift_info = {
+                    "name": shift_doc.name,
+                    "start_time": _to_hhmm(shift_doc.start_time),
+                    "end_time": _to_hhmm(shift_doc.end_time),
+                    "start_time_ampm": _to_ampm(shift_doc.start_time),
+                    "end_time_ampm": _to_ampm(shift_doc.end_time),
+                }
+    except Exception as e:
+        frappe.log_error(f"Error fetching shift for {employee.name}: {e}", "Daily Check-In Shift Error")
+
+    if shift_info and half_day_session_val:
+        shift_info = _split_shift_for_half_day(shift_info, half_day_session_val)
 
     leave_today = None
     try:
@@ -220,6 +225,7 @@ def get_context(context):
     context.total_count = len(tasks)
     context.work_location_config = work_location_config
     context.is_half_day_leave = is_half_day_leave
+    context.half_day_session = half_day_session_val
     context.shift_info = shift_info
     context.leave_today = leave_today
     context.has_reset_today = has_reset_today
@@ -319,6 +325,32 @@ def _get_work_location_config(employee, date_obj):
         "hybrid_office_day": False,
         "note":     "Select your work location for today.",
     }
+
+
+def _shift_midpoint_minutes(start_hhmm, end_hhmm):
+    """Midpoint of a shift window in minutes-of-day, overnight-safe."""
+    def to_mins(hhmm):
+        h, m = hhmm.split(":")
+        return int(h) * 60 + int(m)
+    start_min, end_min = to_mins(start_hhmm), to_mins(end_hhmm)
+    duration = end_min - start_min
+    if duration <= 0:
+        duration += 24 * 60
+    return start_min, end_min, (start_min + duration // 2) % (24 * 60)
+
+
+def _split_shift_for_half_day(shift_info, session):
+    """Returns a copy of shift_info truncated to just the chosen half."""
+    start_min, end_min, midpoint = _shift_midpoint_minutes(
+        shift_info["start_time"], shift_info["end_time"]
+    )
+    new_start, new_end = (midpoint, end_min) if session == "Second Half" else (start_min, midpoint)
+    result = dict(shift_info)
+    result["start_time"] = f"{new_start // 60:02d}:{new_start % 60:02d}"
+    result["end_time"] = f"{new_end // 60:02d}:{new_end % 60:02d}"
+    result["start_time_ampm"] = _to_ampm(result["start_time"])
+    result["end_time_ampm"] = _to_ampm(result["end_time"])
+    return result
 
 
 def _get_hybrid_office_days():

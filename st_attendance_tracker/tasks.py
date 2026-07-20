@@ -10,6 +10,7 @@ Employee reminders go directly to each employee's work email.
 
 import frappe
 from frappe.utils import today, getdate, now_datetime
+from st_attendance_tracker.api import _to_hhmm
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -129,7 +130,7 @@ def send_morning_combined_report():
     if not missing and not late_employees:
         return
 
-    late_emp_map = {l.employee: str(l.login_time)[:5] for l in late_employees}
+    late_emp_map = {l.employee: _to_hhmm(l.login_time) for l in late_employees}
 
     missing_rows = ""
     for i, emp in enumerate(
