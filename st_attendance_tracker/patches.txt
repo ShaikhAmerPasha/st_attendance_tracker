@@ -5,3 +5,4 @@ st_attendance_tracker.patches.cleanup_task_times
 st_attendance_tracker.patches.backfill_work_location
 st_attendance_tracker.patches.backfill_task_sequence
 st_attendance_tracker.patches.backfill_employee_work_type
+st_attendance_tracker.patches.backfill_employee_department_assignments

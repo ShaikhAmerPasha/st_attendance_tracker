@@ -9,6 +9,13 @@ app_license = "MIT"
 # Automatically created on bench migrate
 after_migrate = ["st_attendance_tracker.setup.create_custom_fields"]
 
+# ── Employee validation ────────────────────────────────────────────────────────
+doc_events = {
+    "Employee": {
+        "validate": "st_attendance_tracker.setup.validate_department_assignments",
+    }
+}
+
 # ── Scheduled Jobs ─────────────────────────────────────────────────────────────
 scheduler_events = {
     "cron": {

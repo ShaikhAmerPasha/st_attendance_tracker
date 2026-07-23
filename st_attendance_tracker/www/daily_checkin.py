@@ -57,8 +57,9 @@ def get_context(context):
         "log_type": "Morning Check-In", "docstatus": 1,
     })
     if not existing_morning_today:
-        from st_attendance_tracker.api import _safety_rollover
+        from st_attendance_tracker.api import _safety_rollover, _ensure_recurring_tasks
         _safety_rollover(employee.name, actual_today)
+        _ensure_recurring_tasks(employee.name, actual_today)
 
 
     morning_log = frappe.db.exists("Daily Task Log", {
@@ -95,6 +96,10 @@ def get_context(context):
     )
     for task in tasks:
         task["is_carried"] = bool(task.get("rolled_over_from"))
+        # Redisplay as "1h 30m" style, not the raw decimal-hours DB value —
+        # keeps the box round-trippable with _parse_time_to_hours on re-save.
+        task["estimated_time_display"] = _format_hours(task.get("estimated_time"))
+        task["actual_time_display"] = _format_hours(task.get("actual_time"))
         if task.get("rolled_over_from") and task.get("origin_date"):
             task["days_pending"] = (
                 frappe.utils.getdate(date) -
@@ -133,10 +138,16 @@ def get_context(context):
         lunch_to_val    = _to_ampm(eod_data.lunch_to)
         working_hours_val = _format_hours(eod_data.working_hours) or "0h"
 
-    # Group tasks by project
+    # Recurring tasks get their own section at the top, not scattered into
+    # whichever project they happen to belong to.
+    recurring_tasks = [t for t in tasks if t.get("task_type") == "Recurring"]
+
+    # Group the rest by project
     projects = {}
     standalone = []
     for task in tasks:
+        if task.get("task_type") == "Recurring":
+            continue
         pname = (task.get("project_name") or "").strip()
         if pname:
             if pname not in projects:
@@ -213,6 +224,7 @@ def get_context(context):
     context.tasks = tasks
     context.projects = projects
     context.standalone = standalone
+    context.recurring_tasks = recurring_tasks
     context.carried_count = sum(1 for t in tasks if t.get("is_carried"))
     context.login_time = login_time_val
     context.logout_time = logout_time_val
@@ -250,9 +262,12 @@ def _get_work_location_config(employee, date_obj):
                              needed, this IS their normal routine. They can
                              still choose Office if they want to come in.
     """
+    from st_attendance_tracker.api import _wfh_request_exists
+
     work_type = (employee.get("work_type") or "Office").strip()
     weekday_num = date_obj.weekday()  # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
     is_saturday = weekday_num == 5
+    has_wfh_request = _wfh_request_exists(employee.get("name"), date_obj)
 
     # Saturday — everyone is WFH, no validation needed
     if is_saturday:
@@ -287,8 +302,10 @@ def _get_work_location_config(employee, date_obj):
                 f"Today ({day_names[weekday_num]}) is an office day for hybrid "
                 f"employees. Select Office, or apply for WFH first."
             )
+            if has_wfh_request:
+                note = f"Today ({day_names[weekday_num]}) — your WFH request is on file."
             return {
-                "value":    "Office",
+                "value":    "WFH" if has_wfh_request else "Office",
                 "readonly": False,
                 "options":  ["Office", "WFH"],
                 "validate": True,
@@ -318,12 +335,12 @@ def _get_work_location_config(employee, date_obj):
 
     # Office employee
     return {
-        "value":    "Office",
+        "value":    "WFH" if has_wfh_request else "Office",
         "readonly": False,
         "options":  ["Office", "WFH"],
         "validate": True,
         "hybrid_office_day": False,
-        "note":     "Select your work location for today.",
+        "note":     "Your WFH request is on file." if has_wfh_request else "Select your work location for today.",
     }
 
 

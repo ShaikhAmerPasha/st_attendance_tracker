@@ -82,7 +82,9 @@ class DailyTask(Document):
         )
 
         # Allowed privileged roles
-        allowed_roles = {"HR Manager", "Team Lead", "System Manager"}
+        # Team Lead oversight goes through the reports_to-scoped dashboard/API
+        # (_is_team_leader), not a blanket role bypass here.
+        allowed_roles = {"HR Manager", "System Manager"}
         user_roles = set(frappe.get_roles(frappe.session.user))
         if allowed_roles & user_roles:
             return
@@ -99,7 +101,9 @@ class DailyTask(Document):
             return
 
         # Allowed privileged roles can bypass
-        allowed_roles = {"HR Manager", "Team Lead", "System Manager"}
+        # Team Lead oversight goes through the reports_to-scoped dashboard/API
+        # (_is_team_leader), not a blanket role bypass here.
+        allowed_roles = {"HR Manager", "System Manager"}
         user_roles = set(frappe.get_roles(frappe.session.user))
         if allowed_roles & user_roles:
             return

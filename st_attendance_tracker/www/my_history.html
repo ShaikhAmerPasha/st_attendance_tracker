@@ -830,7 +830,7 @@ function parseDateParts(d) {
 }
 
 function getBadge(log) {
-  if (!log.eod_done || !parseInt(log.eod_done)) return '<span class="day-badge db-no">No EOD</span>';
+  if (!log.eod_done || !parseInt(log.eod_done)) return '<span class="day-badge db-no">No Checkout</span>';
   if (log.is_late && parseInt(log.is_late)) return '<span class="day-badge db-late">Late</span>';
   var total = parseInt(log.total_tasks) || 0;
   var done  = parseInt(log.done_tasks)  || 0;
@@ -851,6 +851,7 @@ function getStag(s) {
   return 'st-pe';
 }
 
+function esc(s){ if(s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function formatTimeHM(t) {
   if (!t) return '—';
   if (/AM|PM/i.test(t)) return t;
@@ -932,14 +933,14 @@ function loadDayDetail(date) {
       } else {
         tasksHtml = tasks.map(function(t) {
           var pills = '';
-          if (t.estimated_time) pills += '<span class="tp"><i class="ti ti-clock" aria-hidden="true"></i>Est: ' + t.estimated_time + '</span>';
-          if (t.actual_time)    pills += '<span class="tp"><i class="ti ti-check" aria-hidden="true"></i>Time taken for task completion: ' + t.actual_time + '</span>';
-          if (t.project_name)   pills += '<span class="tp"><i class="ti ti-folder" aria-hidden="true"></i>' + t.project_name + '</span>';
+          if (t.estimated_time) pills += '<span class="tp"><i class="ti ti-clock" aria-hidden="true"></i>Est: ' + esc(t.estimated_time) + '</span>';
+          if (t.actual_time)    pills += '<span class="tp"><i class="ti ti-check" aria-hidden="true"></i>Time taken for task completion: ' + esc(t.actual_time) + '</span>';
+          if (t.project_name)   pills += '<span class="tp"><i class="ti ti-folder" aria-hidden="true"></i>' + esc(t.project_name) + '</span>';
           if (t.is_carried)     pills += '<span class="tp"><i class="ti ti-history" aria-hidden="true"></i>Carried</span>';
           return '<div class="task-row">' +
             '<i class="ti ' + getTaskIcon(t.status) + ' task-ico" aria-hidden="true"></i>' +
             '<div class="task-body">' +
-              '<div class="task-desc' + (t.status === 'Done' ? ' dn' : '') + '">' + (t.description || '') + '</div>' +
+              '<div class="task-desc' + (t.status === 'Done' ? ' dn' : '') + '">' + esc(t.description) + '</div>' +
               (pills ? '<div class="task-pills">' + pills + '</div>' : '') +
             '</div>' +
             '<span class="stag ' + getStag(t.status) + '">' + t.status + '</span>' +

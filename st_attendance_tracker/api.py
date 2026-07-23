@@ -3,9 +3,10 @@ ST Attendance Tracker v2 — API
 All whitelisted methods consumed by web pages.
 
 Fixes:
-  - Notifications sent to HR Manager role users + Team Leader (via reports_to)
+  - Notifications sent to HR Manager role users + Team Leader(s)
   - No manual recipient configuration needed
-  - reports_to field used for Team Leader identification
+  - Team Leader(s) resolved via Employee Department Assignment child table,
+    falling back to reports_to for employees with no assignment rows
   - Root task guard prevents duplicate rollover
   - Safety rollover on morning page load
   - Checkin auto-heal if HR deletes record
@@ -23,6 +24,7 @@ Fixes:
 
 import frappe
 import datetime
+import html
 import json
 from frappe.utils import today, now_datetime, getdate, add_days, get_datetime
 
@@ -80,12 +82,33 @@ def _resolve_half_day_session(employee_name, date, raw_value):
 
 # ── Team leader check ──────────────────────────────────────────────────────────
 
+def _get_team_members(employee_name):
+    """
+    All active employees this person leads — via reports_to OR any Employee
+    Department Assignment row naming them Team Leader. Keeps dashboard
+    visibility aligned with who actually gets notified for that employee
+    (_get_team_leader_emails draws from the same two sources) — previously
+    the dashboard only checked reports_to, so a Team Leader defined solely
+    via the Department Assignment table got emailed about an employee they
+    couldn't actually see on /team-dashboard.
+    """
+    reports_to_names = frappe.get_all("Employee", filters={
+        "reports_to": employee_name, "status": "Active",
+    }, pluck="name")
+
+    eda_parents = frappe.get_all("Employee Department Assignment",
+        filters={"parenttype": "Employee", "team_leader": employee_name},
+        pluck="parent")
+    eda_names = frappe.get_all("Employee", filters={
+        "name": ["in", eda_parents], "status": "Active",
+    }, pluck="name") if eda_parents else []
+
+    return list(set(reports_to_names) | set(eda_names))
+
+
 def _is_team_leader(employee_name):
-    """True if at least one active employee has reports_to = this person."""
-    return bool(frappe.db.exists("Employee", {
-        "reports_to": employee_name,
-        "status": "Active",
-    }))
+    """True if this person leads at least one active employee (reports_to or EDA)."""
+    return bool(_get_team_members(employee_name))
 
 
 # ── HR Manager emails ──────────────────────────────────────────────────────────
@@ -254,16 +277,73 @@ def _to_ampm(t):
         return hhmm
 
 
+def _format_action_timestamp(dt):
+    """
+    Full 'DD Mon YYYY, HH:MM AM/PM' timestamp of the actual moment an
+    action happened (server clock, captured when the request hit the
+    server) — independent of the Login/Logout Time fields, which the
+    employee can edit. Lets management reading the email later know
+    exactly when check-in/check-out was really pressed.
+    """
+    return dt.strftime("%d %b %Y, %I:%M %p")
+
+
 # ── Notification helper ────────────────────────────────────────────────────────
+
+# Shared, single-tone styling — every email uses the same font/width/accent color.
+EMAIL_ACCENT_COLOR = "#1e3a5f"
+EMAIL_WRAPPER_STYLE = (
+    "font-family:'Segoe UI', Arial, sans-serif; max-width: 680px; "
+    "margin: 0 auto; padding: 16px; color: #1f2937;"
+)
+EMAIL_HEADING_STYLE = (
+    f"font-size: 18px; font-weight: bold; color: {EMAIL_ACCENT_COLOR}; margin-bottom: 12px;"
+)
+EMAIL_SUBHEADING_STYLE = (
+    f"font-size: 16px; font-weight: bold; color: {EMAIL_ACCENT_COLOR}; "
+    "margin: 20px 0 12px;"
+)
+
+
+def _render_detail_table(rows):
+    """
+    Render a clean label/value detail card. rows: list of (label, value)
+    tuples; any row with a falsy value is skipped. Single consistent
+    style for every row — no per-field colors.
+    """
+    visible_rows = [(label, value) for label, value in rows if value]
+    if not visible_rows:
+        return ""
+
+    body = "".join(
+        f"""
+        <tr>
+          <td style="padding:7px 12px;font-size:13px;color:#64748b;width:40%;
+                     border-bottom:1px solid #e2e8f0;vertical-align:top">{html.escape(str(label))}</td>
+          <td style="padding:7px 12px;font-size:13px;font-weight:600;color:#1f2937;
+                     border-bottom:1px solid #e2e8f0;vertical-align:top">{html.escape(str(value))}</td>
+        </tr>
+        """
+        for label, value in visible_rows
+    )
+    return f"""
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;
+           border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:8px;
+           font-family:'Segoe UI', Arial, sans-serif">
+      <tbody>{body}</tbody>
+    </table>
+    """
 
 
 # ── Employee self-notification emails ─────────────────────────────────────────
 
-def _send_employee_checkin_email(employee_name, employee_display_name,
-                                  login_time, work_location, tasks, date):
+def _send_employee_checkin_email(employee_name, employee_display_name, login_time,
+                                  checkin_action_time, work_location, half_day_session,
+                                  is_late, tasks, date):
     """
     Send check-in confirmation email to the employee themselves.
-    Includes today's planned task list grouped by project.
+    Includes a detail card (login time, work location, ...) and
+    today's planned task list grouped by project.
     """
     try:
         emp_email = _get_employee_email(employee_name)
@@ -271,12 +351,22 @@ def _send_employee_checkin_email(employee_name, employee_display_name,
             return
 
         login_hm = _to_ampm(login_time)
+        detail_table_html = _render_detail_table([
+            ("Employee", employee_display_name),
+            ("Date", date),
+            ("Login Time", login_hm),
+            ("Checked-In At", _format_action_timestamp(checkin_action_time)),
+            ("Work Location", work_location),
+            ("Half-Day Session", half_day_session),
+            ("Status", "Late Check-in" if is_late else None),
+        ])
         task_table_html = _render_screenshot_task_table(tasks, is_checkout=False)
 
         html = f"""
-        <div style="font-family:'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 12px;">
-          <div style="font-size: 16px; font-weight: bold; color: #15803d; margin-bottom: 4px;">Login: {login_hm}</div>
-          <div style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin-bottom: 16px;">Today's Work To Do:</div>
+        <div style="{EMAIL_WRAPPER_STYLE}">
+          <div style="{EMAIL_HEADING_STYLE}">Check-In Confirmation</div>
+          {detail_table_html}
+          <div style="{EMAIL_SUBHEADING_STYLE}">Today's Work To Do</div>
           <div>
             {task_table_html}
           </div>
@@ -296,19 +386,20 @@ def _send_employee_checkin_email(employee_name, employee_display_name,
         )
 
 
-def _send_employee_eod_email(employee_name, employee_display_name,
-                              logout_time, net_hours, tasks, date):
+def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
+                              checkout_action_time, net_hours, work_location,
+                              half_day_session, tasks, date):
     """
     Send EOD confirmation email to the employee themselves.
-    Includes done tasks and carried-forward tasks.
+    Includes a detail card (hours, work location, ...), done tasks,
+    and carried-forward tasks.
     """
     try:
         emp_email = _get_employee_email(employee_name)
         if not emp_email:
             return
 
-        done_tasks    = [t for t in tasks if t.get("status") == "Done"]
-        pending_tasks = [t for t in tasks if t.get("status") in ["Pending", "In Progress"]]
+        done_tasks = [t for t in tasks if t.get("status") == "Done"]
 
         # Fetch lunch and check-in times from Daily Task Log
         db_vals = frappe.db.get_value("Daily Task Log", {
@@ -326,10 +417,11 @@ def _send_employee_eod_email(employee_name, employee_display_name,
             "docstatus": 1
         }, "login_time")
 
-        login_hm = _to_ampm(login_time) if login_time else "—"
+        login_hm = _to_ampm(login_time) if login_time else None
         logout_hm = _to_ampm(logout_time)
         lunch_from_hm = _to_ampm(lunch_from) if lunch_from else None
         lunch_to_hm = _to_ampm(lunch_to) if lunch_to else None
+        lunch_break = f"{lunch_from_hm} - {lunch_to_hm}" if lunch_from_hm and lunch_to_hm else None
 
         task_table_html = _render_screenshot_task_table(
             tasks, is_checkout=True, lunch_from=lunch_from_hm, lunch_to=lunch_to_hm
@@ -338,13 +430,25 @@ def _send_employee_eod_email(employee_name, employee_display_name,
         total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in tasks)
         working_hours_str = _format_hours(total_actual_hours) or "0h"
 
+        detail_table_html = _render_detail_table([
+            ("Employee", employee_display_name),
+            ("Date", date),
+            ("Login Time", login_hm),
+            ("Logout Time", logout_hm),
+            ("Checked-Out At", _format_action_timestamp(checkout_action_time)),
+            ("Lunch Break", lunch_break),
+            ("Work Location", work_location),
+            ("Net Working Hours", net_hours),
+            ("Total Task Hours", working_hours_str),
+            ("Half-Day Session", half_day_session),
+            ("Tasks Completed", f"{len(done_tasks)}/{len(tasks)}"),
+        ])
+
         html = f"""
-        <div style="font-family:'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 12px;">
-          <div style="font-size: 16px; font-weight: bold; color: #15803d; margin-bottom: 4px;">Login: {login_hm}</div>
-          <div style="font-size: 16px; font-weight: bold; color: #dc2626; margin-bottom: 4px;">Logout: {logout_hm}</div>
-          {f'<div style="font-size: 16px; font-weight: bold; color: #2563eb; margin-bottom: 4px;">Net Working Hours: {net_hours}</div>' if net_hours else ''}
-          <div style="font-size: 16px; font-weight: bold; color: #7c3aed; margin-bottom: 12px;">Total Task Hours: {working_hours_str}</div>
-          <div style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin-bottom: 16px;">Today's Work Summary:</div>
+        <div style="{EMAIL_WRAPPER_STYLE}">
+          <div style="{EMAIL_HEADING_STYLE}">Checkout Summary</div>
+          {detail_table_html}
+          <div style="{EMAIL_SUBHEADING_STYLE}">Today's Work Summary</div>
           <div>
             {task_table_html}
           </div>
@@ -394,25 +498,23 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
 
     sorted_group_names = list(groups.keys())
 
+    # Single accent color for all project names; alternating neutral shade
+    # per group is the only visual separator — no rainbow.
     palettes = [
-        {"bg": "#eff6ff", "border": "#bfdbfe", "text": "#1e40af"}, # Blue (General)
-        {"bg": "#fdf2f8", "border": "#fbcfe8", "text": "#9d174d"}, # Pink
-        {"bg": "#fffbeb", "border": "#fde68a", "text": "#92400e"}, # Amber
-        {"bg": "#f0fdfa", "border": "#99f6e4", "text": "#115e59"}, # Teal
-        {"bg": "#faf5ff", "border": "#e9d5ff", "text": "#6b21a8"}, # Purple
-        {"bg": "#f5f3ff", "border": "#ddd6fe", "text": "#5b21b6"}, # Indigo
+        {"bg": "#ffffff", "border": "#e2e8f0", "text": EMAIL_ACCENT_COLOR},
+        {"bg": "#f8fafc", "border": "#e2e8f0", "text": EMAIL_ACCENT_COLOR},
     ]
 
     html_rows = []
 
-    header_html = """
-    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px;font-family:'Segoe UI', Arial, sans-serif;border:1px solid #cbd5e1;table-layout:fixed">
+    header_html = f"""
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px;font-family:'Segoe UI', Arial, sans-serif;border:1px solid #e2e8f0;table-layout:fixed">
       <thead>
-        <tr style="background-color:#1553a1;color:#ffffff;font-size:12.5px;font-weight:bold">
-          <th style="padding:12px 10px;text-align:left;border:1px solid #cbd5e1;width:20%">Client</th>
-          <th style="padding:12px 10px;text-align:left;border:1px solid #cbd5e1;width:50%">Task / Work</th>
-          <th style="padding:12px 10px;text-align:center;border:1px solid #cbd5e1;width:15%">Time</th>
-          <th style="padding:12px 10px;text-align:center;border:1px solid #cbd5e1;width:15%">Status</th>
+        <tr style="background-color:{EMAIL_ACCENT_COLOR};color:#ffffff;font-size:12.5px;font-weight:bold">
+          <th style="padding:12px 10px;text-align:left;border:1px solid #e2e8f0;width:20%">Client</th>
+          <th style="padding:12px 10px;text-align:left;border:1px solid #e2e8f0;width:50%">Task / Work</th>
+          <th style="padding:12px 10px;text-align:center;border:1px solid #e2e8f0;width:15%">Time</th>
+          <th style="padding:12px 10px;text-align:center;border:1px solid #e2e8f0;width:15%">Status</th>
         </tr>
       </thead>
       <tbody>
@@ -455,7 +557,7 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
                 html_rows.append(sep_html)
 
         for task_idx, t in enumerate(ptasks):
-            client_text = pname if task_idx == 0 else ""
+            client_text = html.escape(pname) if task_idx == 0 else ""
             client_style = f"padding:10px 12px;font-size:13px;font-weight:bold;color:{palette['text']};background-color:{palette['bg']};border:1px solid {palette['border']};vertical-align:top;word-wrap:break-word;overflow:hidden;text-overflow:ellipsis" if task_idx == 0 else f"padding:10px 12px;background-color:{palette['bg']};border:1px solid {palette['border']};vertical-align:top"
 
             badges = []
@@ -489,7 +591,7 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
             row_html = f"""
             <tr>
               <td style="{client_style}">{client_text}</td>
-              <td style="{task_style}">{t.get("description") or ""}{badges_str}</td>
+              <td style="{task_style}">{html.escape(t.get("description") or "")}{badges_str}</td>
               <td style="{time_style}">{time_val}</td>
               <td style="{status_style}">{status_val}</td>
             </tr>
@@ -511,70 +613,44 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
     return "".join(html_rows)
 
 
-def _render_compact_task_rows(tasks, mode="checkin"):
+def _get_team_leader_emails(employee_name):
     """
-    Compact, scannable task list for HR/Team Leader emails.
-    mode="checkin"  → shows all tasks for today, tags Carried tasks
-    mode="checkout" → groups into Done / Ad-hoc / Pending sections
-    Kept deliberately denser than the employee's own email since HR/TL
-    receive one of these per employee per event, multiple times a day.
+    Team Leader(s) to notify for this employee. Employees working across
+    multiple departments (Employee Department Assignment child table) get
+    every listed department's Team Leader notified. Employees with no
+    assignment rows yet fall back to the legacy single reports_to manager.
     """
-    if not tasks:
-        return '<p style="font-size:12px;color:#9ca3af;font-style:italic;margin:6px 0">No tasks recorded.</p>'
+    team_leaders = frappe.get_all("Employee Department Assignment",
+        filters={"parenttype": "Employee", "parent": employee_name},
+        pluck="team_leader")
 
-    def row(t):
-        tag = ""
-        if t.get("rolled_over_from"):
-            tag = ' <span style="color:#92400e;font-size:10px;background:#fef3c7;padding:1px 6px;border-radius:8px">Carried</span>'
-        elif t.get("task_type") == "Ad-hoc":
-            tag = ' <span style="color:#7c3aed;font-size:10px;background:#f3e8ff;padding:1px 6px;border-radius:8px">Ad-hoc</span>'
-        proj = f' <span style="color:#9ca3af;font-size:10px">[{t["project_name"]}]</span>' if t.get("project_name") else ""
-        est  = f' <span style="color:#9ca3af;font-size:10px">Est:{_format_hours(t.get("estimated_time"))}</span>' if t.get("estimated_time") else ""
-        act  = f' <span style="color:#2563eb;font-size:10px">Done in:{_format_hours(t.get("actual_time"))}</span>' if t.get("actual_time") else ""
-        return f'<li style="margin-bottom:4px;font-size:12.5px;color:#374151">{t["description"]}{tag}{proj}{est}{act}</li>'
+    if not team_leaders:
+        reports_to = frappe.db.get_value("Employee", employee_name, "reports_to")
+        team_leaders = [reports_to] if reports_to else []
 
-    if mode == "checkin":
-        items = "".join(row(t) for t in tasks)
-        return f'<ul style="margin:6px 0 0;padding-left:18px">{items}</ul>'
-
-    # checkout mode: split into sections
-    done    = [t for t in tasks if t.get("status") == "Done"]
-    pending = [t for t in tasks if t.get("status") in ["Pending", "In Progress"]]
-
-    out = ""
-    if done:
-        out += (
-            '<div style="font-size:11px;font-weight:600;color:#15803d;margin:10px 0 3px">'
-            f'Completed ({len(done)})</div>'
-            f'<ul style="margin:0;padding-left:18px">{"".join(row(t) for t in done)}</ul>'
-        )
-    if pending:
-        out += (
-            '<div style="font-size:11px;font-weight:600;color:#d97706;margin:10px 0 3px">'
-            f'Carried to tomorrow ({len(pending)})</div>'
-            f'<ul style="margin:0;padding-left:18px">{"".join(row(t) for t in pending)}</ul>'
-        )
-    return out or '<p style="font-size:12px;color:#9ca3af;font-style:italic;margin:6px 0">No tasks recorded.</p>'
+    emails = []
+    for tl in set(team_leaders):
+        tl_user = frappe.db.get_value("Employee", tl, "user_id")
+        if tl_user and tl_user not in emails:
+            emails.append(tl_user)
+    return emails
 
 
-def _notify_hr_and_team_leader(employee_name, employee_display_name, event, details="", tasks=None):
+def _notify_hr_and_team_leader(employee_name, employee_display_name, event, detail_rows=None, tasks=None):
     """
     Send email to:
     1. All users with HR Manager role (auto-fetched)
-    2. The employee's Team Leader (via reports_to → user_id)
+    2. The employee's Team Leader(s) — see _get_team_leader_emails
 
+    detail_rows: list of (label, value) tuples — same structured detail
+                 card shown to the employee, so HR/TL see identical facts.
     tasks: optional list of Daily Task dicts for the relevant date.
-           Rendered compactly below the summary line so HR/TL can see
-           what the employee is working on without opening the system.
     """
     try:
         recipients = _get_hr_manager_emails()
 
-        # Add Team Leader via reports_to
-        reports_to = frappe.db.get_value("Employee", employee_name, "reports_to")
-        if reports_to:
-            tl_user = frappe.db.get_value("Employee", reports_to, "user_id")
-            if tl_user and tl_user not in recipients:
+        for tl_user in _get_team_leader_emails(employee_name):
+            if tl_user not in recipients:
                 recipients.append(tl_user)
 
         if not recipients:
@@ -584,7 +660,7 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
 
         subject_map = {
             "checkin":  f"{employee_display_name} checked in",
-            "checkout": f"{employee_display_name} submitted EOD",
+            "checkout": f"{employee_display_name} checked out",
         }
         subject = subject_map.get(event, f"{employee_display_name} — attendance update")
 
@@ -608,11 +684,14 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
             lunch_from=lunch_from_hm,
             lunch_to=lunch_to_hm
         )
-        task_label = "Today's tasks" if event == "checkin" else "Task summary"
+        task_label = "Today's Tasks" if event == "checkin" else "Task Summary"
+        detail_table_html = _render_detail_table(detail_rows or [])
 
         html = f"""
-        <div style="font-family:'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 12px;">
-          <p style="font-size: 14px; color: #334155; margin: 0 0 16px; line-height: 1.5;">{details}</p>
+        <div style="{EMAIL_WRAPPER_STYLE}">
+          <div style="{EMAIL_HEADING_STYLE}">{subject}</div>
+          {detail_table_html}
+          <div style="{EMAIL_SUBHEADING_STYLE}">{task_label}</div>
           <div>
             {task_html}
           </div>
@@ -696,6 +775,7 @@ def _rollover_pending_tasks(employee, date):
         "employee": employee,
         "task_date": date,
         "status": ["in", ["Pending", "In Progress"]],
+        "task_type": ["!=", "Recurring"],
     }, fields=["name", "description", "task_type", "origin_date",
                "remarks", "rolled_over_from", "estimated_time", "project_name"])
 
@@ -784,6 +864,46 @@ def _safety_rollover(employee, today_date):
         new_task.sequence = _next_sequence(employee, today_date) + 1
         new_task.insert(ignore_permissions=True)
         frappe.db.set_value("Daily Task", task.name, "status", "Rolled Over")
+
+    frappe.db.commit()
+
+
+# ── Recurring tasks (e.g. daily scrum) ─────────────────────────────────────────
+
+def _ensure_recurring_tasks(employee, date):
+    """
+    For every active Recurring Task Template belonging to this employee,
+    make sure a Daily Task for today already exists; insert one if not.
+    Idempotent — safe to call on every page load / check-in attempt.
+    Recurring-type tasks never enter the carry-forward chain (see the
+    task_type exclusion in _rollover_pending_tasks) — a fresh one appears
+    here again tomorrow regardless of whether today's was completed.
+    """
+    templates = frappe.get_all("Recurring Task Template",
+        filters={"employee": employee, "is_active": 1},
+        fields=["description", "project_name", "estimated_time"])
+
+    for tpl in templates:
+        exists = frappe.db.exists("Daily Task", {
+            "employee": employee,
+            "task_date": date,
+            "task_type": "Recurring",
+            "description": tpl.description,
+        })
+        if exists:
+            continue
+
+        new_task = frappe.new_doc("Daily Task")
+        new_task.employee      = employee
+        new_task.task_date     = date
+        new_task.description   = tpl.description
+        new_task.task_type     = "Recurring"
+        new_task.status        = "Pending"
+        new_task.origin_date   = date
+        new_task.estimated_time = tpl.estimated_time or ""
+        new_task.project_name   = tpl.project_name or ""
+        new_task.sequence = _next_sequence(employee, date) + 1
+        new_task.insert(ignore_permissions=True)
 
     frappe.db.commit()
 
@@ -916,6 +1036,17 @@ def _get_hybrid_office_days():
         return [1, 3]
 
 
+def _wfh_request_exists(employee_name, date):
+    """True if a draft/submitted Attendance Request (reason=WFH) covers this date."""
+    return bool(frappe.db.exists("Attendance Request", {
+        "employee": employee_name,
+        "from_date": ["<=", date],
+        "to_date":   [">=", date],
+        "reason":    "Work From Home",
+        "docstatus": ["in", [0, 1]],
+    }))
+
+
 @frappe.whitelist()
 def validate_wfh_request():
     """
@@ -940,13 +1071,7 @@ def validate_wfh_request():
         if weekday_num not in hybrid_office_days:
             return {"valid": True, "message": "Hybrid routine WFH day — no Attendance Request needed."}
 
-    exists = frappe.db.exists("Attendance Request", {
-        "employee": employee,
-        "from_date": ["<=", date],
-        "to_date":   [">=", date],
-        "reason":    "Work From Home",
-        "docstatus": ["in", [0, 1]],
-    })
+    exists = _wfh_request_exists(employee, date)
 
     if exists:
         return {"valid": True, "message": "WFH request found.", "doc": exists}
@@ -982,6 +1107,7 @@ def get_page_state():
     # Safety rollover — only before check-in
     if not morning_log:
         _safety_rollover(employee.name, date)
+        _ensure_recurring_tasks(employee.name, date)
 
     # Auto-heal checkin if HR deleted it
     if morning_log:
@@ -1092,6 +1218,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
     half_day_session: "First Half"/"Second Half", only kept if employee is
                       actually on approved half-day leave today
     """
+    checkin_action_time = now_datetime()
     employee = _get_employee()
     # Lock employee record to serialize check-in processing
     frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee.name,))
@@ -1100,6 +1227,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
 
     # Safety rollover to catch and carry forward any pending tasks from previous days
     _safety_rollover(employee.name, date)
+    _ensure_recurring_tasks(employee.name, date)
 
     if frappe.db.exists("Daily Task Log", {
         "employee": employee.name, "date": date,
@@ -1207,13 +1335,21 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
 
     # Notification — includes today's tasks + carried-forward tasks
     late_flag = frappe.db.get_value("Daily Task Log", log.name, "is_late")
-    late_text = " (Late check-in)" if late_flag else ""
-    wfh_text = f" [{work_location}]" if work_location != "Office" else ""
+    resolved_half_day = log.half_day_session
+    detail_rows = [
+        ("Employee", employee.employee_name),
+        ("Date", date),
+        ("Login Time", _to_ampm(actual_login)),
+        ("Checked-In At", _format_action_timestamp(checkin_action_time)),
+        ("Work Location", work_location),
+        ("Half-Day Session", resolved_half_day),
+        ("Status", "Late Check-in" if late_flag else None),
+    ]
     _notify_hr_and_team_leader(
         employee.name,
         employee.employee_name,
         "checkin",
-        f"{employee.employee_name} checked in at {_to_hhmm(actual_login)}{late_text}{wfh_text} on {date}.",
+        detail_rows,
         tasks=all_tasks,
     )
 
@@ -1222,7 +1358,10 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         employee.name,
         employee.employee_name,
         actual_login,
+        checkin_action_time,
         work_location,
+        resolved_half_day,
+        late_flag,
         all_tasks,
         date,
     )
@@ -1234,6 +1373,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
 
 @frappe.whitelist()
 def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks):
+    checkout_action_time = now_datetime()
     employee = _get_employee()
     # Lock employee record to serialize checkout/EOD processing
     frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee.name,))
@@ -1271,7 +1411,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         "employee": employee.name, "date": date,
         "log_type": "End of Day", "docstatus": 1,
     }):
-        frappe.throw(f"You have already submitted End of Day for {date}.")
+        frappe.throw(f"You have already checked out for {date}.")
 
     updates = json.loads(task_updates) if isinstance(task_updates, str) else task_updates
     adhocs  = json.loads(adhoc_tasks)  if isinstance(adhoc_tasks, str)  else adhoc_tasks
@@ -1286,6 +1426,14 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         actual_time = t.get("actual_time", "")
         if status == "Done" and not _parse_time_to_hours(actual_time):
             frappe.throw(f"Please provide time taken for task completion for the completed task: '{t.get('description') or name}'")
+        # Entering time taken without touching the status dropdown means
+        # they've started it — reflect that instead of leaving it Pending.
+        if status == "Pending" and _parse_time_to_hours(actual_time):
+            status = "In Progress"
+        # Employee explicitly declined to carry an unfinished task forward —
+        # drop it instead of letting _rollover_pending_tasks pick it up.
+        if status in ("Pending", "In Progress") and not t.get("carry_forward", True):
+            status = "Dropped"
         update_fields = {
             "status":      status,
             "actual_time": _parse_time_to_hours(actual_time),
@@ -1345,13 +1493,15 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     }, "name")
     login_time_raw = ""
     half_day_session = ""
+    work_location = ""
     if morning_log_name:
-        login_time_raw = frappe.db.get_value(
-            "Daily Task Log", morning_log_name, "login_time"
-        ) or ""
-        half_day_session = frappe.db.get_value(
-            "Daily Task Log", morning_log_name, "half_day_session"
-        ) or ""
+        morning_log = frappe.db.get_value(
+            "Daily Task Log", morning_log_name,
+            ["login_time", "half_day_session", "work_location"], as_dict=True
+        )
+        login_time_raw = morning_log.login_time or ""
+        half_day_session = morning_log.half_day_session or ""
+        work_location = morning_log.work_location or ""
 
     # FIX: normalise all time values through _to_hhmm before calc
     # Frappe DB returns Time fields as datetime.timedelta; JS sends 'HH:MM' strings.
@@ -1394,17 +1544,24 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
 
     total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in all_tasks)
     working_hours_str = _format_hours(total_actual_hours) or "0h"
-    half_day_text = f" &nbsp;·&nbsp; Half-Day: <strong>{half_day_session}</strong>" if half_day_session else ""
 
+    detail_rows = [
+        ("Employee", employee.employee_name),
+        ("Date", date),
+        ("Login Time", _to_ampm(login_time_raw) if login_time_raw else None),
+        ("Logout Time", _to_ampm(logout_time)),
+        ("Checked-Out At", _format_action_timestamp(checkout_action_time)),
+        ("Work Location", work_location),
+        ("Net Working Hours", net_hours),
+        ("Total Task Hours", working_hours_str),
+        ("Half-Day Session", half_day_session),
+        ("Tasks Completed", f"{done_count}/{total_count}"),
+    ]
     _notify_hr_and_team_leader(
         employee.name,
         employee.employee_name,
         "checkout",
-        f"<strong>{employee.employee_name}</strong> submitted EOD.<br>"
-        f"Login: <strong>{_to_ampm(login_time_raw) if login_time_raw else '—'}</strong> &nbsp;·&nbsp; "
-        f"Logout: <strong>{_to_ampm(logout_time)}</strong> &nbsp;·&nbsp; "
-        f"Net Hours: <strong>{net_hours or '—'}</strong> &nbsp;·&nbsp; "
-        f"Total Task Hours: <strong>{working_hours_str}</strong>{half_day_text}",
+        detail_rows,
         tasks=all_tasks,
     )
 
@@ -1413,7 +1570,10 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         employee.name,
         employee.employee_name,
         logout_time,
+        checkout_action_time,
         net_hours,
+        work_location,
+        half_day_session,
         all_tasks,
         date,
     )
@@ -1434,12 +1594,12 @@ def get_team_dashboard(date=None):
     employee = _get_employee()
     date = date or today()
 
-    if not _is_team_leader(employee.name):
+    team_names = _get_team_members(employee.name)
+    if not team_names:
         frappe.throw("Access denied. You are not a Team Leader.", frappe.PermissionError)
 
     team = frappe.get_all("Employee", filters={
-        "reports_to": employee.name,
-        "status": "Active",
+        "name": ["in", team_names],
     }, fields=["name", "employee_name", "department", "designation", "user_id"])
 
     return _build_team_data(team, date)
@@ -1707,7 +1867,7 @@ def delete_carried_task(name):
         "log_type": "End of Day",
         "docstatus": 1
     }):
-        frappe.throw("Cannot delete tasks after End of Day is submitted.", frappe.ValidationError)
+        frappe.throw("Cannot delete tasks after checkout is submitted.", frappe.ValidationError)
 
     # Clean up ancestors to prevent safety/EOD rollover from resurrecting the task
     root = _get_root_task(name)
@@ -1736,7 +1896,7 @@ def delete_carried_project(project_name, task_date):
         "log_type": "End of Day",
         "docstatus": 1
     }):
-        frappe.throw("Cannot delete project tasks after End of Day is submitted.", frappe.ValidationError)
+        frappe.throw("Cannot delete project tasks after checkout is submitted.", frappe.ValidationError)
 
     # Find all tasks for this employee, date, and project name
     tasks = frappe.get_all("Daily Task", filters={
@@ -1800,7 +1960,7 @@ def reset_morning_checkin():
         "docstatus": 1,
     })
     if eod_exists:
-        frappe.throw(f"Cannot reset check-in because End of Day has already been submitted for {date}.")
+        frappe.throw(f"Cannot reset check-in because checkout has already been submitted for {date}.")
 
 
     # 2. Get Morning Check-In log name
@@ -1837,6 +1997,41 @@ def reset_morning_checkin():
 
     frappe.db.commit()
     return {"success": True}
+
+
+@frappe.whitelist()
+def update_half_day_session(session):
+    """
+    Retroactively apply a half-day session to an already-submitted Morning
+    Check-In — for an employee who checked in normally, then got a half-day
+    leave approved later the same day. Reuses the same eligibility check
+    as check-in time (_resolve_half_day_session); the page reload after this
+    re-derives shift truncation and recommended logout time from the newly
+    stored value.
+    """
+    employee = _get_employee()
+    date = today()
+
+    if frappe.db.exists("Daily Task Log", {
+        "employee": employee.name, "date": date,
+        "log_type": "End of Day", "docstatus": 1,
+    }):
+        frappe.throw("Cannot change half-day session after checkout is submitted.")
+
+    morning_log = frappe.db.get_value("Daily Task Log", {
+        "employee": employee.name, "date": date,
+        "log_type": "Morning Check-In", "docstatus": 1,
+    }, "name")
+    if not morning_log:
+        frappe.throw("You have not checked in today.")
+
+    resolved = _resolve_half_day_session(employee.name, date, session)
+    if not resolved:
+        frappe.throw("You do not have an approved half-day leave for today.")
+
+    frappe.db.set_value("Daily Task Log", morning_log, "half_day_session", resolved)
+    frappe.db.commit()
+    return {"success": True, "half_day_session": resolved}
 
 
 # ── Shared builder ─────────────────────────────────────────────────────────────

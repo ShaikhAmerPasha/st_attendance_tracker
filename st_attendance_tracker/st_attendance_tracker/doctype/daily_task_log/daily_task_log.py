@@ -45,7 +45,9 @@ class DailyTaskLog(Document):
         """Block logging attendance for another employee (BOLA guard)."""
         if frappe.session.user in ("Administrator", "Guest"):
             return
-        allowed_roles = {"HR Manager", "Team Lead", "System Manager"}
+        # Team Lead oversight goes through the reports_to-scoped dashboard/API
+        # (_is_team_leader), not a blanket role bypass here.
+        allowed_roles = {"HR Manager", "System Manager"}
         if allowed_roles & set(frappe.get_roles(frappe.session.user)):
             return
         current_employee = frappe.db.get_value(

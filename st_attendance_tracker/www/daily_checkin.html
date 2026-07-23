@@ -1223,6 +1223,21 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
   gap: 8px;
 }
 
+.carry-fwd-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.carry-fwd-label input {
+  margin: 0;
+  cursor: pointer;
+}
+
 .tmeta-field label {
   font-size: 11px;
   font-weight: 700;
@@ -2524,7 +2539,7 @@ body > .container { padding-top: 0 !important; }
       <div style="flex: 1; min-width: 0;">
         <div class="sb-name" style="word-break: break-word; font-size: 13px; font-weight: 700; color: var(--text-main); line-height: 1.35;">{{ employee.employee_name }}</div>
         <div class="sb-dept" style="word-break: break-word; font-size: 11px; color: var(--text-muted); margin-top: 2px; margin-bottom: 8px;">{{ employee.department or 'No department' }}</div>
-        {% if eod_done %}<span class="sb-badge sbb-eod" style="margin-left: 0; display: inline-block;">EOD done</span>
+        {% if eod_done %}<span class="sb-badge sbb-eod" style="margin-left: 0; display: inline-block;">Checkout done</span>
         {% elif is_checked_in %}<span class="sb-badge sbb-in" style="margin-left: 0; display: inline-block;">Checked in</span>
         {% else %}<span class="sb-badge sbb-out" style="margin-left: 0; display: inline-block;">Not checked in</span>{% endif %}
       </div>
@@ -2626,7 +2641,7 @@ body > .container { padding-top: 0 !important; }
 <div class="done-wrap">
   <div class="done-card">
     <div class="done-ico"><i class="ti ti-circle-check" aria-hidden="true"></i></div>
-    <div class="done-t">End-of-Day submitted</div>
+    <div class="done-t">Checked out</div>
     <div class="done-s">Your work is logged. Pending tasks moved to the next working day.</div>
     {% set dt = tasks|selectattr("status","equalto","Done")|list %}
     {% set pt = tasks|selectattr("status","in",["Pending","In Progress"])|list %}
@@ -2662,10 +2677,29 @@ body > .container { padding-top: 0 !important; }
     <div id="rec-lo-banner" style="margin-top: 12px; padding: 10px 14px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: var(--radius-md); font-size: 12px; color: #4f46e5; display: flex; align-items: center; gap: 8px;">
       <i class="ti ti-info-circle" style="font-size: 16px;"></i>
       <span>
-        Based on your login at <strong>{{ login_time }}</strong>{% if is_half_day_leave %} (Half-Day Leave detected){% endif %}, 
+        Based on your login at <strong>{{ login_time }}</strong>{% if is_half_day_leave %} (Half-Day Leave detected){% endif %},
         your recommended logout time is <strong id="rec-lo-val">—</strong>.
       </span>
     </div>
+    {% if is_half_day_leave and half_day_session %}
+    <div style="margin-top: 8px; padding: 8px 14px; font-size: 12px; color: #4f46e5;">
+      <strong>{{ half_day_session }}</strong>: checking in as <strong>{{ work_location }}</strong>.
+      {% if half_day_session == "Second Half" %}First Half{% else %}Second Half{% endif %} is your approved leave.
+    </div>
+    {% endif %}
+    {% if is_half_day_leave and not half_day_session %}
+    <div style="margin-top: 12px; padding: 10px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-md); display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+      <span style="font-size: 12px; color: #92400e; flex: 1; min-width: 200px;">
+        Your half-day leave is approved but not yet applied to today's check-in. Select which half you're working, and it'll be recorded as <strong>{{ work_location }}</strong> (your check-in location) for that half.
+      </span>
+      <select id="hd-session-update-sel" style="height: 34px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 8px; font-size: 12px;">
+        <option value="">Select half...</option>
+        <option value="First Half">First Half</option>
+        <option value="Second Half">Second Half</option>
+      </select>
+      <button class="btn" id="btn-apply-hd" onclick="applyHalfDaySession()">Apply Half-Day</button>
+    </div>
+    {% endif %}
   </div>
   <div class="pb-row">
     <span class="pb-lbl">Task completion</span>
@@ -2683,6 +2717,32 @@ body > .container { padding-top: 0 !important; }
   <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Status</div><div class="ch">Estimated</div><div class="ch">Time taken for task completion</div><div class="ch"></div></div>
   {% endif %}
   {% set pico = ['pi0','pi1','pi2','pi3','pi4','pi5'] %}
+  {% if recurring_tasks %}
+  <div style="margin-bottom:16px">
+    <div class="stlbl"><i class="ti ti-refresh" aria-hidden="true"></i>Recurring</div>
+    <div class="standalone-container">
+      {% for task in recurring_tasks %}
+      <div class="stask" data-id="{{ task.name }}">
+        <div class="stask-main">
+          <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
+          <div class="tdesc-wrap">
+            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description }}</textarea>
+          </div>
+          <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+        </div>
+        <div class="stask-meta">
+          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
+          <span class="ttag ttag-c" title="A fresh copy of this task appears automatically every day">Recurs daily</span>
+          <div class="tmeta-fields">
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
   {% for pname, ptasks in projects.items() %}
   <div class="pg" id="epg{{ loop.index }}">
     <div class="pg-head" onclick="togglePG('epg{{ loop.index }}')">
@@ -2704,9 +2764,10 @@ body > .container { padding-top: 0 !important; }
         </div>
         <div class="trow-meta">
           <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
+          <label class="carry-fwd-label"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward to tomorrow</label>
           <div class="tmeta-fields">
-            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est."></div>
-            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs"></div>
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
         </div>
       </div>
@@ -2733,9 +2794,10 @@ body > .container { padding-top: 0 !important; }
         </div>
         <div class="stask-meta">
           <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
+          <label class="carry-fwd-label"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward to tomorrow</label>
           <div class="tmeta-fields">
-            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est."></div>
-            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time or '' }}" placeholder="e.g. 2 hrs"></div>
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
         </div>
       </div>
@@ -2747,9 +2809,9 @@ body > .container { padding-top: 0 !important; }
   <div style="height:20px"></div>
 </div>
 <footer class="app-footer">
-  <button class="fbtn dk" id="btn-eod" onclick="submitEOD()"><i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit EOD</button>
+  <button class="fbtn dk" id="btn-eod" onclick="submitEOD()"><i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit</button>
   <button class="fbtn gh" id="btn-reset-ci" onclick="resetCheckin()" style="background:#fff5f5;color:#dc2626;border:1px solid #fecaca"><i class="ti ti-rotate-clockwise" aria-hidden="true"></i>Reset check-in</button>
-  <span class="fhint" style="margin-left:auto">Pending tasks auto-carry to tomorrow</span>
+  <span class="fhint" style="margin-left:auto">Uncheck "Carry forward" on a task to drop it instead of carrying it to tomorrow</span>
 </footer>
 {% else %}
 <div class="body">
@@ -2774,6 +2836,11 @@ body > .container { padding-top: 0 !important; }
     <div style="grid-column: 1 / -1; margin-top: -8px;">
       <span id="wl-note" class="wl-note"></span>
     </div>
+    {% if is_half_day_leave %}
+    <div style="grid-column: 1 / -1;">
+      <span id="hd-wl-note" class="wl-note"></span>
+    </div>
+    {% endif %}
   </div>
   {% if carried_count == 0 and tasks|length == 0 %}
   <div class="empty">
@@ -2787,6 +2854,30 @@ body > .container { padding-top: 0 !important; }
   </div>
   {% else %}
   {% if tasks|length > 0 %}
+  {% if recurring_tasks %}
+  <div style="margin-bottom:16px">
+    <div class="stlbl"><i class="ti ti-refresh" aria-hidden="true"></i>Recurring</div>
+    <div class="standalone-container">
+      {% for task in recurring_tasks %}
+      <div class="stask" data-id="{{ task.name }}">
+        <div class="stask-main">
+          <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-refresh" style="font-size:13px;color:#6366f1" aria-hidden="true"></i></div>
+          <div class="tdesc-wrap">
+            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Recurs daily</span></div>
+          </div>
+          <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+        </div>
+        <div class="stask-meta">
+          <span style="font-size:12px;color:#9ca3af">Recurring</span>
+          <div class="tmeta-fields">
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
   <div class="tbar" style="margin-bottom:10px"><span class="tbar-t"><i class="ti ti-history" aria-hidden="true"></i>Carried from previous days</span></div>
   <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Project</div><div class="ch">Estimated</div><div class="ch"></div><div class="ch"></div></div>
   {% for pname, ptasks in projects.items() %}
@@ -2794,7 +2885,7 @@ body > .container { padding-top: 0 !important; }
     <div class="pg-head" onclick="togglePG('cpg{{ loop.index }}')">
       <div class="pg-ico pi{{ loop.index0 % 6 }}"><i class="ti ti-folder" aria-hidden="true"></i></div>
       <span class="pg-name">{{ pname }}</span>
-      <span class="pg-meta">{{ ptasks|length }} carried</span>
+      <span class="pg-meta">{{ ptasks|length }} task{% if ptasks|length != 1 %}s{% endif %}</span>
       <span class="npg-rm" onclick="event.stopPropagation();delCarriedProject('{{ pname|replace("'", "\\'") }}', 'cpg{{ loop.index }}', this)" title="Delete project and tasks"><i class="ti ti-x" aria-hidden="true"></i></span>
       <i class="ti ti-chevron-down pg-chev" aria-hidden="true"></i>
     </div>
@@ -2812,7 +2903,7 @@ body > .container { padding-top: 0 !important; }
         <div class="trow-meta">
           <span style="font-size:12px;color:#9ca3af">{{ pname }}</span>
           <div class="tmeta-fields">
-            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est."></div>
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
         </div>
       </div>
@@ -2825,7 +2916,7 @@ body > .container { padding-top: 0 !important; }
   {% endfor %}
   {% if standalone %}
   <div style="margin-top:16px">
-    <div class="stlbl"><i class="ti ti-minus" aria-hidden="true"></i>Standalone carried</div>
+    <div class="stlbl"><i class="ti ti-minus" aria-hidden="true"></i>Standalone tasks</div>
     <div class="standalone-container">
       {% for task in standalone %}
       <div class="stask carried" data-id="{{ task.name }}">
@@ -2839,7 +2930,7 @@ body > .container { padding-top: 0 !important; }
         <div class="stask-meta">
           <span style="font-size:12px;color:#9ca3af">Standalone</span>
           <div class="tmeta-fields">
-            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time or '' }}" placeholder="Est."></div>
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
         </div>
       </div>
@@ -2980,8 +3071,19 @@ function onHDSessionChange() {
   var sel = document.getElementById('hd-session-sel');
   SEL_HD_SESSION = sel ? sel.value : 'First Half';
   previewHalfDayShift();
+  updateHalfDayWLNote();
 }
-try { if (IS_HALF_DAY) previewHalfDayShift(); } catch (e) {}
+try { if (IS_HALF_DAY) { previewHalfDayShift(); updateHalfDayWLNote(); } } catch (e) {}
+
+function updateHalfDayWLNote() {
+  // Spells out, in one sentence, which half is being worked (and how — Office
+  // or WFH) versus which half is the approved leave — half_day_session and
+  // work_location are otherwise two disconnected dropdowns with no visible link.
+  var el = document.getElementById('hd-wl-note');
+  if (!el || !IS_HALF_DAY) return;
+  var otherHalf = SEL_HD_SESSION === 'Second Half' ? 'First Half' : 'Second Half';
+  el.textContent = SEL_HD_SESSION + ': checking in as ' + wlLabel(SEL_WL) + '. ' + otherHalf + ' is your approved leave.';
+}
 
 function onWLChange() {
   var sel = document.getElementById('wl-sel'); if (!sel) return;
@@ -2989,6 +3091,7 @@ function onWLChange() {
   var note = document.getElementById('wl-note');
   if (note && SEL_WL === 'WFH' && WLC.validate) { note.className = 'wl-note warn'; note.textContent = 'WFH requires an Attendance Request — validated on check-in.'; }
   else if (note && WLC.note) { note.className = 'wl-note'+(WLC.hybrid_office_day?' warn':''); note.textContent = WLC.note; }
+  updateHalfDayWLNote();
 }
 function toast(msg, type, dur) {
   var t = document.getElementById('toast');
@@ -3309,7 +3412,7 @@ function toggleCheck(el, id) {
   var dn=el.classList.contains('dn');
   el.classList.toggle('dn'); el.innerHTML=!dn?'<i class="ti ti-check" aria-hidden="true"></i>':'';
   var row=el.closest('[data-id]');
-  if(row){ var d=row.querySelector('.tdesc'); if(d) d.classList.toggle('dn',!dn); var s=row.querySelector('.tsel'); if(s) s.value=!dn?'Done':'Pending'; }
+  if(row){ var d=row.querySelector('.tdesc'); if(d) d.classList.toggle('dn',!dn); var s=row.querySelector('.tsel'); if(s) s.value=!dn?'Done':'Pending'; var cf=row.querySelector('.carry-fwd-label'); if(cf) cf.style.display=!dn?'none':''; }
   updProg();
 }
 function onSel(s){
@@ -3323,6 +3426,8 @@ function onSel(s){
     if (d) {
       if (dn) d.classList.add('dn'); else d.classList.remove('dn');
     }
+    var cf = row.querySelector('.carry-fwd-label');
+    if (cf) cf.style.display = dn ? 'none' : '';
   }
   updProg();
 }
@@ -3394,7 +3499,7 @@ function addTaskToPG(gid) {
   var c=document.querySelector('[data-tc="'+gid+'"]'); if(!c) return;
   var r=document.createElement('div'); r.className='npg-row'; r.dataset.tid=tid;
   r.innerHTML='<textarea class="npg-ti npg-desc" data-tid="'+tid+'" data-pg="'+gid+'" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit"></textarea>'+
-    '<input class="npg-ei" data-tid="'+tid+'" placeholder="Est. time">'+
+    '<input class="npg-ei" data-tid="'+tid+'" placeholder="e.g. 1h 30m, 45m">'+
     '<span class="npg-trm" onclick="this.closest(\'.npg-row\').remove();updCounts()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';
   c.appendChild(r);
   var ta = r.querySelector('textarea');
@@ -3408,7 +3513,7 @@ function addT() {
   d.innerHTML='<div style="flex:1;display:flex;flex-direction:column;gap:8px;">'+
     '<input class="ns-head" data-tid="'+tid+'" placeholder="Project / Header..." style="border:none;border-bottom:1px solid #e2e8f0;border-radius:0;padding:4px 0;font-size:14px;font-weight:600;font-family:inherit;width:100%;background:transparent;outline:none">'+
     '<textarea class="ns-ti ns-desc" data-tid="'+tid+'" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit;width:100%"></textarea></div>'+
-    '<input class="ns-ei" data-tid="'+tid+'" placeholder="Est. time">'+
+    '<input class="ns-ei" data-tid="'+tid+'" placeholder="e.g. 1h 30m, 45m">'+
     '<span class="ns-rm" onclick="this.closest(\'.ns\').remove();updCounts()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';
   document.getElementById('new-area').appendChild(d);
   var ta = d.querySelector('textarea');
@@ -3451,7 +3556,7 @@ async function submitMorning() {
     var id=el.dataset.id, est=(document.querySelector('.carried-est[data-id="'+id+'"]')||{}).value||'';
     if(id) cUp.push({name:id,description:el.value,estimated_time:est});
   });
-  if(newTasks.length+CARRIED===0){ toast('Add at least one task before checking in.','err'); return; }
+  if(newTasks.length+cUp.length===0){ toast('Add at least one task before checking in.','err'); return; }
   var curWL = document.getElementById('wl-sel') ? document.getElementById('wl-sel').value : SEL_WL;
   if(curWL==='WFH' && WLC.validate){
     try{
@@ -3486,7 +3591,7 @@ function addAdhoc(){
     '<div class="stask-meta">'+
     '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
     '<div class="tmeta-fields">'+
-    '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 2 hrs"></div>'+
+    '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 1h 30m, 45m"></div>'+
     '</div>'+
     '</div>';
   document.getElementById('adhoc-area').appendChild(d);
@@ -3519,7 +3624,7 @@ function addAdhocToProj(pgId, projName) {
     '<div class="trow-meta">'+
     '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
     '<div class="tmeta-fields">'+
-    '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 2 hrs"></div>'+
+    '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 1h 30m, 45m"></div>'+
     '</div>'+
     '</div>';
   var pgAdd = pgEl.querySelector('.pg-add');
@@ -3586,9 +3691,10 @@ async function submitEOD(){
   document.querySelectorAll('[data-id]').forEach(function(row){
     var id=row.dataset.id; if(!id) return;
     var sel=row.querySelector('.tsel[data-id="'+id+'"]'), act=row.querySelector('.act-in[data-id="'+id+'"]'), desc=row.querySelector('.desc-edit[data-id="'+id+'"]');
+    var carryChk=row.querySelector('.carry-fwd-chk[data-id="'+id+'"]');
     if(act) act.classList.remove('input-err');
     if(sel && sel.value==='Done' && act && !act.value.trim()){ act.classList.add('input-err'); hasErrors=true; }
-    if(sel) tu.push({name:id,status:sel.value,actual_time:act?act.value:'',description:desc?desc.value:'',remarks:''});
+    if(sel) tu.push({name:id,status:sel.value,actual_time:act?act.value:'',description:desc?desc.value:'',remarks:'',carry_forward:carryChk?carryChk.checked:true});
   });
   var at=[];
   document.querySelectorAll('[data-adhocid]').forEach(function(row){
@@ -3632,7 +3738,7 @@ async function submitEOD(){
       if(p>0) msg+=' · '+p+' task'+(p>1?'s':'')+' carried to tomorrow';
       toast(msg,'ok',2000); setTimeout(function(){ window.location.href=window.location.href.split('?')[0]; },1800);
     }
-  }catch(e){ btn.disabled=false; btn.innerHTML='<i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit EOD'; toast(e.message||'Something went wrong.','err'); }
+  }catch(e){ btn.disabled=false; btn.innerHTML='<i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit'; toast(e.message||'Something went wrong.','err'); }
 }
 {% if is_team_leader %}
 frappe.call({method:'st_attendance_tracker.api.get_team_dashboard',callback:function(r){
@@ -3644,7 +3750,7 @@ frappe.call({method:'st_attendance_tracker.api.get_team_dashboard',callback:func
   function av(n){ var s=0; for(var i=0;i<n.length;i++) s+=n.charCodeAt(i); return avCls[s%avCls.length]; }
   function ini(n){ var p=(n||'').split(' ').filter(Boolean); return p.length>=2?(p[0][0]+p[1][0]).toUpperCase():n.slice(0,2).toUpperCase(); }
   var bm={checked_in:'tmb-in',late:'tmb-la',missing:'tmb-ou',leave:'tmb-lv',eod_done:'tmb-eo'};
-  var lm={checked_in:'In',late:'Late',missing:'Missing',leave:'Leave',eod_done:'EOD done'};
+  var lm={checked_in:'In',late:'Late',missing:'Missing',leave:'Leave',eod_done:'Checkout done'};
   list.innerHTML=emps.slice(0,5).map(function(e){
     var done=e.done_tasks||0,tot=e.total_tasks||0,pct=tot>0?Math.round(done/tot*100):0;
     return '<div class="tm-row"><div class="tm-av '+av(e.employee_name)+'">'+ini(e.employee_name)+'</div>'+
@@ -3777,6 +3883,23 @@ async function resetCheckin() {
       btn.innerHTML = '<i class="ti ti-rotate-clockwise" aria-hidden="true"></i>Reset check-in';
     }
     toast(e.message || "Could not reset check-in.", "err");
+  }
+}
+async function applyHalfDaySession() {
+  var sel = document.getElementById('hd-session-update-sel');
+  var val = sel ? sel.value : '';
+  if (!val) { toast('Select First Half or Second Half.', 'err'); return; }
+  var btn = document.getElementById('btn-apply-hd');
+  if (btn) btn.disabled = true;
+  try {
+    var r = await frappe.call({method: 'st_attendance_tracker.api.update_half_day_session', args: {session: val}});
+    if (r.message && r.message.success) {
+      toast('Half-day applied. Reloading...', 'ok', 1500);
+      setTimeout(function() { location.reload(); }, 1200);
+    }
+  } catch(e) {
+    if (btn) btn.disabled = false;
+    toast(e.message || 'Could not apply half-day.', 'err');
   }
 }
 window.addEventListener('resize', initTextareaResizer);

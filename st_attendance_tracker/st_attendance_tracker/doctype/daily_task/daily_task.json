@@ -67,7 +67,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Task Type",
-   "options": "Planned\nAd-hoc"
+   "options": "Planned\nAd-hoc\nRecurring"
   },
   {
    "default": "Pending",
@@ -75,7 +75,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Pending\nIn Progress\nDone\nRolled Over"
+   "options": "Pending\nIn Progress\nDone\nRolled Over\nDropped"
   },
   {
    "fieldname": "section_break_task",
@@ -165,6 +165,7 @@
    "create": 1,
    "delete": 0,
    "export": 1,
+   "if_owner": 1,
    "read": 1,
    "report": 1,
    "role": "Employee",

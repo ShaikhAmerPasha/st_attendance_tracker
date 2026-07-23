@@ -1,0 +1,21 @@
+{
+ "actions": [],
+ "creation": "2026-07-20 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": ["department","team_leader","team_leader_name"],
+ "fields": [
+  {"fieldname":"department","fieldtype":"Link","in_list_view":1,"label":"Department","options":"Department","reqd":1},
+  {"fieldname":"team_leader","fieldtype":"Link","ignore_user_permissions":1,"in_list_view":1,"label":"Team Leader","options":"Employee","reqd":1},
+  {"fetch_from":"team_leader.employee_name","fieldname":"team_leader_name","fieldtype":"Data","in_list_view":1,"label":"Team Leader Name","read_only":1}
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-20 00:00:00",
+ "modified_by": "Administrator",
+ "module": "ST Attendance Tracker",
+ "name": "Employee Department Assignment",
+ "owner": "Administrator",
+ "permissions": []
+}

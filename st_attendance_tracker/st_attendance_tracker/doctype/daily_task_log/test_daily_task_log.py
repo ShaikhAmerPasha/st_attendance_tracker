@@ -13,7 +13,7 @@ from st_attendance_tracker.api import (
     _to_hhmm, _to_ampm, _calc_net_hours,
     submit_morning_log, submit_eod_log,
     get_page_state, validate_wfh_request,
-    get_management_dashboard,
+    get_management_dashboard, _get_team_leader_emails,
 )
 from st_attendance_tracker.api import delete_carried_task
 
@@ -672,4 +672,115 @@ class TestQACheckinFull(FrappeTestCase):
         tasks_after = frappe.get_all("Daily Task", filters={"employee": self.emp_name, "task_date": today()}, fields=["status"])
         self.assertEqual(len(tasks_after), 1)
         self.assertEqual(tasks_after[0].status, "Pending")
+
+    # ── SECTION 6 — Multi-Department Team Leader Notification ─────────────────
+
+    def test_6_1_team_leader_fallback_to_reports_to(self):
+        """TC-6.1: No Employee Department Assignment rows -> falls back to reports_to."""
+        tl_user = "qa_tl_fallback@test.example.com"
+        tl_name = _make_employee("QATLFallback", self.dept, tl_user, ["Employee"])
+        subj_user = "qa_subj_fallback@test.example.com"
+        subj_name = _make_employee("QASubjFallback", self.dept, subj_user, ["Employee"])
+        try:
+            frappe.db.set_value("Employee", subj_name, "reports_to", tl_name)
+            emails = _get_team_leader_emails(subj_name)
+            self.assertEqual(emails, [tl_user])
+        finally:
+            frappe.db.sql("DELETE FROM `tabEmployee` WHERE name IN (%s,%s)", (tl_name, subj_name))
+            frappe.db.sql("DELETE FROM `tabUser` WHERE email IN (%s,%s)", (tl_user, subj_user))
+            frappe.db.commit()
+
+    def test_6_2_team_leader_multiple_department_assignments(self):
+        """TC-6.2: Department Assignment rows notify every listed Team Leader, ignoring reports_to."""
+        tl1_user = "qa_tl1@test.example.com"
+        tl1_name = _make_employee("QATL1", self.dept, tl1_user, ["Employee"])
+        tl2_user = "qa_tl2@test.example.com"
+        tl2_name = _make_employee("QATL2", self.dept, tl2_user, ["Employee"])
+        subj_user = "qa_subj_multi@test.example.com"
+        subj_name = _make_employee("QASubjMulti", self.dept, subj_user, ["Employee"])
+        try:
+            doc = frappe.get_doc("Employee", subj_name)
+            doc.reports_to = tl1_name  # must be ignored once assignment rows exist
+            doc.append("department_assignments", {"department": self.dept, "team_leader": tl1_name})
+            doc.append("department_assignments", {"department": self.dept, "team_leader": tl2_name})
+            doc.save(ignore_permissions=True)
+
+            emails = _get_team_leader_emails(subj_name)
+            self.assertEqual(sorted(emails), sorted([tl1_user, tl2_user]))
+        finally:
+            frappe.db.sql(
+                "DELETE FROM `tabEmployee Department Assignment` WHERE parent IN (%s,%s,%s)",
+                (tl1_name, tl2_name, subj_name)
+            )
+            frappe.db.sql("DELETE FROM `tabEmployee` WHERE name IN (%s,%s,%s)", (tl1_name, tl2_name, subj_name))
+            frappe.db.sql("DELETE FROM `tabUser` WHERE email IN (%s,%s,%s)", (tl1_user, tl2_user, subj_user))
+            frappe.db.commit()
+
+    # ── SECTION 7 — Carry-Forward Confirmation & Recurring Tasks ───────────────
+
+    def test_7_1_carry_forward_declined_drops_task_no_rollover(self):
+        """TC-7.1: Unchecking carry-forward marks the task Dropped and skips rollover."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Task to drop"}]),
+            login_time="09:00",
+            work_location="Office"
+        )
+        task = frappe.db.get_value("Daily Task", {
+            "employee": self.emp_name, "task_date": today(), "description": "Task to drop"
+        }, "name")
+
+        submit_eod_log(
+            lunch_from="", lunch_to="", logout_time="18:00",
+            task_updates=json.dumps([{
+                "name": task, "status": "Pending", "actual_time": "", "carry_forward": False
+            }]),
+            adhoc_tasks="[]"
+        )
+
+        status = frappe.db.get_value("Daily Task", task, "status")
+        self.assertEqual(status, "Dropped")
+
+        next_date = str(getdate(today()) + timedelta(days=1))
+        rolled = frappe.db.exists("Daily Task", {
+            "employee": self.emp_name, "task_date": next_date, "rolled_over_from": task
+        })
+        self.assertIsNone(rolled, "Dropped task should not roll over")
+
+    def test_7_2_recurring_task_auto_created_and_never_rolls_over(self):
+        """TC-7.2: Recurring Task Template auto-creates a fresh Daily Task daily; never carried forward."""
+        from st_attendance_tracker.api import _ensure_recurring_tasks, _rollover_pending_tasks
+
+        tpl = frappe.get_doc({
+            "doctype": "Recurring Task Template",
+            "employee": self.emp_name,
+            "description": "Daily Scrum Standup",
+            "is_active": 1,
+        }).insert(ignore_permissions=True)
+        try:
+            _ensure_recurring_tasks(self.emp_name, today())
+            scrum_today = frappe.db.get_value("Daily Task", {
+                "employee": self.emp_name, "task_date": today(),
+                "task_type": "Recurring", "description": "Daily Scrum Standup"
+            }, "name")
+            self.assertIsNotNone(scrum_today, "Recurring task not auto-created")
+
+            # Left Pending — EOD-style rollover must NOT carry a Recurring task forward
+            _rollover_pending_tasks(self.emp_name, today())
+            next_date = str(getdate(today()) + timedelta(days=1))
+            rolled = frappe.db.exists("Daily Task", {
+                "employee": self.emp_name, "task_date": next_date, "rolled_over_from": scrum_today
+            })
+            self.assertIsNone(rolled, "Recurring task should never roll over")
+
+            # A fresh copy still appears tomorrow — from the template, not the carry chain
+            _ensure_recurring_tasks(self.emp_name, next_date)
+            scrum_tomorrow = frappe.db.exists("Daily Task", {
+                "employee": self.emp_name, "task_date": next_date,
+                "task_type": "Recurring", "description": "Daily Scrum Standup"
+            })
+            self.assertIsNotNone(scrum_tomorrow, "Recurring task did not auto-create for the next day")
+        finally:
+            frappe.db.sql("DELETE FROM `tabRecurring Task Template` WHERE name=%s", (tpl.name,))
+            frappe.db.commit()
 

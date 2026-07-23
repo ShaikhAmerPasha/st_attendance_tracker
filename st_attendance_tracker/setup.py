@@ -14,6 +14,7 @@ def create_custom_fields():
     """
     _create_employee_work_type()
     _create_attendance_request_button()
+    _create_employee_department_assignments()
     frappe.db.commit()
 
 
@@ -38,6 +39,36 @@ def _create_employee_work_type():
     )
     custom_field.insert(ignore_permissions=True)
     frappe.msgprint("Custom field 'work_type' added to Employee doctype.", alert=True)
+
+
+def _create_employee_department_assignments():
+    """
+    Add department_assignments child table to Employee doctype.
+    Lists every department an employee works in and that department's
+    Team Leader — lets employees working across multiple departments
+    (e.g. Web + Digital Marketing) notify every Team Leader on
+    check-in/check-out, not just the single reports_to manager.
+    """
+    if frappe.db.exists("Custom Field", "Employee-department_assignments"):
+        return
+
+    custom_field = frappe.new_doc("Custom Field")
+    custom_field.dt = "Employee"
+    custom_field.label = "Department Assignments"
+    custom_field.fieldname = "department_assignments"
+    custom_field.fieldtype = "Table"
+    custom_field.options = "Employee Department Assignment"
+    custom_field.insert_after = "department"
+    custom_field.description = (
+        "Departments this employee works in and each department's Team "
+        "Leader. Used to notify every relevant Team Leader on check-in/"
+        "check-out for employees working across multiple departments."
+    )
+    custom_field.insert(ignore_permissions=True)
+    frappe.msgprint(
+        "Custom field 'department_assignments' added to Employee doctype.",
+        alert=True
+    )
 
 
 def _create_attendance_request_button():
@@ -70,3 +101,29 @@ def _create_attendance_request_button():
         "Custom button 'Go to Check-In Page' added to Attendance Request.",
         alert=True
     )
+
+
+def validate_department_assignments(doc, method=None):
+    """
+    Employee "validate" doc_event (see hooks.py). Child table rows
+    (Employee Department Assignment) don't get their own validate() called
+    by Frappe when the parent saves, so this check has to live here.
+
+    team_leader ignores User Permissions (so the parent Employee record
+    stays viewable regardless of who their leader is) — that removes the
+    one implicit check that would otherwise apply. A role-based check
+    ("must hold Team Lead/HR Manager") was tried and reverted — this
+    org's real team leaders (e.g. reports_to chains already in use) are
+    not tagged with those Frappe roles, so it broke legitimate existing
+    data. Enforcing instead: must be a real, active employee, and can't
+    name yourself as your own team leader — catches garbage/self-referential
+    values without requiring role tagging this org doesn't actually use.
+    """
+    for row in doc.get("department_assignments") or []:
+        if not row.team_leader:
+            continue
+        if row.team_leader == doc.name:
+            frappe.throw("An employee cannot be set as their own Team Leader.")
+        is_active = frappe.db.get_value("Employee", row.team_leader, "status")
+        if is_active != "Active":
+            frappe.throw(f"{row.team_leader} is not an active employee and cannot be a Team Leader.")

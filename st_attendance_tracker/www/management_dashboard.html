@@ -1064,7 +1064,7 @@ body {
     <div class="gstats">
       <div class="gs"><div class="gs-n" id="g-total">—</div><div class="gs-l">Total</div><div class="gs-bar"><div class="gs-fill" style="background:#EE1C29;width:100%"></div></div></div>
       <div class="gs"><div class="gs-n g" id="g-in">—</div><div class="gs-l">Checked in</div><div class="gs-bar"><div class="gs-fill" id="gb-in" style="background:#4ade80"></div></div></div>
-      <div class="gs"><div class="gs-n b" id="g-eod">—</div><div class="gs-l">EOD done</div><div class="gs-bar"><div class="gs-fill" id="gb-eod" style="background:#60a5fa"></div></div></div>
+      <div class="gs"><div class="gs-n b" id="g-eod">—</div><div class="gs-l">Checkout done</div><div class="gs-bar"><div class="gs-fill" id="gb-eod" style="background:#60a5fa"></div></div></div>
       <div class="gs"><div class="gs-n r" id="g-miss">—</div><div class="gs-l">Missing</div><div class="gs-bar"><div class="gs-fill" id="gb-miss" style="background:#f87171"></div></div></div>
       <div class="gs"><div class="gs-n a" id="g-leave">—</div><div class="gs-l">On leave</div><div class="gs-bar"><div class="gs-fill" id="gb-leave" style="background:#fbbf24"></div></div></div>
     </div>
@@ -1076,7 +1076,7 @@ body {
         <span class="fc" data-f="missing">Missing</span>
         <span class="fc" data-f="late">Late</span>
         <span class="fc" data-f="leave">On leave</span>
-        <span class="fc" data-f="eod_done">EOD done</span>
+        <span class="fc" data-f="eod_done">Checkout done</span>
       </div>
       <div id="dept-list"><div id="loading"><i class="ti ti-loader" style="font-size:22px;animation:spin .7s linear infinite" aria-hidden="true"></i><br><br>Loading...</div></div>
     </div>
@@ -1090,7 +1090,7 @@ body {
           <div class="dp-dept" style="color: rgba(255, 255, 255, 0.7); margin-top: 4px;">Employees ranked by net hours worked</div>
         </div>
         <div class="dp-body" id="leaderboard-body" style="max-height: 320px; overflow-y: auto; padding: 16px;">
-          <div style="text-align: center; color: var(--text-light); font-size: 12px; padding: 16px 0;">No EOD logs submitted yet for this date.</div>
+          <div style="text-align: center; color: var(--text-light); font-size: 12px; padding: 16px 0;">No checkout logs submitted yet for this date.</div>
         </div>
       </div>
 
@@ -1110,9 +1110,10 @@ var SEL_EMP = null;
 function getInitials(n){ var p=(n||'').split(' ').filter(Boolean); return p.length>=2?(p[0][0]+p[1][0]).toUpperCase():n.slice(0,2).toUpperCase(); }
 function getAv(n){ var cls=['av-g','av-b','av-a','av-p','av-r'], s=0; for(var i=0;i<n.length;i++) s+=n.charCodeAt(i); return cls[s%cls.length]; }
 function getDot(status){ var m={checked_in:'dot-g',late:'dot-a',missing:'dot-r',leave:'dot-x',eod_done:'dot-g'}; return m[status]||'dot-x'; }
-function getDotLabel(status){ var m={checked_in:'Checked in',late:'Late',missing:'Missing',leave:'On leave',eod_done:'EOD done'}; return m[status]||status; }
+function getDotLabel(status){ var m={checked_in:'Checked in',late:'Late',missing:'Missing',leave:'On leave',eod_done:'Checkout done'}; return m[status]||status; }
 function getTaskIcon(s){ if(s==='Done') return 'ti-circle-check ico-g'; if(s==='In Progress') return 'ti-circle-half ico-b'; return 'ti-circle ico-a'; }
 function getStag(s){ if(s==='Done') return 'st-dn'; if(s==='In Progress') return 'st-ip'; return 'st-pe'; }
+function esc(s){ if(s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 var DEPT_ICONS = ['ti-code','ti-users','ti-speakerphone','ti-tools','ti-truck','ti-building-factory'];
 
 function renderDepts(){
@@ -1134,7 +1135,7 @@ function renderDepts(){
       var done=emp.done_tasks||0, tot=emp.total_tasks||0, ep=tot>0?Math.round(done/tot*100):0;
       return '<div class="ec'+selCls+'" data-emp="'+emp.name+'" onclick="selectEmp(this,\''+emp.name+'\')">'+
         '<div class="ec-top"><div class="ec-av '+getAv(emp.employee_name)+'">'+getInitials(emp.employee_name)+'</div>'+
-        '<span class="ec-name">'+emp.employee_name+'</span></div>'+
+        '<span class="ec-name">'+esc(emp.employee_name)+'</span></div>'+
         '<div class="ec-status"><span class="dot '+getDot(emp.status)+'"></span><span style="color:#374151">'+getDotLabel(emp.status)+'</span></div>'+
         '<div class="ec-time">'+timeStr+'</div>'+
         (tot>0?'<div class="ec-prog"><div class="ecp-t"><div class="ecp-f" style="width:'+ep+'%"></div></div><span class="ecp-l">'+done+'/'+tot+'</span></div>':'')+
@@ -1144,7 +1145,7 @@ function renderDepts(){
     return '<div class="dept-card">'+
       '<div class="dept-head">'+
         '<div class="dept-ico '+iconCls+'"><i class="ti '+icon+'" aria-hidden="true"></i></div>'+
-        '<div><div class="dept-name">'+dept.department+'</div><div class="dept-meta">'+emps.length+' employees</div></div>'+
+        '<div><div class="dept-name">'+esc(dept.department)+'</div><div class="dept-meta">'+emps.length+' employees</div></div>'+
         '<div class="dept-prog"><div class="dp-trk"><div class="dp-fill" style="width:'+pct+'%"></div></div><span class="dp-lbl">'+checkedIn+'/'+emps.length+'</span></div>'+
       '</div>'+
       (filtered.length?'<div class="emp-grid">'+empCells+'</div>':'<div style="padding:12px 16px;font-size:12px;color:#9ca3af;font-style:italic">No employees match this filter.</div>')+
@@ -1194,13 +1195,13 @@ function renderDetail(data){
   if(!tasks.length) taskRows='<div style="font-size:12px;color:#9ca3af;font-style:italic;padding:8px 0">No tasks recorded for this date.</div>';
   else taskRows=tasks.map(function(t){
     var pills='';
-    if(t.estimated_time) pills+='<span class="tp"><i class="ti ti-clock" aria-hidden="true"></i>'+t.estimated_time+'</span>';
-    if(t.actual_time) pills+='<span class="tp"><i class="ti ti-check" aria-hidden="true"></i>'+t.actual_time+'</span>';
+    if(t.estimated_time) pills+='<span class="tp"><i class="ti ti-clock" aria-hidden="true"></i>'+esc(t.estimated_time)+'</span>';
+    if(t.actual_time) pills+='<span class="tp"><i class="ti ti-check" aria-hidden="true"></i>'+esc(t.actual_time)+'</span>';
     if(t.is_carried) pills+='<span class="tp"><i class="ti ti-history" aria-hidden="true"></i>Carried</span>';
     return '<div class="task-row">'+
       '<i class="ti '+getTaskIcon(t.status)+' task-ico" aria-hidden="true"></i>'+
       '<div class="task-body">'+
-        '<div class="task-desc'+(t.status==='Done'?' dn':'')+'">'+(t.description||'')+'</div>'+
+        '<div class="task-desc'+(t.status==='Done'?' dn':'')+'">'+esc(t.description)+'</div>'+
         (pills?'<div class="task-pills">'+pills+'</div>':'')+
       '</div>'+
       '<span class="stag '+getStag(t.status)+'">'+t.status+'</span>'+
@@ -1211,8 +1212,8 @@ function renderDetail(data){
     '<div class="dp-hero">'+
       '<div class="dp-hero-row">'+
         '<div class="dp-av">'+getInitials(emp.employee_name||'')+'</div>'+
-        '<div><div class="dp-name">'+(emp.employee_name||'')+'</div>'+
-        '<div class="dp-dept">'+(emp.department||'')+(emp.designation?' · '+emp.designation:'')+'</div></div>'+
+        '<div><div class="dp-name">'+esc(emp.employee_name)+'</div>'+
+        '<div class="dp-dept">'+esc(emp.department)+(emp.designation?' · '+esc(emp.designation):'')+'</div></div>'+
       '</div>'+
       '<div class="dp-stats">'+
         '<div class="dps"><div class="dps-n g">'+done+'</div><div class="dps-l">Done</div></div>'+
@@ -1241,7 +1242,7 @@ function renderLeaderboard(rankings){
   var body = document.getElementById('leaderboard-body');
   if(!body) return;
   if(!rankings || !rankings.length){
-    body.innerHTML = '<div style="text-align: center; color: var(--text-light); font-size: 12px; padding: 16px 0;">No EOD logs submitted yet for this date.</div>';
+    body.innerHTML = '<div style="text-align: center; color: var(--text-light); font-size: 12px; padding: 16px 0;">No checkout logs submitted yet for this date.</div>';
     return;
   }
 
@@ -1271,7 +1272,7 @@ function renderLeaderboard(rankings){
     return '<div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f1f5f9;">' +
       rankBadge +
       '<div style="flex: 1; min-width: 0;">' +
-        '<div style="font-size: 13px; font-weight: 600; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + r.employee_name + '</div>' +
+        '<div style="font-size: 13px; font-weight: 600; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + esc(r.employee_name) + '</div>' +
         '<div style="font-size: 11px; color: #64748b;">' + timeRange + '</div>' +
       '</div>' +
       '<div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end;">' +
