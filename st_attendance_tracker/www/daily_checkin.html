@@ -2646,7 +2646,7 @@ body > .container { padding-top: 0 !important; }
     {% set dt = tasks|selectattr("status","equalto","Done")|list %}
     {% set pt = tasks|selectattr("status","in",["Pending","In Progress"])|list %}
     <div class="done-grid" style="grid-template-columns: repeat(3, 1fr);">
-      <div><div class="dg-l">Tasks done</div><div class="dg-v g">{{ dt|length }} / {{ tasks|length }}</div></div>
+      <div><div class="dg-l">Tasks completed</div><div class="dg-v g">{{ dt|length }} / {{ tasks|length }}</div></div>
       <div><div class="dg-l">Carried forward</div><div class="dg-v">{{ pt|length }}</div></div>
       <div><div class="dg-l">Working Hours</div><div class="dg-v" style="color:var(--primary)">{{ working_hours }}</div></div>
     </div>
@@ -2731,7 +2731,7 @@ body > .container { padding-top: 0 !important; }
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="stask-meta">
-          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
+          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed - Task is finished</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress - Task is ongoing</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending - Task not started</option></select>
           <span class="ttag ttag-c" title="A fresh copy of this task appears automatically every day">Recurs daily</span>
           <div class="tmeta-fields">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
@@ -2748,7 +2748,7 @@ body > .container { padding-top: 0 !important; }
     <div class="pg-head" onclick="togglePG('epg{{ loop.index }}')">
       <div class="pg-ico {{ pico[loop.index0 % 6] }}"><i class="ti ti-folder" aria-hidden="true"></i></div>
       <span class="pg-name">{{ pname }}</span>
-      <span class="pg-meta">{{ ptasks|length }} task{% if ptasks|length != 1 %}s{% endif %} &nbsp;·&nbsp; {{ ptasks|selectattr("status","equalto","Done")|list|length }} done</span>
+      <span class="pg-meta">{{ ptasks|length }} task{% if ptasks|length != 1 %}s{% endif %} &nbsp;·&nbsp; {{ ptasks|selectattr("status","equalto","Done")|list|length }} completed</span>
       <i class="ti ti-chevron-down pg-chev" aria-hidden="true"></i>
     </div>
     <div class="pg-body">
@@ -2763,7 +2763,7 @@ body > .container { padding-top: 0 !important; }
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="trow-meta">
-          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
+          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed - Task is finished</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress - Task is ongoing</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending - Task not started</option></select>
           <label class="carry-fwd-label"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward to tomorrow</label>
           <div class="tmeta-fields">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
@@ -2793,7 +2793,7 @@ body > .container { padding-top: 0 !important; }
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="stask-meta">
-          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option {% if task.status=='Done' %}selected{% endif %}>Done</option><option {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
+          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed - Task is finished</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress - Task is ongoing</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending - Task not started</option></select>
           <label class="carry-fwd-label"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward to tomorrow</label>
           <div class="tmeta-fields">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
@@ -2962,7 +2962,7 @@ body > .container { padding-top: 0 !important; }
   <div class="rp-sec">
     <div class="rp-t"><i class="ti ti-chart-bar" aria-hidden="true"></i>Today's summary</div>
     <div class="sg">
-      <div class="sc"><div class="sc-n g" id="ts-done">{{ done_count }}</div><div class="sc-l">Done</div></div>
+      <div class="sc"><div class="sc-n g" id="ts-done">{{ done_count }}</div><div class="sc-l">Completed</div></div>
       <div class="sc"><div class="sc-n a" id="ts-prog">{{ tasks|selectattr("status","equalto","In Progress")|list|length }}</div><div class="sc-l">In progress</div></div>
       <div class="sc"><div class="sc-n r" id="ts-pend">{{ tasks|selectattr("status","in",["Pending"])|list|length }}</div><div class="sc-l">Pending</div></div>
       <div class="sc"><div class="sc-n b" id="ts-tot">{{ total_count }}</div><div class="sc-l">Total tasks</div></div>
@@ -3589,7 +3589,7 @@ function addAdhoc(){
     '<div class="trm adhoc-rm" onclick="this.closest(\'.stask\').remove(); updProg();" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
     '</div>'+
     '<div class="stask-meta">'+
-    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
+    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option value="Done">Completed - Task is finished</option><option value="In Progress">In Progress - Task is ongoing</option><option value="Pending">Pending - Task not started</option></select>'+
     '<div class="tmeta-fields">'+
     '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 1h 30m, 45m"></div>'+
     '</div>'+
@@ -3622,7 +3622,7 @@ function addAdhocToProj(pgId, projName) {
     '<div class="trm adhoc-rm" onclick="this.closest(\'[data-adhocid]\').remove(); updProg();" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
     '</div>'+
     '<div class="trow-meta">'+
-    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option>Done</option><option>In Progress</option><option>Pending</option></select>'+
+    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option value="Done">Completed - Task is finished</option><option value="In Progress">In Progress - Task is ongoing</option><option value="Pending">Pending - Task not started</option></select>'+
     '<div class="tmeta-fields">'+
     '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 1h 30m, 45m"></div>'+
     '</div>'+
@@ -3862,6 +3862,16 @@ document.addEventListener('input', function(e) {
   }
   if (e.target.classList.contains('act-in') || e.target.classList.contains('adhoc-act')) {
     recalc();
+    if (e.target.value.trim() !== '') {
+      var row = e.target.closest('.trow, .stask');
+      if (row) {
+        var sel = row.querySelector('.tsel');
+        if (sel && sel.value === 'Pending') {
+          sel.value = 'In Progress';
+          if (typeof onSel === 'function') onSel(sel);
+        }
+      }
+    }
   }
 });
 async function resetCheckin() {

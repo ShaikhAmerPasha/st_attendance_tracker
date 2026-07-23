@@ -375,7 +375,7 @@ def _send_employee_checkin_email(employee_name, employee_display_name, login_tim
 
         frappe.sendmail(
             recipients=[emp_email],
-            subject=f"Checked in at {login_hm} — Your plan for {date}",
+            subject=f"Attendance Confirmation: Check-In & Task Plan - {date}",
             message=html,
             now=False,
         )
@@ -456,7 +456,7 @@ def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
 
         frappe.sendmail(
             recipients=[emp_email],
-            subject=f"Day complete — {len(done_tasks)}/{len(tasks)} tasks done | {date}",
+            subject=f"Attendance Summary: End of Day & Tasks Completed - {date}",
             message=html,
             now=False,
         )
@@ -658,16 +658,17 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
 
         recipients = list(set(recipients))
 
+        email_date = tasks[0].get("task_date") if (tasks and tasks[0].get("task_date")) else frappe.utils.today()
         subject_map = {
-            "checkin":  f"{employee_display_name} checked in",
-            "checkout": f"{employee_display_name} checked out",
+            "checkin":  f"Attendance Log: Check-In - {employee_display_name} - {email_date}",
+            "checkout": f"Attendance Log: Check-Out - {employee_display_name} - {email_date}",
         }
-        subject = subject_map.get(event, f"{employee_display_name} — attendance update")
+        subject = subject_map.get(event, f"Attendance Log: Update - {employee_display_name} - {email_date}")
 
         lunch_from_hm = None
         lunch_to_hm = None
         if event == "checkout":
-            date = tasks[0].get("task_date") if (tasks and tasks[0].get("task_date")) else frappe.utils.today()
+            date = email_date
             db_vals = frappe.db.get_value("Daily Task Log", {
                 "employee": employee_name,
                 "date": date,
