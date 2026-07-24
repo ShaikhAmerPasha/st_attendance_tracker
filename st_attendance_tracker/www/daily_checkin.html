@@ -3162,24 +3162,17 @@ function addMinutesToTime(timeStr, minutes) {
   return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
 }
 
-function getShiftDurationMinutes() {
-  var s = parseTimeToMinutes(SHIFT_START_TIME), e = parseTimeToMinutes(SHIFT_END_TIME);
-  if (s === null || e === null) return null;
-  var d = e - s;
-  if (d <= 0) d += 24 * 60;
-  return d;
-}
 function getRecommendedLogoutTime() {
   if (!LOGIN_TIME) return '';
   var loginMin = parseTimeToMinutes(LOGIN_TIME);
   if (loginMin === null) return '';
 
-  // SHIFT_START_TIME/END are already truncated to the half-day window
-  // server-side when a half-day session was chosen at check-in, so this
-  // naturally yields the correct ~4h target with no IS_HALF_DAY branching.
-  // Falls back to the legacy hardcode only when no shift is assigned at all.
-  var shiftDur = getShiftDurationMinutes();
-  var expectedNetWork = shiftDur !== null ? shiftDur : (IS_HALF_DAY ? 4 * 60 : 8 * 60);
+  // Always a fixed net-hours policy target (8h full day, 4h half-day),
+  // regardless of the assigned Shift Type's own clock span. A shift's
+  // gross span (e.g. 9h for a 9:00 AM-6:00 PM "Day Shift") is normally
+  // already built assuming a lunch break inside it, so using it here and
+  // then adding actual lunch on top double-counted the lunch.
+  var expectedNetWork = IS_HALF_DAY ? 4 * 60 : 8 * 60;
 
   // Calculate actual lunch duration
   var actualLunch = 0;
