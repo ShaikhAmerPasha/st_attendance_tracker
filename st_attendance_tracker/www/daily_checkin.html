@@ -824,12 +824,38 @@ body {
 .pb-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 20px 24px;
   box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 102px;
+  z-index: 50;
+}
+
+.pb-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
+}
+
+.pb-mini-l {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.pb-mini-v {
+  font-size: 14px;
+  font-weight: 800;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--primary);
 }
 
 .pb-lbl {
@@ -842,6 +868,7 @@ body {
 
 .pb-trk {
   flex: 1;
+  min-width: 80px;
   height: 10px;
   background: hsl(210, 40%, 94%);
   border-radius: 999px;
@@ -2705,6 +2732,8 @@ body > .container { padding-top: 0 !important; }
     <span class="pb-lbl">Task completion</span>
     <div class="pb-trk"><div class="pb-fill" id="pb-fill" style="width:{% if total_count > 0 %}{{ (done_count/total_count*100)|int }}{% else %}0{% endif %}%"></div></div>
     <span class="pb-n" id="pb-n">{{ done_count }} / {{ total_count }}</span>
+    <div class="pb-mini"><span class="pb-mini-l">Net</span><span class="pb-mini-v" id="pb-nh">{{ net_hours or '—' }}</span></div>
+    <div class="pb-mini"><span class="pb-mini-l">Tasks</span><span class="pb-mini-v" id="pb-th">—</span></div>
   </div>
   <div class="tbar">
     <span class="tbar-t"><i class="ti ti-list" aria-hidden="true"></i>Update tasks</span>
@@ -3328,6 +3357,7 @@ function recalc(){
     var netStr = nh + 'h ' + nm + 'm';
 
     var topNh = document.getElementById('top-nh'); if (topNh) topNh.textContent = netStr;
+    var pbNh = document.getElementById('pb-nh'); if (pbNh) pbNh.textContent = netStr;
 
     // Sum task actual hours dynamically
     var totalActualMin = 0;
@@ -3339,13 +3369,19 @@ function recalc(){
       var hrs = parseTimeToHoursJs(inp.value);
       totalActualMin += Math.round(hrs * 60);
     });
-    var topTh = document.getElementById('top-th');
-    if (topTh) {
-      var thVal = formatMinsToHoursMins(totalActualMin);
-      topTh.textContent = thVal;
-    }
+    var thVal = formatMinsToHoursMins(totalActualMin);
+    var topTh = document.getElementById('top-th'); if (topTh) topTh.textContent = thVal;
+    var pbTh = document.getElementById('pb-th'); if (pbTh) pbTh.textContent = thVal;
   }
 }
+// Total Task Hours only summed .act-in/.adhoc-act values when recalc() ran —
+// but nothing called it when those fields themselves changed, only when the
+// lunch fields did. Keeps the running total live as time is entered per task.
+document.addEventListener('input', function(e) {
+  if (e.target.classList && (e.target.classList.contains('act-in') || e.target.classList.contains('adhoc-act'))) {
+    recalc();
+  }
+});
 
 function toggleLunchFields() {
   var chk = document.getElementById('include_lunch');
