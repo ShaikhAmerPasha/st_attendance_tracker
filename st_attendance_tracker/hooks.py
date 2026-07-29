@@ -5,6 +5,9 @@ app_description = "Daily Attendance & Task Management for ERPNext v15"
 app_email = "ameer@standardtouch.com"
 app_license = "MIT"
 
+# ── Desk branding polish (spacing/radius/font only, no color changes) ─────────
+app_include_css = "/assets/st_attendance_tracker/css/branding.css"
+
 # ── Custom fields on Employee doctype ─────────────────────────────────────────
 # Automatically created on bench migrate
 after_migrate = ["st_attendance_tracker.setup.create_custom_fields"]
@@ -25,6 +28,8 @@ scheduler_events = {
         "30 11 * * 1-6": ["st_attendance_tracker.tasks.send_morning_combined_report"],
         # 10:00 PM IST Mon-Sat (22:00)
         "0 22 * * 1-6":  ["st_attendance_tracker.tasks.send_eod_missing_report"],
+        # 10:30 PM IST Mon-Sat
+        "30 22 * * 1-6": ["st_attendance_tracker.tasks.send_employee_checkout_reminder"],
     }
 }
 

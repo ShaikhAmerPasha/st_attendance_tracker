@@ -375,7 +375,7 @@ def _send_employee_checkin_email(employee_name, employee_display_name, login_tim
 
         frappe.sendmail(
             recipients=[emp_email],
-            subject=f"Attendance Confirmation: Check-In & Task Plan - {date}",
+            subject=f"{employee_display_name} - Check-in - {frappe.utils.getdate(date).strftime('%d-%m-%Y')}",
             message=html,
             now=False,
         )
@@ -388,7 +388,8 @@ def _send_employee_checkin_email(employee_name, employee_display_name, login_tim
 
 def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
                               checkout_action_time, net_hours, work_location,
-                              half_day_session, tasks, date):
+                              half_day_session, tasks, date,
+                              is_late_checkout=False, submission_date=None):
     """
     Send EOD confirmation email to the employee themselves.
     Includes a detail card (hours, work location, ...), done tasks,
@@ -432,7 +433,7 @@ def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
 
         detail_table_html = _render_detail_table([
             ("Employee", employee_display_name),
-            ("Date", date),
+            ("Shift Date", date),
             ("Login Time", login_hm),
             ("Logout Time", logout_hm),
             ("Checked-Out At", _format_action_timestamp(checkout_action_time)),
@@ -444,11 +445,20 @@ def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
             ("Tasks Completed", f"{len(done_tasks)}/{len(tasks)}"),
         ])
 
+        late_note_html = ""
+        work_summary_heading = "Today's Work Summary"
+        if is_late_checkout:
+            late_note_html = f"""<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#92400e;">
+              Note: this checkout is for your shift on <strong>{date}</strong>, submitted on {submission_date} because checkout was missed at the time.
+            </div>"""
+            work_summary_heading = f"Work Summary for {frappe.utils.getdate(date).strftime('%d %b %Y')}"
+
         html = f"""
         <div style="{EMAIL_WRAPPER_STYLE}">
           <div style="{EMAIL_HEADING_STYLE}">Checkout Summary</div>
+          {late_note_html}
           {detail_table_html}
-          <div style="{EMAIL_SUBHEADING_STYLE}">Today's Work Summary</div>
+          <div style="{EMAIL_SUBHEADING_STYLE}">{work_summary_heading}</div>
           <div>
             {task_table_html}
           </div>
@@ -456,7 +466,7 @@ def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
 
         frappe.sendmail(
             recipients=[emp_email],
-            subject=f"Attendance Summary: End of Day & Tasks Completed - {date}",
+            subject=f"{employee_display_name} - Check-out - {frappe.utils.getdate(date).strftime('%d-%m-%Y')}",
             message=html,
             now=False,
         )
@@ -564,7 +574,7 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
             if t.get("rolled_over_from"):
                 badges.append('<span style="background-color:#fffbeb;color:#b45309;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid #fde68a;margin-left:6px;display:inline-block">Carried</span>')
             if t.get("task_type") == "Ad-hoc":
-                badges.append('<span style="background-color:#faf5ff;color:#7c3aed;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid #e9d5ff;margin-left:6px;display:inline-block">Ad-hoc</span>')
+                badges.append('<span style="background-color:#faf5ff;color:#7c3aed;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid #e9d5ff;margin-left:6px;display:inline-block">Additional</span>')
             
             badges_str = "".join(badges)
             task_style = f"padding:10px 12px;font-size:13px;color:#334155;background-color:{palette['bg']};border:1px solid {palette['border']};vertical-align:top;word-wrap:break-word"
@@ -588,10 +598,14 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
             
             status_style = f"padding:10px 12px;font-size:12px;font-weight:bold;text-align:center;color:{status_style_color};background-color:#fef8e7;border:1px solid {palette['border']};vertical-align:middle"
 
+            remark_html = ""
+            if is_checkout and t.get("remarks"):
+                remark_html = f'<div style="font-size:11.5px;color:#64748b;font-style:italic;margin-top:4px">Remark: {html.escape(t.get("remarks"))}</div>'
+
             row_html = f"""
             <tr>
               <td style="{client_style}">{client_text}</td>
-              <td style="{task_style}">{html.escape(t.get("description") or "")}{badges_str}</td>
+              <td style="{task_style}">{html.escape(t.get("description") or "")}{badges_str}{remark_html}</td>
               <td style="{time_style}">{time_val}</td>
               <td style="{status_style}">{status_val}</td>
             </tr>
@@ -659,11 +673,12 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
         recipients = list(set(recipients))
 
         email_date = tasks[0].get("task_date") if (tasks and tasks[0].get("task_date")) else frappe.utils.today()
+        email_date_label = frappe.utils.getdate(email_date).strftime('%d-%m-%Y')
         subject_map = {
-            "checkin":  f"Attendance Log: Check-In - {employee_display_name} - {email_date}",
-            "checkout": f"Attendance Log: Check-Out - {employee_display_name} - {email_date}",
+            "checkin":  f"{employee_display_name} - Check-in - {email_date_label}",
+            "checkout": f"{employee_display_name} - Check-out - {email_date_label}",
         }
-        subject = subject_map.get(event, f"Attendance Log: Update - {employee_display_name} - {email_date}")
+        subject = subject_map.get(event, f"{employee_display_name} - Update - {email_date_label}")
 
         lunch_from_hm = None
         lunch_to_hm = None
@@ -1378,7 +1393,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     employee = _get_employee()
     # Lock employee record to serialize checkout/EOD processing
     frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee.name,))
-    
+
     # Resolve active date: latest check-in without a checkout, else today
     latest_checkin = frappe.db.get_value("Daily Task Log", {
         "employee": employee.name,
@@ -1399,6 +1414,8 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
             date = today()
     else:
         date = today()
+
+    is_late_checkout = str(date) != str(today())
 
     if not isinstance(date, str):
         date = frappe.utils.getdate(date).strftime("%Y-%m-%d")
@@ -1539,7 +1556,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     all_tasks = frappe.get_all("Daily Task",
         filters={"employee": employee.name, "task_date": date},
         fields=["name", "description", "status", "task_type",
-                "estimated_time", "actual_time", "project_name", "rolled_over_from"],
+                "estimated_time", "actual_time", "project_name", "rolled_over_from", "remarks"],
         order_by="sequence asc",
     )
 
@@ -1577,6 +1594,8 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         half_day_session,
         all_tasks,
         date,
+        is_late_checkout=is_late_checkout,
+        submission_date=today(),
     )
 
     return {

@@ -26,7 +26,8 @@ def get_context(context):
             "Please contact HR or System Administrator."
         )
 
-    date = today()
+    actual_today = today()
+    date = actual_today
     latest_checkin = frappe.db.get_value("Daily Task Log", {
         "employee": employee.name,
         "log_type": "Morning Check-In",
@@ -43,6 +44,7 @@ def get_context(context):
         if not has_eod:
             date = latest_checkin.date
 
+    is_late_checkout = bool(latest_checkin) and (str(date) != str(actual_today))
     date_obj = getdate(date)
 
     # ── Work location configuration ───────────────────────────────────────
@@ -51,7 +53,6 @@ def get_context(context):
     # ── Safety rollover — ALWAYS runs against today() ─────────────────────
     # Even if the page renders an older open check-in date, we must still
     # carry forward any missed Pending/In-Progress tasks to today's date.
-    actual_today = today()
     existing_morning_today = frappe.db.exists("Daily Task Log", {
         "employee": employee.name, "date": actual_today,
         "log_type": "Morning Check-In", "docstatus": 1,
@@ -243,6 +244,8 @@ def get_context(context):
     context.has_reset_today = has_reset_today
     context.working_hours = working_hours_val
     context.title = "Daily Check-In"
+    context.is_late_checkout = is_late_checkout
+    context.checkout_date_label = date_obj.strftime("%A, %d %B %Y")
 
 
 def _get_work_location_config(employee, date_obj):

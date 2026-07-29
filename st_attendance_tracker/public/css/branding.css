@@ -1,0 +1,10 @@
+/* ST Attendance Tracker — desk branding polish (spacing/radius/font only).
+   No color changes — Frappe's own --font-stack already lists Inter first,
+   but never actually loads the font file anywhere, so it silently falls
+   back to plain OS system fonts. Loading it here is what actually makes
+   that existing declaration take effect. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --border-radius: 10px;
+}

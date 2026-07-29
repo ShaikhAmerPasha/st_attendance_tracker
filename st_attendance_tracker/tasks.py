@@ -1,8 +1,9 @@
 """
 Scheduled email tasks for ST Attendance Tracker.
-  10:30 AM IST Mon-Sat → send_employee_checkin_reminder  (to employees who haven't checked in)
-  11:30 AM IST Mon-Sat → send_morning_combined_report    (to HR: missing + late summary)
-  10:00 PM IST Mon-Sat → send_eod_missing_report         (to HR: employees without EOD)
+  10:30 AM IST Mon-Sat → send_employee_checkin_reminder   (to employees who haven't checked in)
+  11:30 AM IST Mon-Sat → send_morning_combined_report     (to HR: missing + late summary)
+  10:00 PM IST Mon-Sat → send_eod_missing_report          (to HR: employees without EOD)
+  10:30 PM IST Mon-Sat → send_employee_checkout_reminder  (to employees who haven't checked out)
 
 HR reports go to all users with HR Manager role.
 Employee reminders go directly to each employee's work email.
@@ -291,6 +292,98 @@ def send_eod_missing_report():
         subject=f"[{date}] EOD Report Missing — {len(missing)} employee(s)",
         message=html,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EMPLOYEE CHECKOUT REMINDER — 10:30 PM
+# ─────────────────────────────────────────────────────────────────────────────
+
+def send_employee_checkout_reminder():
+    """
+    Sent at 10:30 PM IST Mon-Sat.
+    Emails each employee individually who checked in today but hasn't checked out yet.
+    """
+    date = today()
+    day_label = getdate(date).strftime("%A, %d %B %Y")
+
+    expected = _get_expected_employees(date)
+    if not expected:
+        return
+    emp_names = [e.name for e in expected]
+
+    checked_in = {r.employee for r in frappe.get_all("Daily Task Log", filters={
+        "date": date,
+        "log_type": "Morning Check-In",
+        "docstatus": 1,
+        "employee": ["in", emp_names],
+    }, fields=["employee"])}
+
+    checked_out = {r.employee for r in frappe.get_all("Daily Task Log", filters={
+        "date": date,
+        "log_type": "End of Day",
+        "docstatus": 1,
+        "employee": ["in", emp_names],
+    }, fields=["employee"])}
+
+    pending = [e for e in expected if e.name in checked_in and e.name not in checked_out]
+    if not pending:
+        return
+
+    for emp in pending:
+        emp_email = frappe.db.get_value("Employee", emp.name,
+            ["prefered_email", "company_email", "personal_email"], as_dict=True)
+
+        email = (
+            emp_email.get("prefered_email") or
+            emp_email.get("company_email") or
+            emp_email.get("personal_email")
+        )
+
+        if not email:
+            user_id = frappe.db.get_value("Employee", emp.name, "user_id")
+            if user_id:
+                email = frappe.db.get_value("User", user_id, "email") or user_id
+
+        if not email:
+            continue
+
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
+          <div style="background:#EE1C29;padding:20px 24px;border-radius:6px 6px 0 0">
+            <h2 style="color:#fff;margin:0;font-size:18px">Checkout Reminder</h2>
+            <p style="color:rgba(255,255,255,0.8);margin:5px 0 0;font-size:13px">
+              StandardTouch e-Solutions · Attendance System
+            </p>
+          </div>
+          <div style="background:#fff;padding:20px 24px;border:1px solid #e0e0e0;
+                      border-top:none;border-radius:0 0 6px 6px">
+            <p style="font-size:15px;color:#111;margin:0 0 10px">
+              Hi <strong>{emp.employee_name}</strong>,
+            </p>
+            <p style="font-size:13px;color:#444;line-height:1.6;margin:0 0 16px">
+              You checked in today — <strong>{day_label}</strong> — but haven't checked out yet.
+            </p>
+            <p style="font-size:13px;color:#444;line-height:1.6;margin:0 0 20px">
+              Please check out as soon as possible by visiting the attendance portal.
+            </p>
+            <a href="/daily-checkin"
+               style="display:inline-block;background:#EE1C29;color:#fff;
+                      padding:10px 22px;border-radius:6px;text-decoration:none;
+                      font-size:13px;font-weight:500">
+              Check Out Now →
+            </a>
+          </div>
+          <p style="font-size:11px;color:#aaa;text-align:center;margin-top:10px">
+            Automated reminder · StandardTouch Attendance System · Do not reply
+          </p>
+        </div>"""
+
+        frappe.sendmail(
+            recipients=[email],
+            subject=f"Reminder: You have not checked out today ({date})",
+            message=html,
+            now=True,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
