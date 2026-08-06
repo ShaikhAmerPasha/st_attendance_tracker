@@ -171,8 +171,8 @@ def _format_hours(val):
         val_float = float(val)
         if val_float <= 0:
             return ""
-        h = int(val_float)
-        m = int(round((val_float - h) * 60))
+        total_minutes = int(round(val_float * 60))
+        h, m = divmod(total_minutes, 60)
         if h > 0 and m > 0:
             return f"{h}h {m}m"
         elif h > 0:
