@@ -2711,7 +2711,7 @@ body > .container { padding-top: 0 !important; }
     <div class="done-t">Checked out</div>
     <div class="done-s">Your work is logged. Pending tasks moved to the next working day.</div>
     {% set dt = tasks|selectattr("status","equalto","Done")|list %}
-    {% set pt = tasks|selectattr("status","in",["Pending","In Progress"])|list %}
+    {% set pt = tasks|selectattr("status","in",["Pending","In Progress","Rolled Over"])|list %}
     <div class="done-grid" style="grid-template-columns: repeat(3, 1fr);">
       <div><div class="dg-l">Tasks completed</div><div class="dg-v g">{{ dt|length }} / {{ tasks|length }}</div></div>
       <div><div class="dg-l">Carried forward</div><div class="dg-v">{{ pt|length }}</div></div>
@@ -3045,7 +3045,7 @@ body > .container { padding-top: 0 !important; }
     <div class="sg">
       <div class="sc"><div class="sc-n g" id="ts-done">{{ done_count }}</div><div class="sc-l">Completed</div></div>
       <div class="sc"><div class="sc-n a" id="ts-prog">{{ tasks|selectattr("status","equalto","In Progress")|list|length }}</div><div class="sc-l">In progress</div></div>
-      <div class="sc"><div class="sc-n r" id="ts-pend">{{ tasks|selectattr("status","in",["Pending"])|list|length }}</div><div class="sc-l">Pending</div></div>
+      <div class="sc"><div class="sc-n r" id="ts-pend">{{ tasks|selectattr("status","in",["Pending","Rolled Over"])|list|length }}</div><div class="sc-l">Pending</div></div>
       <div class="sc"><div class="sc-n b" id="ts-tot">{{ total_count }}</div><div class="sc-l">Total tasks</div></div>
     </div>
   </div>
