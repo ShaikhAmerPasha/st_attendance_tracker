@@ -1,6 +1,8 @@
 import frappe
 from frappe.utils import today, now_datetime, getdate, get_datetime
-from st_attendance_tracker.api import _to_hhmm, _to_ampm, _format_hours, _is_half_day_leave_today
+from st_attendance_tracker.api import (
+    _to_hhmm, _to_ampm, _format_hours, _is_half_day_leave_today, _is_team_leader,
+)
 
 
 def get_context(context):
@@ -157,9 +159,9 @@ def get_context(context):
         else:
             standalone.append(task)
 
-    is_team_leader = bool(frappe.db.exists("Employee", {
-        "reports_to": employee.name, "status": "Active"
-    }))
+    # Team Leader via reports_to OR Employee Department Assignment — matches
+    # the access gate on /team-dashboard and the get_team_dashboard API.
+    is_team_leader = _is_team_leader(employee.name)
 
     done_count = sum(1 for t in tasks if t.get("status") == "Done")
 

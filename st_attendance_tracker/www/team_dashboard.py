@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils import today
+from st_attendance_tracker.api import _is_team_leader
 
 
 def get_context(context):
@@ -15,10 +16,9 @@ def get_context(context):
         frappe.local.flags.redirect_location = "/daily-checkin"
         raise frappe.Redirect
 
-    is_tl = bool(frappe.db.exists("Employee", {
-        "reports_to": employee.name, "status": "Active"
-    }))
-    if not is_tl:
+    # Team Leader via reports_to OR Employee Department Assignment —
+    # same check the dashboard's own data API (_get_team_members) already uses.
+    if not _is_team_leader(employee.name):
         frappe.local.flags.redirect_location = "/daily-checkin"
         raise frappe.Redirect
 

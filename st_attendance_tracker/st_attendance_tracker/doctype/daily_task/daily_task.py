@@ -47,11 +47,18 @@ class DailyTask(Document):
                 h = float(parts[0].strip())
             except ValueError:
                 pass
-            s = parts[1]
+            s = parts[1].strip()
         if 'm' in s:
             parts = s.split('m')
             try:
                 m = float(parts[0].strip())
+            except ValueError:
+                pass
+        elif s:
+            # No 'm' suffix but leftover text after the 'h' split
+            # (e.g. "1h30") — treat it as bare minutes instead of dropping it.
+            try:
+                m = float(s)
             except ValueError:
                 pass
 

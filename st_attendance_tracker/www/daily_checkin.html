@@ -3058,8 +3058,8 @@ body > .container { padding-top: 0 !important; }
     {% set pdone = ptasks|selectattr("status","equalto","Done")|list|length %}
     {% set ppct = (pdone/ptasks|length*100)|int if ptasks|length > 0 else 0 %}
     <div class="pi">
-      <div class="pi-row"><span class="pi-lbl">{{ pname }}</span><span class="pi-val">{{ pdone }}/{{ ptasks|length }}</span></div>
-      <div class="pi-trk"><div class="pi-fill" style="width:{{ ppct }}%;background:{{ pclr[loop.index0 % 6] }}"></div></div>
+      <div class="pi-row"><span class="pi-lbl">{{ pname }}</span><span class="pi-val" id="pi-val-{{ loop.index }}">{{ pdone }}/{{ ptasks|length }}</span></div>
+      <div class="pi-trk"><div class="pi-fill" id="pi-fill-{{ loop.index }}" style="width:{{ ppct }}%;background:{{ pclr[loop.index0 % 6] }}"></div></div>
     </div>
     {% endfor %}
   </div>
@@ -3300,11 +3300,16 @@ function parseTimeToHoursJs(s) {
     var parts = s.split('h');
     var val = parseFloat(parts[0].trim());
     if (!isNaN(val)) h = val;
-    s = parts[1];
+    s = parts[1].trim();
   }
   if (s.indexOf('m') !== -1) {
     var parts = s.split('m');
     var val = parseFloat(parts[0].trim());
+    if (!isNaN(val)) m = val;
+  } else if (s) {
+    // No 'm' suffix but leftover text after the 'h' split (e.g. "1h30") —
+    // treat it as bare minutes instead of dropping it.
+    var val = parseFloat(s);
     if (!isNaN(val)) m = val;
   }
   if (h === 0 && m === 0) {
@@ -3499,6 +3504,18 @@ function updProg(){
   var tsp=document.getElementById('ts-prog'); if(tsp) tsp.textContent=prog;
   var tsr=document.getElementById('ts-pend'); if(tsr) tsr.textContent=pend;
   var tst=document.getElementById('ts-tot'); if(tst) tst.textContent=tot;
+
+  document.querySelectorAll('.pg[id^="epg"]').forEach(function(pg){
+    var pgSels=pg.querySelectorAll('.tsel'), pgTot=pgSels.length, pgDone=0;
+    pgSels.forEach(function(s){ if(s.value==='Done') pgDone++; });
+    var meta=pg.querySelector('.pg-meta');
+    if(meta) meta.textContent=pgTot+' task'+(pgTot!==1?'s':'')+'  ·  '+pgDone+' completed';
+
+    var idx=pg.id.replace('epg','');
+    var pv=document.getElementById('pi-val-'+idx); if(pv) pv.textContent=pgDone+'/'+pgTot;
+    var pf=document.getElementById('pi-fill-'+idx);
+    if(pf) pf.style.width=(pgTot>0?Math.round(pgDone/pgTot*100):0)+'%';
+  });
 }
 function toggleCheck(el, id) {
   event.stopPropagation();
@@ -3507,6 +3524,7 @@ function toggleCheck(el, id) {
   var row=el.closest('[data-id], [data-adhocid]');
   if(row){ var d=row.querySelector('.tdesc, .desc-edit'); if(d) d.classList.toggle('dn',!dn); var s=row.querySelector('.tsel'); if(s) s.value=!dn?'Done':'Pending'; var cf=row.querySelector('.carry-fwd-label'); if(cf) cf.style.display=!dn?'none':''; }
   updProg();
+  if(document.getElementById('btn-eod')) saveEodDraft();
 }
 function onSel(s){
   var row = s.closest('.trow, .stask');
@@ -3678,11 +3696,11 @@ function addAdhoc(){
     '<div class="tck" onclick="toggleCheck(this,\''+id+'\')"></div>'+
     '<div class="tdesc-wrap">'+
     '<input class="adhoc-head" placeholder="Project / Header..." style="border:none;border-bottom:1px solid #e2e8f0;border-radius:0;padding:4px 0;margin-bottom:8px;font-size:14px;font-weight:600;font-family:inherit;width:100%;background:transparent;outline:none">'+
-    '<textarea class="tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="Additional task..." style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea><div class="ttags"><span class="ttag ttag-a">Additional</span></div></div>'+
+    '<textarea class="tdesc tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="Additional task..." style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea><div class="ttags"><span class="ttag ttag-a">Additional</span></div></div>'+
     '<div class="trm adhoc-rm" onclick="this.closest(\'.stask\').remove(); updProg();" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
     '</div>'+
     '<div class="stask-meta">'+
-    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option value="Done">Completed - Task is finished</option><option value="In Progress">In Progress - Task is ongoing</option><option value="Pending" selected>Pending - Task not started</option></select>'+
+    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this); saveEodDraft()"><option value="Done">Completed - Task is finished</option><option value="In Progress">In Progress - Task is ongoing</option><option value="Pending" selected>Pending - Task not started</option></select>'+
     '<div class="tmeta-fields">'+
     '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 1h 30m, 45m"></div>'+
     '</div>'+
@@ -3712,12 +3730,12 @@ function addAdhocToProj(pgId, projName) {
   row.innerHTML =
     '<div class="trow-main">'+
     '<div class="tck" onclick="toggleCheck(this,\''+id+'\')"></div>'+
-    '<div class="tdesc-wrap"><textarea class="tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="'+placeholder+'" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea>'+
+    '<div class="tdesc-wrap"><textarea class="tdesc tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="'+placeholder+'" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea>'+
     '<div class="ttags"><span class="ttag ttag-a">Additional</span>' + tagHtml + '</div></div>'+
     '<div class="trm adhoc-rm" onclick="this.closest(\'[data-adhocid]\').remove(); updProg();" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
     '</div>'+
     '<div class="trow-meta">'+
-    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this)"><option value="Done">Completed - Task is finished</option><option value="In Progress">In Progress - Task is ongoing</option><option value="Pending" selected>Pending - Task not started</option></select>'+
+    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this); saveEodDraft()"><option value="Done">Completed - Task is finished</option><option value="In Progress">In Progress - Task is ongoing</option><option value="Pending" selected>Pending - Task not started</option></select>'+
     '<div class="tmeta-fields">'+
     '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 1h 30m, 45m"></div>'+
     '</div>'+
@@ -3768,6 +3786,7 @@ async function submitEOD(){
   if(!logout){ toast('Please enter your logout time.','err'); if(lo) lo.focus(); return; }
   if (chk && chk.checked && lfv && ltv) {
     var loginMin = parseTimeToMinutes(LOGIN_TIME);
+    var logoutMin = parseTimeToMinutes(logout);
     var lfMin = parseTimeToMinutes(lfv);
     var ltMin = parseTimeToMinutes(ltv);
     if (loginMin !== null && lfMin !== null && ltMin !== null) {
@@ -3780,6 +3799,17 @@ async function submitEOD(){
       if (lDiff <= 0) {
         toast('Lunch end must be after lunch start.','err');
         return;
+      }
+      // Must match the server's hard requirement (DailyTaskLog._validate_lunch_hours):
+      // lunch has to fall completely within the shift, or checkout submission fails
+      // server-side even though the live preview only soft-warns about this case.
+      if (logoutMin !== null) {
+        var shiftLen = logoutMin - loginMin;
+        if (shiftLen <= 0) shiftLen += 24 * 60;
+        if (ltAbs > shiftLen) {
+          toast('Lunch break must fall completely within your shift ('+formatTimeAMPM(LOGIN_TIME)+' to '+formatTimeAMPM(logout)+').','err');
+          return;
+        }
       }
     }
   }
@@ -4011,23 +4041,88 @@ setTimeout(initTextareaResizer, 100);
 setTimeout(initTextareaResizer, 500);
 setTimeout(initTextareaResizer, 1500);
 
-/* --- NEW UX FEATURES --- */
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    var t = e.target;
-    if (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT') {
-      if (t.classList.contains('npg-desc') || t.classList.contains('npg-ei')) {
-        e.preventDefault();
-        var pg = t.closest('.npg');
-        if (pg) { addTaskToPG(pg.dataset.pgid); }
-      } else if (t.classList.contains('ns-desc') || t.classList.contains('ns-ei') || t.classList.contains('ns-head')) {
-        e.preventDefault(); addT();
-      } else if (t.classList.contains('adhoc-d') || t.classList.contains('adhoc-head')) {
-        e.preventDefault(); addAdhoc();
-      }
+/* --- KEYBOARD SHORTCUTS ---
+   Tab in a task field  → add another task line (same context).
+   Enter (in a task field) or Ctrl+Enter (anywhere) → submit the active
+   form (check-in or checkout, whichever button is present on the page).
+   Shift+P / Shift+T (when not typing in a field) → add project / add task,
+   for whichever screen (check-in or EOD) is currently showing. */
+function _stKeyTaskField(t) {
+  return (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT') && (
+    t.classList.contains('npg-desc') || t.classList.contains('npg-ei') ||
+    t.classList.contains('ns-desc') || t.classList.contains('ns-ei') || t.classList.contains('ns-head') ||
+    t.classList.contains('adhoc-d') || t.classList.contains('adhoc-head') || t.classList.contains('adhoc-act')
+  );
+}
+function _stKeyAddTask(t) {
+  if (t.classList.contains('npg-desc') || t.classList.contains('npg-ei')) {
+    var pg = t.closest('.npg');
+    if (pg) addTaskToPG(pg.dataset.pgid);
+  } else if (t.classList.contains('ns-desc') || t.classList.contains('ns-ei') || t.classList.contains('ns-head')) {
+    addT();
+  } else if (t.classList.contains('adhoc-d') || t.classList.contains('adhoc-head') || t.classList.contains('adhoc-act')) {
+    var pgEl = t.closest('.pg'), row = t.closest('[data-adhocid]');
+    if (pgEl && row) {
+      addAdhocToProj(pgEl.id, row.dataset.projName || '');
+    } else {
+      addAdhoc();
     }
   }
-});
+}
+function _stKeySubmit() {
+  if (document.getElementById('btn-ci')) submitMorning();
+  else if (document.getElementById('btn-eod')) submitEOD();
+}
+window.addEventListener('keydown', function(e) {
+  var t = e.target || {};
+  var isInput = t.tagName === 'INPUT' || t.tagName === 'SELECT';
+  var isTextarea = t.tagName === 'TEXTAREA';
+  var isTextField = isInput || isTextarea;
+
+  // 1. Tab on the LAST field of a task creates a new task
+  if (e.key === 'Tab' && !e.shiftKey) {
+    if (t.classList && (t.classList.contains('npg-ei') || t.classList.contains('ns-ei') || t.classList.contains('adhoc-act'))) {
+       e.preventDefault(); e.stopPropagation(); _stKeyAddTask(t); return;
+    }
+  }
+
+  // 2. Submit form on Enter
+  if (e.key === 'Enter') {
+    if (e.ctrlKey) {
+      // Ctrl+Enter submits from anywhere
+      e.preventDefault(); e.stopPropagation(); _stKeySubmit(); return;
+    } else if (!e.shiftKey) {
+      if (isInput) {
+        // Enter inside a single-line input or select submits the form
+        e.preventDefault(); e.stopPropagation(); _stKeySubmit(); return;
+      }
+      // If it's a TEXTAREA or a button or somewhere else, let normal Enter behavior proceed!
+      // (This means Enter in a description will correctly add a new line again).
+    }
+  }
+
+  // 3. Shift+P / Alt+P to create project
+  var isP = (e.key === 'P' || e.key === 'p' || e.code === 'KeyP');
+  if (isP && !e.ctrlKey) {
+    if ((e.shiftKey && !e.altKey && !isTextField) || (e.altKey && !e.shiftKey)) {
+      e.preventDefault(); e.stopPropagation();
+      if (document.getElementById('btn-ci')) addPG();
+      else if (document.getElementById('btn-eod')) addEodProject();
+      return;
+    }
+  }
+
+  // 4. Shift+T / Alt+T to create standalone task
+  var isT = (e.key === 'T' || e.key === 't' || e.code === 'KeyT');
+  if (isT && !e.ctrlKey) {
+    if ((e.shiftKey && !e.altKey && !isTextField) || (e.altKey && !e.shiftKey)) {
+      e.preventDefault(); e.stopPropagation();
+      if (document.getElementById('btn-ci')) addT();
+      else if (document.getElementById('btn-eod')) addAdhoc();
+      return;
+    }
+  }
+}, true);
 function saveMorningDraft() {
   if(!document.getElementById('btn-ci')) return; 
   var newTasks=[];
@@ -4044,6 +4139,55 @@ function saveMorningDraft() {
   });
   localStorage.setItem('st_morning_draft', JSON.stringify(newTasks));
 }
+
+function saveEodDraft() {
+  if(!document.getElementById('btn-eod')) return;
+  var draft = [];
+  
+  document.querySelectorAll('.stask[data-adhocid]').forEach(function(el) {
+    var stat = (el.querySelector('.tsel')||{}).value||'Pending';
+    var head = (el.querySelector('.adhoc-head')||{}).value||'';
+    var desc = (el.querySelector('.adhoc-d')||{}).value||'';
+    var act = (el.querySelector('.adhoc-act')||{}).value||'';
+    var rmk = (el.querySelector('.remark-in')||{}).value||'';
+    var rmkOn = (el.querySelector('.remark-chk')||{}).checked||false;
+    draft.push({ type: 'standalone', head: head, desc: desc, act: act, stat: stat, rmk: rmk, rmkOn: rmkOn });
+  });
+
+  document.querySelectorAll('.pg[id^="epg_new_"]').forEach(function(pg) {
+    var pName = (pg.querySelector('.npg-ni')||{}).value||'';
+    var tasks = [];
+    pg.querySelectorAll('.trow[data-adhocid]').forEach(function(el) {
+      var stat = (el.querySelector('.tsel')||{}).value||'Pending';
+      var desc = (el.querySelector('.adhoc-d')||{}).value||'';
+      var act = (el.querySelector('.adhoc-act')||{}).value||'';
+      var rmk = (el.querySelector('.remark-in')||{}).value||'';
+      var rmkOn = (el.querySelector('.remark-chk')||{}).checked||false;
+      tasks.push({ desc: desc, act: act, stat: stat, rmk: rmk, rmkOn: rmkOn });
+    });
+    draft.push({ type: 'project', name: pName, tasks: tasks });
+  });
+  
+  document.querySelectorAll('.pg:not([id^="epg_new_"])').forEach(function(pg) {
+    var pgId = pg.id;
+    var tasks = [];
+    pg.querySelectorAll('.trow[data-adhocid]').forEach(function(el) {
+      if(!el.dataset.adhocid.startsWith('pad')) return; 
+      var stat = (el.querySelector('.tsel')||{}).value||'Pending';
+      var desc = (el.querySelector('.adhoc-d')||{}).value||'';
+      var act = (el.querySelector('.adhoc-act')||{}).value||'';
+      var rmk = (el.querySelector('.remark-in')||{}).value||'';
+      var rmkOn = (el.querySelector('.remark-chk')||{}).checked||false;
+      tasks.push({ desc: desc, act: act, stat: stat, rmk: rmk, rmkOn: rmkOn });
+    });
+    if(tasks.length > 0) {
+      draft.push({ type: 'existing_project', pgId: pgId, tasks: tasks });
+    }
+  });
+
+  localStorage.setItem('st_eod_draft', JSON.stringify(draft));
+}
+
 function loadMorningDraft() {
   if(!document.getElementById('btn-ci')) return;
   try {
@@ -4080,11 +4224,85 @@ function loadMorningDraft() {
     });
   } catch(e){}
 }
+
+function loadEodDraft() {
+  if(!document.getElementById('btn-eod')) return;
+  try {
+    var str = localStorage.getItem('st_eod_draft');
+    if(!str) return;
+    var draft = JSON.parse(str);
+    if(draft.length === 0) return;
+    draft.forEach(function(d) {
+       if (d.type === 'standalone') {
+          addAdhoc();
+          var ns = document.querySelectorAll('.stask'); var last = ns[ns.length-1];
+          if(last) {
+             if(d.head) last.querySelector('.adhoc-head').value = d.head;
+             if(d.desc) { last.querySelector('.adhoc-d').value = d.desc; autoResizeTextarea(last.querySelector('.adhoc-d')); }
+             if(d.act) last.querySelector('.adhoc-act').value = d.act;
+             if(d.stat) { last.querySelector('.tsel').value = d.stat; onSel(last.querySelector('.tsel')); }
+             if(d.rmkOn) { 
+                var chk = last.querySelector('.remark-chk'); 
+                if(chk) { chk.checked = true; toggleRemark(chk); }
+                var rmkIn = last.querySelector('.remark-in');
+                if(rmkIn) rmkIn.value = d.rmk || '';
+             }
+          }
+       } else if (d.type === 'project') {
+          addEodProject();
+          var pgList = document.querySelectorAll('.pg[id^="epg_new_"]'); var pg = pgList[pgList.length-1];
+          if(pg) {
+             if(d.name) pg.querySelector('.npg-ni').value = d.name;
+             var gid = pg.id;
+             pg.querySelectorAll('.trow[data-adhocid]').forEach(function(r) { r.remove(); }); 
+             d.tasks.forEach(function(t) {
+                addAdhocToProj(gid, '');
+                var pgRows = pg.querySelectorAll('.trow[data-adhocid]'); var lastRow = pgRows[pgRows.length-1];
+                if(lastRow) {
+                   if(t.desc) { lastRow.querySelector('.adhoc-d').value = t.desc; autoResizeTextarea(lastRow.querySelector('.adhoc-d')); }
+                   if(t.act) lastRow.querySelector('.adhoc-act').value = t.act;
+                   if(t.stat) { lastRow.querySelector('.tsel').value = t.stat; onSel(lastRow.querySelector('.tsel')); }
+                   if(t.rmkOn) { 
+                      var chk = lastRow.querySelector('.remark-chk'); 
+                      if(chk) { chk.checked = true; toggleRemark(chk); }
+                      var rmkIn = lastRow.querySelector('.remark-in');
+                      if(rmkIn) rmkIn.value = t.rmk || '';
+                   }
+                }
+             });
+          }
+       } else if (d.type === 'existing_project') {
+          var pg = document.getElementById(d.pgId);
+          if (pg) {
+             d.tasks.forEach(function(t) {
+                addAdhocToProj(d.pgId, '');
+                var pgRows = pg.querySelectorAll('.trow[data-adhocid]'); var lastRow = pgRows[pgRows.length-1];
+                if(lastRow) {
+                   if(t.desc) { lastRow.querySelector('.adhoc-d').value = t.desc; autoResizeTextarea(lastRow.querySelector('.adhoc-d')); }
+                   if(t.act) lastRow.querySelector('.adhoc-act').value = t.act;
+                   if(t.stat) { lastRow.querySelector('.tsel').value = t.stat; onSel(lastRow.querySelector('.tsel')); }
+                   if(t.rmkOn) { 
+                      var chk = lastRow.querySelector('.remark-chk'); 
+                      if(chk) { chk.checked = true; toggleRemark(chk); }
+                      var rmkIn = lastRow.querySelector('.remark-in');
+                      if(rmkIn) rmkIn.value = t.rmk || '';
+                   }
+                }
+             });
+          }
+       }
+    });
+  } catch(e){}
+}
+
 document.addEventListener('input', function(e) {
-  if(!document.getElementById('btn-ci')) return;
   var t = e.target;
-  if(t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') { saveMorningDraft(); }
+  if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') {
+    if(document.getElementById('btn-ci')) saveMorningDraft();
+    if(document.getElementById('btn-eod')) saveEodDraft();
+  }
 });
 loadMorningDraft();
+loadEodDraft();
 </script>
 {% endblock %}

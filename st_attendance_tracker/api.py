@@ -25,6 +25,7 @@ Fixes:
 import frappe
 import datetime
 import html
+from html import escape as html_escape
 import json
 from frappe.utils import today, now_datetime, getdate, add_days, get_datetime
 
@@ -207,11 +208,18 @@ def _parse_time_to_hours(s):
             h = float(parts[0].strip())
         except ValueError:
             pass
-        s = parts[1]
+        s = parts[1].strip()
     if 'm' in s:
         parts = s.split('m')
         try:
             m = float(parts[0].strip())
+        except ValueError:
+            pass
+    elif s:
+        # No 'm' suffix but leftover text after the 'h' split
+        # (e.g. "1h30") — treat it as bare minutes instead of dropping it.
+        try:
+            m = float(s)
         except ValueError:
             pass
 
@@ -705,7 +713,7 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
 
         html = f"""
         <div style="{EMAIL_WRAPPER_STYLE}">
-          <div style="{EMAIL_HEADING_STYLE}">{subject}</div>
+          <div style="{EMAIL_HEADING_STYLE}">{html_escape(subject)}</div>
           {detail_table_html}
           <div style="{EMAIL_SUBHEADING_STYLE}">{task_label}</div>
           <div>
@@ -937,13 +945,6 @@ def _calc_net_hours(login_time, logout_time, lunch_from, lunch_to, date_str):
     '9:30:' (trailing colon) — an unparseable string that silently raised
     an exception and caused net_hours to be stored as ''.
     """
-    # Diagnostic log — captures raw inputs so any future discrepancy
-    # can be confirmed in Frappe Error Log (filter title "ST NetHours Debug")
-    frappe.log_error(
-        f"raw inputs → login={login_time!r}({type(login_time).__name__}) "
-        f"logout={logout_time!r} lunch={lunch_from!r}-{lunch_to!r} date={date_str}",
-        "ST NetHours Debug"
-    )
     try:
         login_hm  = _to_hhmm(login_time)
         logout_hm = _to_hhmm(logout_time)
@@ -1015,11 +1016,6 @@ def _calc_net_hours(login_time, logout_time, lunch_from, lunch_to, date_str):
             return ""
 
         result = f"{net // 60}h {net % 60}m"
-        frappe.log_error(
-            f"result → login={login_hm} logout={logout_hm} "
-            f"total={total_mins} lunch={lunch_mins} net={net} → {result}",
-            "ST NetHours Debug"
-        )
         return result
     except Exception as e:
         frappe.log_error(
@@ -1541,6 +1537,11 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     log.flags.ignore_permissions = True
     log.submit()
 
+    # DailyTaskLog.validate() recalculates and overwrites net_hours on its own
+    # (see daily_task_log.py _calculate_net_hours) — re-sync the local variable
+    # so the response + notification emails below match what was actually saved.
+    net_hours = log.net_hours or net_hours
+
     _make_checkin(employee.name, "OUT", logout_time)
     pending_count = _rollover_pending_tasks(employee.name, date)
     frappe.db.commit()
@@ -1751,11 +1752,7 @@ def get_employee_task_detail(employee_name, date=None):
     """Full task detail for one employee. HR Manager or their Team Leader."""
     if not ("HR Manager" in frappe.get_roles(frappe.session.user)):
         current_emp = _get_employee()
-        reports_to_me = frappe.db.exists("Employee", {
-            "name": employee_name,
-            "reports_to": current_emp.name,
-        })
-        if not reports_to_me:
+        if employee_name not in _get_team_members(current_emp.name):
             frappe.throw("Access denied.", frappe.PermissionError)
 
     date = date or today()
