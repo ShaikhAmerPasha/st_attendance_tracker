@@ -6,6 +6,7 @@
  "field_order": [
   "section_thresholds",
   "late_checkin_threshold",
+  "standard_workday_hours",
   "section_hybrid",
   "hybrid_office_days",
   "hybrid_days_note",
@@ -27,6 +28,13 @@
    "fieldname": "late_checkin_threshold",
    "fieldtype": "Time",
    "label": "Late Check-In Threshold"
+  },
+  {
+   "default": "8",
+   "description": "Employees who net more than this many hours in a day are flagged OT on the management dashboard leaderboard",
+   "fieldname": "standard_workday_hours",
+   "fieldtype": "Float",
+   "label": "Standard Workday Hours"
   },
   {
    "fieldname": "section_hybrid",

@@ -1,6 +1,7 @@
 import frappe
 from frappe.model.document import Document
 from frappe.utils import now_datetime, get_datetime, time_diff_in_hours
+from st_attendance_tracker.time_utils import resolve_zero_diff_minutes
 
 
 class DailyTaskLog(Document):
@@ -40,6 +41,12 @@ class DailyTaskLog(Document):
             self._calculate_net_hours()
             self._calculate_working_hours()
             self.db_update()
+
+    def on_trash(self):
+        # validate() is never called on delete — without this, the ownership
+        # guard above is silently bypassed for the one action (delete) the
+        # doctype's own permissions actually allow employees to do.
+        self._check_ownership()
 
     def _check_ownership(self):
         """Block logging attendance for another employee (BOLA guard)."""
@@ -163,11 +170,7 @@ class DailyTaskLog(Document):
             if total_mins < 0:
                 total_mins += 24 * 60
             elif total_mins == 0:
-                from frappe.utils import today
-                if today() == str(self.date):
-                    total_mins = 0
-                else:
-                    total_mins = 24 * 60 # 24-hour workday
+                total_mins = resolve_zero_diff_minutes(self.date)
 
             lunch_mins = 0
             if self.lunch_from and self.lunch_to:
@@ -185,7 +188,12 @@ class DailyTaskLog(Document):
             mins  = net_mins % 60
             self.net_hours = f"{hours}h {mins}m"
         except Exception:
-            pass
+            frappe.log_error(frappe.get_traceback(), "ST Attendance Tracker — net hours calculation failed")
+            frappe.msgprint(
+                "Could not calculate your net working hours automatically. "
+                "Your checkout has still been recorded — please contact HR to verify your hours.",
+                indicator="orange", alert=True,
+            )
 
     def _calculate_working_hours(self):
         if self.log_type != "End of Day":

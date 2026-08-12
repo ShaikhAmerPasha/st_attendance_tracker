@@ -201,7 +201,7 @@ body {
 /* ── LAYOUT GRID ── */
 .cols {
   display: grid;
-  grid-template-columns: 240px 1fr 320px;
+  grid-template-columns: 240px minmax(0, 1fr) 320px;
   gap: 32px;
   max-width: 1600px;
   margin: 0 auto;
@@ -1765,7 +1765,7 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
   border-radius: var(--radius-lg);
   padding: 24px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   text-align: left;
   margin-bottom: 32px;
@@ -2228,7 +2228,7 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
 /* ── RESPONSIVE MEDIA QUERIES ── */
 @media(max-width: 1200px) {
   .cols {
-    grid-template-columns: 200px 1fr;
+    grid-template-columns: 200px minmax(0, 1fr);
     gap: 24px;
   }
   .rp {
@@ -2712,7 +2712,7 @@ body > .container { padding-top: 0 !important; }
     <div class="done-s">Your work is logged. Pending tasks moved to the next working day.</div>
     {% set dt = tasks|selectattr("status","equalto","Done")|list %}
     {% set pt = tasks|selectattr("status","in",["Pending","In Progress","Rolled Over"])|list %}
-    <div class="done-grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="done-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
       <div><div class="dg-l">Tasks completed</div><div class="dg-v g">{{ dt|length }} / {{ tasks|length }}</div></div>
       <div><div class="dg-l">Carried forward</div><div class="dg-v">{{ pt|length }}</div></div>
       <div><div class="dg-l">Working Hours</div><div class="dg-v" style="color:var(--primary)">{{ working_hours }}</div></div>
@@ -2801,7 +2801,7 @@ body > .container { padding-top: 0 !important; }
         <div class="stask-main">
           <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
           <div class="tdesc-wrap">
-            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description }}</textarea>
+            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description|e }}</textarea>
           </div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
@@ -2809,11 +2809,11 @@ body > .container { padding-top: 0 !important; }
           <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed - Task is finished</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress - Task is ongoing</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending - Task not started</option></select>
           <span class="ttag ttag-c" title="A fresh copy of this task appears automatically every day">Recurs daily</span>
           <div class="tmeta-fields">
-            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
-            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
           <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>
-          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark...">{{ task.remarks or '' }}</textarea>
+          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark...">{{ (task.remarks or '')|e }}</textarea>
         </div>
       </div>
       {% endfor %}
@@ -2824,7 +2824,7 @@ body > .container { padding-top: 0 !important; }
   <div class="pg" id="epg{{ loop.index }}">
     <div class="pg-head" onclick="togglePG('epg{{ loop.index }}')">
       <div class="pg-ico {{ pico[loop.index0 % 6] }}"><i class="ti ti-folder" aria-hidden="true"></i></div>
-      <span class="pg-name">{{ pname }}</span>
+      <span class="pg-name">{{ pname|e }}</span>
       <span class="pg-meta">{{ ptasks|length }} task{% if ptasks|length != 1 %}s{% endif %} &nbsp;·&nbsp; {{ ptasks|selectattr("status","equalto","Done")|list|length }} completed</span>
       <i class="ti ti-chevron-down pg-chev" aria-hidden="true"></i>
     </div>
@@ -2834,24 +2834,24 @@ body > .container { padding-top: 0 !important; }
         <div class="trow-main">
           <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
           <div class="tdesc-wrap">
-            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description }}</textarea>
+            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description|e }}</textarea>
             {% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}
           </div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="trow-meta">
           <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed - Task is finished</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress - Task is ongoing</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending - Task not started</option></select>
-          <label class="carry-fwd-label"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward to tomorrow</label>
+          <label class="carry-fwd-label" title="Uncheck 'Carry forward' on a task to drop it instead of carrying it to tomorrow"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward to tomorrow</label>
           <div class="tmeta-fields">
-            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
-            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
           <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>
-          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark...">{{ task.remarks or '' }}</textarea>
+          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark...">{{ (task.remarks or '')|e }}</textarea>
         </div>
       </div>
       {% endfor %}
-      <div class="pg-add" onclick="addAdhocToProj('epg{{ loop.index }}','{{ pname }}')" style="color:#7c3aed;background:#faf5ff;border-top:1px dashed #e9d5ff">
+      <div class="pg-add" data-pgid="epg{{ loop.index }}" data-pname="{{ pname|e }}" onclick="addAdhocToProj(this.dataset.pgid,this.dataset.pname)" style="color:#7c3aed;background:#faf5ff;border-top:1px dashed #e9d5ff">
         <i class="ti ti-zap" aria-hidden="true"></i>Add additional task to this project
       </div>
     </div>
@@ -2866,20 +2866,20 @@ body > .container { padding-top: 0 !important; }
         <div class="stask-main">
           <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
           <div class="tdesc-wrap">
-            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description }}</textarea>
+            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description|e }}</textarea>
             {% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}
           </div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="stask-meta">
           <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed - Task is finished</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress - Task is ongoing</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending - Task not started</option></select>
-          <label class="carry-fwd-label"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward to tomorrow</label>
+          <label class="carry-fwd-label" title="Uncheck 'Carry forward' on a task to drop it instead of carrying it to tomorrow"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward to tomorrow</label>
           <div class="tmeta-fields">
-            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
-            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ task.actual_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
           <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>
-          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark...">{{ task.remarks or '' }}</textarea>
+          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark...">{{ (task.remarks or '')|e }}</textarea>
         </div>
       </div>
       {% endfor %}
@@ -2892,7 +2892,7 @@ body > .container { padding-top: 0 !important; }
 <footer class="app-footer">
   <button class="fbtn dk" id="btn-eod" onclick="submitEOD()"><i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit</button>
   <button class="fbtn gh" id="btn-reset-ci" onclick="resetCheckin()" style="background:#fff5f5;color:#dc2626;border:1px solid #fecaca"><i class="ti ti-rotate-clockwise" aria-hidden="true"></i>Reset check-in</button>
-  <span class="fhint" style="margin-left:auto">Uncheck "Carry forward" on a task to drop it instead of carrying it to tomorrow</span>
+
 </footer>
 {% else %}
 <div class="body">
@@ -2944,14 +2944,14 @@ body > .container { padding-top: 0 !important; }
         <div class="stask-main">
           <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-refresh" style="font-size:13px;color:#6366f1" aria-hidden="true"></i></div>
           <div class="tdesc-wrap">
-            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Recurs daily</span></div>
+            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description|e }}</textarea><div class="ttags"><span class="ttag ttag-c">Recurs daily</span></div>
           </div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="stask-meta">
           <span style="font-size:12px;color:#9ca3af">Recurring</span>
           <div class="tmeta-fields">
-            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
         </div>
       </div>
@@ -2965,26 +2965,26 @@ body > .container { padding-top: 0 !important; }
   <div class="pg npg" id="cpg{{ loop.index }}" data-pgid="cpg{{ loop.index }}">
     <div class="pg-head" onclick="togglePG('cpg{{ loop.index }}')">
       <div class="pg-ico pi{{ loop.index0 % 6 }}"><i class="ti ti-folder" aria-hidden="true"></i></div>
-      <span class="pg-name">{{ pname }}</span>
+      <span class="pg-name">{{ pname|e }}</span>
       <span class="pg-meta">{{ ptasks|length }} task{% if ptasks|length != 1 %}s{% endif %}</span>
-      <span class="npg-rm" onclick="event.stopPropagation();delCarriedProject('{{ pname|replace("'", "\\'") }}', 'cpg{{ loop.index }}', this)" title="Delete project and tasks"><i class="ti ti-x" aria-hidden="true"></i></span>
+      <span class="npg-rm" data-pgid="cpg{{ loop.index }}" data-pname="{{ pname|e }}" onclick="event.stopPropagation();delCarriedProject(this.dataset.pname,this.dataset.pgid,this)" title="Delete project and tasks"><i class="ti ti-x" aria-hidden="true"></i></span>
       <i class="ti ti-chevron-down pg-chev" aria-hidden="true"></i>
     </div>
-    <input type="hidden" data-pname="cpg{{ loop.index }}" value="{{ pname }}">
+    <input type="hidden" data-pname="cpg{{ loop.index }}" value="{{ pname|e }}">
     <div class="pg-body" data-tc="cpg{{ loop.index }}">
       {% for task in ptasks %}
       <div class="trow" data-id="{{ task.name }}">
         <div class="trow-main">
           <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
           <div class="tdesc-wrap">
-            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>
+            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description|e }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>
           </div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="trow-meta">
-          <span style="font-size:12px;color:#9ca3af">{{ pname }}</span>
+          <span style="font-size:12px;color:#9ca3af">{{ pname|e }}</span>
           <div class="tmeta-fields">
-            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
         </div>
       </div>
@@ -3004,14 +3004,14 @@ body > .container { padding-top: 0 !important; }
         <div class="stask-main">
           <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
           <div class="tdesc-wrap">
-            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>
+            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description|e }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>
           </div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="stask-meta">
           <span style="font-size:12px;color:#9ca3af">Standalone</span>
           <div class="tmeta-fields">
-            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ task.estimated_time_display or '' }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
         </div>
       </div>
@@ -3058,7 +3058,7 @@ body > .container { padding-top: 0 !important; }
     {% set pdone = ptasks|selectattr("status","equalto","Done")|list|length %}
     {% set ppct = (pdone/ptasks|length*100)|int if ptasks|length > 0 else 0 %}
     <div class="pi">
-      <div class="pi-row"><span class="pi-lbl">{{ pname }}</span><span class="pi-val" id="pi-val-{{ loop.index }}">{{ pdone }}/{{ ptasks|length }}</span></div>
+      <div class="pi-row"><span class="pi-lbl">{{ pname|e }}</span><span class="pi-val" id="pi-val-{{ loop.index }}">{{ pdone }}/{{ ptasks|length }}</span></div>
       <div class="pi-trk"><div class="pi-fill" id="pi-fill-{{ loop.index }}" style="width:{{ ppct }}%;background:{{ pclr[loop.index0 % 6] }}"></div></div>
     </div>
     {% endfor %}
@@ -3094,6 +3094,7 @@ body > .container { padding-top: 0 !important; }
 <script>
 var LOGIN_TIME = "{{ login_time or current_time }}";
 var LOG_DATE = "{{ date }}";
+var TODAY_DATE = "{{ actual_today }}"; // server's current calendar date, independent of LOG_DATE (which can be backdated for a late checkout)
 var IS_HALF_DAY = {{ 'true' if is_half_day_leave else 'false' }};
 var CARRIED = {{ carried_count }};
 var SHIFT_END_TIME = "{{ shift_info.end_time if shift_info else '' }}";
@@ -3109,6 +3110,7 @@ try {
   WLC = {value:'Office',readonly:false,options:['Office','WFH'],validate:true,note:'Select work location.'};
 }
 var SEL_WL = WLC.value || 'Office';
+function esc(s) { if (s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function wlLabel(o) {
   if (o === 'WFH' && WLC.hybrid_routine_day) return 'Hybrid (WFH)';
   return o;
@@ -3286,12 +3288,28 @@ updateClockAndLogoutTime();
 setInterval(updateClockAndLogoutTime, 5000);
 
 function parseTimeToHoursJs(s) {
+  // Mirrors time_utils.parse_duration_to_hours (Python) so the sticky
+  // progress bar shows the same value the server will end up persisting.
   if (!s) return 0;
   s = String(s).trim().toLowerCase();
+  if (!s) return 0;
+
+  if (s.indexOf(':') !== -1 && s.indexOf('h') === -1 && s.indexOf('m') === -1) {
+    var cparts = s.split(':');
+    var ch = parseFloat(cparts[0]);
+    var cm = cparts[1] ? parseFloat(cparts[1]) : 0;
+    if (!isNaN(ch)) {
+      var ctotal = ch + (isNaN(cm) ? 0 : cm) / 60;
+      return ctotal >= 0 ? ctotal : 0;
+    }
+  }
+
   var num = parseFloat(s);
   if (!isNaN(num) && String(num) === s) {
-    return num;
+    // Bare number with no unit is minutes, not hours.
+    return num >= 0 ? num / 60 : 0;
   }
+
   s = s.replace(/hours|hour|hrs|hr/g, 'h');
   s = s.replace(/minutes|minute|mins|min/g, 'm');
   var h = 0;
@@ -3312,11 +3330,8 @@ function parseTimeToHoursJs(s) {
     var val = parseFloat(s);
     if (!isNaN(val)) m = val;
   }
-  if (h === 0 && m === 0) {
-    var val = parseFloat(s);
-    if (!isNaN(val)) return val;
-  }
-  return h + (m / 60);
+  var total = h + (m / 60);
+  return total >= 0 ? total : 0;
 }
 
 function formatMinsToHoursMins(totalMins) {
@@ -3355,15 +3370,9 @@ function recalc(){
     if (diff < 0) {
       diff += 24 * 60; // handle midnight wrap
     } else if (diff === 0) {
-      var todayLocalObj = new Date();
-      var curDate = todayLocalObj.getFullYear() + '-' + 
-                    String(todayLocalObj.getMonth() + 1).padStart(2, '0') + '-' + 
-                    String(todayLocalObj.getDate()).padStart(2, '0');
-      if (curDate === LOG_DATE) {
-        diff = 0;
-      } else {
-        diff = 24 * 60;
-      }
+      // Use the server's current date, not the client's clock, to avoid a
+      // client/server timezone mismatch flipping this the wrong way.
+      diff = (TODAY_DATE === LOG_DATE) ? 0 : 24 * 60;
     }
 
     var lunchMin = 0;
@@ -3622,7 +3631,7 @@ function addT() {
   tkC++; var tid='st'+tkC;
   var d=document.createElement('div'); d.className='ns'; d.dataset.stid=tid;
   d.innerHTML='<div style="flex:1;display:flex;flex-direction:column;gap:8px;">'+
-    '<input class="ns-head" data-tid="'+tid+'" placeholder="Project / Header..." style="border:none;border-bottom:1px solid #e2e8f0;border-radius:0;padding:4px 0;font-size:14px;font-weight:600;font-family:inherit;width:100%;background:transparent;outline:none">'+
+    '<input class="ns-head" data-tid="'+tid+'" placeholder="Task Name / Project..." style="border:none;border-bottom:1px solid #e2e8f0;border-radius:0;padding:4px 0;font-size:14px;font-weight:600;font-family:inherit;width:100%;background:transparent;outline:none">'+
     '<textarea class="ns-ti ns-desc" data-tid="'+tid+'" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit;width:100%"></textarea></div>'+
     '<input class="ns-ei" data-tid="'+tid+'" placeholder="e.g. 1h 30m, 45m">'+
     '<span class="ns-rm" onclick="this.closest(\'.ns\').remove();updCounts()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';
@@ -3695,8 +3704,8 @@ function addAdhoc(){
   d.innerHTML='<div class="stask-main">'+
     '<div class="tck" onclick="toggleCheck(this,\''+id+'\')"></div>'+
     '<div class="tdesc-wrap">'+
-    '<input class="adhoc-head" placeholder="Project / Header..." style="border:none;border-bottom:1px solid #e2e8f0;border-radius:0;padding:4px 0;margin-bottom:8px;font-size:14px;font-weight:600;font-family:inherit;width:100%;background:transparent;outline:none">'+
-    '<textarea class="tdesc tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="Additional task..." style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea><div class="ttags"><span class="ttag ttag-a">Additional</span></div></div>'+
+    '<input class="adhoc-head" placeholder="Task Name / Project..." style="border:none;border-bottom:1px solid #e2e8f0;border-radius:0;padding:4px 0;margin-bottom:8px;font-size:14px;font-weight:600;font-family:inherit;width:100%;background:transparent;outline:none">'+
+    '<textarea class="tdesc tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="Task description..." style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea><div class="ttags"><span class="ttag ttag-a">Additional</span></div></div>'+
     '<div class="trm adhoc-rm" onclick="this.closest(\'.stask\').remove(); updProg();" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
     '</div>'+
     '<div class="stask-meta">'+
@@ -3724,8 +3733,9 @@ function addAdhocToProj(pgId, projName) {
   row.dataset.adhocid = id;
   row.dataset.projName = projName || '';
   
-  var placeholder = projName ? 'Additional task for ' + projName + '...' : 'Additional task description...';
-  var tagHtml = projName ? '<span class="ttag" style="background:#ede9fe;color:#7c3aed">' + projName + '</span>' : '';
+  var safeProjName = esc(projName);
+  var placeholder = projName ? 'Additional task for ' + safeProjName + '...' : 'Additional task description...';
+  var tagHtml = projName ? '<span class="ttag" style="background:#ede9fe;color:#7c3aed">' + safeProjName + '</span>' : '';
   
   row.innerHTML =
     '<div class="trow-main">'+
@@ -3856,6 +3866,7 @@ async function submitEOD(){
   try{
     var r=await frappe.call({method:'st_attendance_tracker.api.submit_eod_log',args:{lunch_from:lfv,lunch_to:ltv,logout_time:logout,task_updates:JSON.stringify(tu),adhoc_tasks:JSON.stringify(at)}});
     if(r.message&&r.message.success){
+      localStorage.removeItem('st_eod_draft');
       var p=r.message.pending_count, msg='Checked out at '+r.message.logout_time;
       if(p>0) msg+=' · '+p+' task'+(p>1?'s':'')+' carried to tomorrow';
       toast(msg,'ok',2000); setTimeout(function(){ window.location.href=window.location.href.split('?')[0]; },1800);
@@ -3876,7 +3887,7 @@ frappe.call({method:'st_attendance_tracker.api.get_team_dashboard',callback:func
   list.innerHTML=emps.slice(0,5).map(function(e){
     var done=e.done_tasks||0,tot=e.total_tasks||0,pct=tot>0?Math.round(done/tot*100):0;
     return '<div class="tm-row"><div class="tm-av '+av(e.employee_name)+'">'+ini(e.employee_name)+'</div>'+
-      '<div style="flex:1;min-width:0"><div class="tm-name">'+e.employee_name+'</div>'+
+      '<div style="flex:1;min-width:0"><div class="tm-name">'+esc(e.employee_name)+'</div>'+
       (tot>0?'<div class="tm-p"><div class="tmp-t"><div class="tmp-f" style="width:'+pct+'%"></div></div><span class="tmp-l">'+done+'/'+tot+'</span></div>':'<div style="font-size:11px;color:#9ca3af">No tasks</div>')+
       '</div><span class="tm-b '+(bm[e.status]||'tmb-lv')+'">'+(lm[e.status]||'—')+'</span></div>';
   }).join('');
@@ -3982,19 +3993,8 @@ document.addEventListener('input', function(e) {
   )) {
     autoResizeTextarea(e.target);
   }
-  if (e.target.classList.contains('act-in') || e.target.classList.contains('adhoc-act')) {
-    recalc();
-    if (e.target.value.trim() !== '') {
-      var row = e.target.closest('.trow, .stask');
-      if (row) {
-        var sel = row.querySelector('.tsel');
-        if (sel && sel.value === 'Pending') {
-          sel.value = 'In Progress';
-          if (typeof onSel === 'function') onSel(sel);
-        }
-      }
-    }
-  }
+  // recalc() + Pending->In Progress auto-promotion for .act-in/.adhoc-act
+  // is handled by the single input listener defined earlier (see recalc()).
 });
 async function resetCheckin() {
   if (!confirm("Are you sure you want to reset today's check-in? This will delete today's check-in log and newly added morning tasks, restoring your state back to before check-in.")) return;
@@ -4040,6 +4040,97 @@ window.addEventListener('load', initTextareaResizer);
 setTimeout(initTextareaResizer, 100);
 setTimeout(initTextareaResizer, 500);
 setTimeout(initTextareaResizer, 1500);
+
+/* --- PASTE MULTIPLE TASKS ---
+   Pasting 2+ lines into a task description field splits them into one
+   row per line instead of one multi-line description. A trailing
+   "- 1h 30m" style suffix on a line is lifted into the estimate/actual
+   time field. Single-line paste behaves exactly as before. */
+function _stSplitPastedTasks(text) {
+  return text.split(/\r\n|\r|\n/)
+    .map(function(line) { return line.replace(/^[-*•]\s+|^\d+[.)]\s+/, '').trim(); })
+    .filter(function(line) { return line.length > 0; })
+    .map(_stExtractLineDuration);
+}
+function _stExtractLineDuration(line) {
+  var m = line.match(/^(.*?)\s*[-–—:]\s*([0-9][0-9a-zA-Z .]*)$/);
+  if (m && _stLooksLikeDuration(m[2])) {
+    return { description: m[1].trim(), estimated_time: m[2].trim() };
+  }
+  return { description: line, estimated_time: '' };
+}
+function _stLooksLikeDuration(s) {
+  return /\d/.test(s) && /^\d+(\.\d+)?\s*(h|hr|hrs|hour|hours)?\s*\d*\s*(m|min|mins|minute|minutes)?$/i.test(s.trim());
+}
+function _stLastRowIn(container, selector) {
+  if (!container) return null;
+  var rows = container.querySelectorAll(selector);
+  return rows.length ? rows[rows.length - 1] : null;
+}
+function _stFillRow(row, descSelector, estSelector, entry) {
+  if (!row) return;
+  var descEl = row.querySelector(descSelector);
+  if (descEl) { descEl.value = entry.description; autoResizeTextarea(descEl); }
+  if (entry.estimated_time) {
+    var estEl = row.querySelector(estSelector);
+    if (estEl) estEl.value = entry.estimated_time;
+  }
+}
+function _stApplyPastedTasks(entries, kind, ctx) {
+  entries.forEach(function(entry) {
+    var row;
+    if (kind === 'npg') {
+      addTaskToPG(ctx.gid);
+      row = _stLastRowIn(ctx.pgEl.querySelector('.npg-body'), '.npg-row');
+      _stFillRow(row, '.npg-desc', '.npg-ei', entry);
+    } else if (kind === 'ns') {
+      addT();
+      row = _stLastRowIn(document.getElementById('new-area'), '.ns');
+      _stFillRow(row, '.ns-desc', '.ns-ei', entry);
+    } else if (kind === 'adhoc') {
+      addAdhoc();
+      row = _stLastRowIn(document.getElementById('adhoc-area'), '.stask');
+      _stFillRow(row, '.adhoc-d', '.adhoc-act', entry);
+    } else if (kind === 'adhoc-proj') {
+      addAdhocToProj(ctx.pgId, ctx.projName);
+      row = _stLastRowIn(ctx.pgEl.querySelector('.pg-body'), '.trow');
+      _stFillRow(row, '.adhoc-d', '.adhoc-act', entry);
+    }
+  });
+}
+function _stHandlePaste(e) {
+  var t = e.target, kind, ctx = {};
+  if (t.classList.contains('npg-desc')) {
+    kind = 'npg'; ctx.pgEl = t.closest('.npg'); ctx.gid = ctx.pgEl.dataset.pgid;
+  } else if (t.classList.contains('ns-desc')) {
+    kind = 'ns';
+  } else if (t.classList.contains('adhoc-d')) {
+    var pgEl = t.closest('.pg'), row = t.closest('[data-adhocid]');
+    if (pgEl && row) {
+      kind = 'adhoc-proj'; ctx = { pgEl: pgEl, pgId: pgEl.id, projName: row.dataset.projName || '' };
+    } else {
+      kind = 'adhoc';
+    }
+  } else {
+    return;
+  }
+
+  var text = (e.clipboardData || window.clipboardData).getData('text');
+  var entries = _stSplitPastedTasks(text);
+  if (entries.length < 2) return;
+
+  e.preventDefault();
+  t.value = entries[0].description;
+  autoResizeTextarea(t);
+  _stApplyPastedTasks(entries.slice(1), kind, ctx);
+
+  updCounts();
+  if (typeof updProg === 'function') updProg();
+  if (document.getElementById('btn-ci')) saveMorningDraft();
+  if (document.getElementById('btn-eod')) saveEodDraft();
+  toast('Split into ' + entries.length + ' tasks.', 'ok');
+}
+document.addEventListener('paste', _stHandlePaste, true);
 
 /* --- KEYBOARD SHORTCUTS ---
    Tab in a task field  → add another task line (same context).
@@ -4292,6 +4383,7 @@ function loadEodDraft() {
           }
        }
     });
+    recalc(); // restored rows arrive with their own time values already filled in
   } catch(e){}
 }
 

@@ -220,6 +220,7 @@ def get_context(context):
     context.no_cache = 1
     context.employee = employee
     context.date = date
+    context.actual_today = actual_today
     context.current_time = now_datetime().strftime("%H:%M")
     context.current_time_ampm = _to_ampm(now_datetime().strftime("%H:%M:%S"))
     context.is_checked_in = bool(morning_log)

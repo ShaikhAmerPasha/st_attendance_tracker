@@ -28,6 +28,7 @@ import html
 from html import escape as html_escape
 import json
 from frappe.utils import today, now_datetime, getdate, add_days, get_datetime
+from st_attendance_tracker.time_utils import parse_duration_to_hours, resolve_zero_diff_minutes
 
 
 # ── Employee helper ────────────────────────────────────────────────────────────
@@ -154,7 +155,7 @@ def _make_checkin(employee, log_type, time_value=None):
             if shift:
                 checkin.shift = shift.shift_type.name
         except Exception:
-            pass
+            frappe.log_error(frappe.get_traceback(), "ST Attendance Tracker — checkin shift lookup failed")
 
         checkin.insert(ignore_permissions=True)
         frappe.db.commit()
@@ -186,44 +187,7 @@ def _format_hours(val):
 
 
 def _parse_time_to_hours(s):
-    if not s:
-        return 0.0
-    s = str(s).strip().lower()
-    try:
-        return float(s)
-    except ValueError:
-        pass
-
-    h = 0.0
-    m = 0.0
-
-    for term in ['hours', 'hour', 'hrs', 'hr']:
-        s = s.replace(term, 'h')
-    for term in ['minutes', 'minute', 'mins', 'min', 'm']:
-        s = s.replace(term, 'm')
-
-    if 'h' in s:
-        parts = s.split('h')
-        try:
-            h = float(parts[0].strip())
-        except ValueError:
-            pass
-        s = parts[1].strip()
-    if 'm' in s:
-        parts = s.split('m')
-        try:
-            m = float(parts[0].strip())
-        except ValueError:
-            pass
-    elif s:
-        # No 'm' suffix but leftover text after the 'h' split
-        # (e.g. "1h30") — treat it as bare minutes instead of dropping it.
-        try:
-            m = float(s)
-        except ValueError:
-            pass
-
-    return h + (m / 60.0)
+    return parse_duration_to_hours(s)
 
 
 def _to_hhmm(t):
@@ -765,9 +729,13 @@ def _get_root_task(task_name):
     Walk up the rolled_over_from chain to find the original task.
     Prevents task pending 10 days from being duplicated 10 times.
     """
+    # Bounds the walk against corrupted/cyclic data only — a task carried
+    # forward every working day for 10 years is still far short of this,
+    # so it never silently truncates a legitimate chain.
+    MAX_CHAIN_DEPTH = 3650
     current = task_name
     depth = 0
-    while depth < 365:
+    while depth < MAX_CHAIN_DEPTH:
         parent = frappe.db.get_value("Daily Task", current, "rolled_over_from")
         if not parent:
             return current
@@ -777,6 +745,11 @@ def _get_root_task(task_name):
             return current
         current = parent
         depth += 1
+    frappe.log_error(
+        f"_get_root_task: chain from {task_name} exceeded {MAX_CHAIN_DEPTH} hops, "
+        f"likely a cyclic rolled_over_from reference; stopped at {current}",
+        "ST Attendance Tracker — root task chain overflow"
+    )
     return current
 
 
@@ -855,6 +828,7 @@ def _safety_rollover(employee, today_date):
         "employee": employee,
         "task_date": ["<", today_date],
         "status": ["in", ["Pending", "In Progress"]],
+        "task_type": ["!=", "Recurring"],
     }, fields=["name", "description", "task_type", "origin_date",
                "remarks", "task_date", "estimated_time", "project_name"])
 
@@ -964,11 +938,7 @@ def _calc_net_hours(login_time, logout_time, lunch_from, lunch_to, date_str):
         if total_mins < 0:
             total_mins += 24 * 60
         elif total_mins == 0:
-            # If the calendar date of checkout is the same as the check-in date, consider it 0
-            if today() == str(date_str):
-                total_mins = 0
-            else:
-                total_mins = 24 * 60 # 24-hour workday
+            total_mins = resolve_zero_diff_minutes(date_str)
 
         lunch_mins = 0
         lf_hm = lt_hm = ""
@@ -1045,6 +1015,7 @@ def _get_hybrid_office_days():
                 days.append(day_map[d])
         return days if days else [1, 3]
     except Exception:
+        frappe.log_error(frappe.get_traceback(), "ST Attendance Tracker — hybrid office days lookup failed")
         return [1, 3]
 
 
@@ -1181,7 +1152,7 @@ def get_page_state():
                 "end_time_ampm": _to_ampm(shift_details.shift_type.end_time),
             }
     except Exception:
-        pass
+        frappe.log_error(frappe.get_traceback(), "ST Attendance Tracker — shift lookup failed")
 
     leave_today = None
     try:
@@ -1193,7 +1164,7 @@ def get_page_state():
             "docstatus": 1
         }, "leave_type")
     except Exception:
-        pass
+        frappe.log_error(frappe.get_traceback(), "ST Attendance Tracker — leave lookup failed")
 
     has_reset_today = bool(frappe.db.exists("Daily Task Log", {
         "employee": employee.name,
@@ -1637,7 +1608,7 @@ def get_management_dashboard(date=None):
     date = date or today()
 
     departments = frappe.get_all(
-        "Department", filters={"is_group": 0}, pluck="name"
+        "Department", filters={"is_group": 0}, pluck="name", order_by="name asc"
     )
 
     result = []
@@ -1731,10 +1702,15 @@ def get_management_dashboard(date=None):
     # Sort rankings descending by net minutes
     rankings.sort(key=lambda x: x["net_minutes"], reverse=True)
 
+    standard_workday_hours = frappe.db.get_single_value(
+        "ST Attendance Settings", "standard_workday_hours"
+    ) or 8
+
     return {
         "departments": result,
         "date": date,
         "rankings": rankings,
+        "standard_workday_minutes": int(standard_workday_hours * 60),
         "summary": {
             "total":      len(all_employees),
             "checked_in": len(set(checked_in)),
@@ -2004,12 +1980,15 @@ def reset_morning_checkin():
         "time": ["between", [date + " 00:00:00", date + " 23:59:59"]],
     })
 
-    # 5. Revert ALL tasks back to Pending so they are preserved for re-check-in.
+    # 5. Revert tasks back to Pending so they are preserved for re-check-in.
     #    Previously this deleted planned tasks, causing user work loss.
+    #    'Rolled Over' tasks are excluded: they already have a forward copy on
+    #    a later date (rolled_over_from), so reviving them here would leave two
+    #    live copies of the same task.
     frappe.db.sql("""
         UPDATE `tabDaily Task`
         SET status = 'Pending'
-        WHERE employee = %s AND task_date = %s AND status != 'Pending'
+        WHERE employee = %s AND task_date = %s AND status NOT IN ('Pending', 'Rolled Over')
     """, (employee.name, date))
 
     frappe.db.commit()
@@ -2101,12 +2080,15 @@ def _build_team_data(employees, date):
         tasks   = tasks_by_emp.get(emp.name, [])
         done    = sum(1 for t in tasks if t.status == "Done")
 
-        if emp.name in on_leave:
-            status = "leave"
-        elif eod:
+        # Real attendance data always takes priority over a leave record —
+        # an employee on approved half-day leave who checks in for the other
+        # half must still show their actual check-in/checkout, not "On leave".
+        if eod:
             status = "eod_done"
         elif morning:
             status = "late" if morning.is_late else "checked_in"
+        elif emp.name in on_leave:
+            status = "leave"
         else:
             status = "missing"
 
@@ -2138,7 +2120,7 @@ def _build_team_data(employees, date):
             "total":      len(employees),
             "checked_in": checked_in_count,
             "missing":    sum(1 for e in result_employees if e["status"] == "missing"),
-            "on_leave":   len(on_leave),
+            "on_leave":   sum(1 for e in result_employees if e["status"] == "leave"),
             "late":       sum(1 for e in result_employees if e["status"] == "late"),
             "eod_done":   len(eod_map),
         }

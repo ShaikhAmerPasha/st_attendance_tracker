@@ -1,5 +1,6 @@
 import frappe
 from frappe.model.document import Document
+from st_attendance_tracker.time_utils import parse_duration_to_hours
 
 
 class DailyTask(Document):
@@ -25,44 +26,13 @@ class DailyTask(Document):
         self.actual_time = self._parse_time_to_hours(self.actual_time)
 
     def _parse_time_to_hours(self, s):
-        if not s:
-            return 0.0
-        s = str(s).strip().lower()
-        try:
-            return float(s)
-        except ValueError:
-            pass
+        return parse_duration_to_hours(s)
 
-        h = 0.0
-        m = 0.0
-
-        for term in ['hours', 'hour', 'hrs', 'hr']:
-            s = s.replace(term, 'h')
-        for term in ['minutes', 'minute', 'mins', 'min', 'm']:
-            s = s.replace(term, 'm')
-
-        if 'h' in s:
-            parts = s.split('h')
-            try:
-                h = float(parts[0].strip())
-            except ValueError:
-                pass
-            s = parts[1].strip()
-        if 'm' in s:
-            parts = s.split('m')
-            try:
-                m = float(parts[0].strip())
-            except ValueError:
-                pass
-        elif s:
-            # No 'm' suffix but leftover text after the 'h' split
-            # (e.g. "1h30") — treat it as bare minutes instead of dropping it.
-            try:
-                m = float(s)
-            except ValueError:
-                pass
-
-        return h + (m / 60.0)
+    def on_trash(self):
+        # validate() is never called on delete — without this, the ownership
+        # guard above is silently bypassed for the one action (delete) the
+        # doctype's own permissions actually allow employees to do.
+        self._check_ownership()
 
     def _check_ownership(self):
         """

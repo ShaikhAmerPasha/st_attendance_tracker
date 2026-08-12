@@ -1106,6 +1106,7 @@ body {
 var ALL_DEPTS = [];
 var CUR_FILTER = 'all';
 var SEL_EMP = null;
+var STANDARD_WORKDAY_MINUTES = 480;
 
 function getInitials(n){ var p=(n||'').split(' ').filter(Boolean); return p.length>=2?(p[0][0]+p[1][0]).toUpperCase():n.slice(0,2).toUpperCase(); }
 function getAv(n){ var cls=['av-g','av-b','av-a','av-p','av-r'], s=0; for(var i=0;i<n.length;i++) s+=n.charCodeAt(i); return cls[s%cls.length]; }
@@ -1113,6 +1114,7 @@ function getDot(status){ var m={checked_in:'dot-g',late:'dot-a',missing:'dot-r',
 function getDotLabel(status){ var m={checked_in:'Checked in',late:'Late',missing:'Missing',leave:'On leave',eod_done:'Checkout done'}; return m[status]||status; }
 function getTaskIcon(s){ if(s==='Done') return 'ti-circle-check ico-g'; if(s==='In Progress') return 'ti-circle-half ico-b'; return 'ti-circle ico-a'; }
 function getStag(s){ if(s==='Done') return 'st-dn'; if(s==='In Progress') return 'st-ip'; return 'st-pe'; }
+function isPendingTask(t){ return ['Pending','In Progress','Rolled Over'].indexOf(t.status)!==-1; }
 function esc(s){ if(s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 var DEPT_ICONS = ['ti-code','ti-users','ti-speakerphone','ti-tools','ti-truck','ti-building-factory'];
 
@@ -1153,10 +1155,12 @@ function renderDepts(){
   }).join('');
 }
 
+var SEL_EMP_GEN = 0;
 function selectEmp(cell, empName){
   document.querySelectorAll('.ec').forEach(function(c){ c.classList.remove('sel'); });
   cell.classList.add('sel');
   SEL_EMP = empName;
+  var gen = ++SEL_EMP_GEN;
 
   var panel = document.getElementById('detail-panel');
   panel.innerHTML='<div class="dp-body"><div style="text-align:center;padding:32px;color:#9ca3af;font-size:13px"><i class="ti ti-loader" style="font-size:18px;animation:spin .7s linear infinite" aria-hidden="true"></i></div></div>';
@@ -1164,7 +1168,7 @@ function selectEmp(cell, empName){
   frappe.call({
     method:'st_attendance_tracker.api.get_employee_task_detail',
     args:{ employee_name:empName, date:document.getElementById('sel-date').value },
-    callback:function(r){ if(r.message) renderDetail(r.message); }
+    callback:function(r){ if(gen === SEL_EMP_GEN && r.message) renderDetail(r.message); }
   });
 }
 
@@ -1189,7 +1193,7 @@ function formatTimeHM(t) {
 function renderDetail(data){
   var emp=data.employee||{}, ml=data.morning_log||{}, el=data.eod_log||{}, tasks=data.tasks||[];
   var done=tasks.filter(function(t){ return t.status==='Done'; }).length;
-  var pend=tasks.filter(function(t){ return t.status!=='Done'; }).length;
+  var pend=tasks.filter(isPendingTask).length;
 
   var taskRows='';
   if(!tasks.length) taskRows='<div style="font-size:12px;color:#9ca3af;font-style:italic;padding:8px 0">No tasks recorded for this date.</div>';
@@ -1204,7 +1208,7 @@ function renderDetail(data){
         '<div class="task-desc'+(t.status==='Done'?' dn':'')+'">'+esc(t.description)+'</div>'+
         (pills?'<div class="task-pills">'+pills+'</div>':'')+
       '</div>'+
-      '<span class="stag '+getStag(t.status)+'">'+t.status+'</span>'+
+      '<span class="stag '+getStag(t.status)+'">'+esc(t.status)+'</span>'+
     '</div>';
   }).join('');
 
@@ -1255,8 +1259,8 @@ function renderLeaderboard(rankings){
 
     var hoursStr = r.net_hours;
     var otBadge = '';
-    if(r.net_minutes > 480) {
-      var otMin = r.net_minutes - 480;
+    if(r.net_minutes > STANDARD_WORKDAY_MINUTES) {
+      var otMin = r.net_minutes - STANDARD_WORKDAY_MINUTES;
       var oth = Math.floor(otMin / 60);
       var otm = otMin % 60;
       var otStr = '+' + oth + 'h' + (otm > 0 ? ' ' + otm + 'm' : '') + ' OT';
@@ -1305,14 +1309,27 @@ document.querySelectorAll('.fc').forEach(function(chip){
   });
 });
 
+function resetDetailPanel(){
+  SEL_EMP = null;
+  SEL_EMP_GEN++; // invalidate any in-flight selectEmp() request
+  document.querySelectorAll('.ec.sel').forEach(function(c){ c.classList.remove('sel'); });
+  document.getElementById('detail-panel').innerHTML =
+    '<div class="dp-body"><div class="empty-dp"><i class="ti ti-user-search" aria-hidden="true"></i><p>Click any employee to view their tasks and time details</p></div></div>';
+}
+
+var LOAD_ALL_GEN = 0;
 function loadAll(date){
+  var gen = ++LOAD_ALL_GEN;
+  resetDetailPanel();
   document.getElementById('dept-list').innerHTML='<div id="loading" style="text-align:center;padding:48px;color:#9ca3af;font-size:13px"><i class="ti ti-loader" style="font-size:22px;animation:spin .7s linear infinite" aria-hidden="true"></i><br><br>Loading...</div>';
   frappe.call({
     method:'st_attendance_tracker.api.get_management_dashboard',
     args:{ date: date || document.getElementById('sel-date').value },
     callback:function(r){
+      if(gen !== LOAD_ALL_GEN) return; // a newer request has superseded this one
       if(!r.message) return;
       ALL_DEPTS = r.message.departments||[];
+      if(r.message.standard_workday_minutes) STANDARD_WORKDAY_MINUTES = r.message.standard_workday_minutes;
       updateGlobal(r.message.summary);
       if(r.message.rankings) renderLeaderboard(r.message.rankings);
       renderDepts();

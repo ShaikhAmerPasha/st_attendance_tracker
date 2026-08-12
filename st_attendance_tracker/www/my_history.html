@@ -907,13 +907,22 @@ function toggleDay(card) {
   }
 }
 
+var DAY_DETAIL_CACHE = {};
+var DAY_DETAIL_LOADING = {};
 function loadDayDetail(date) {
   var container = document.getElementById('dd-' + date);
   if (!container) return;
+  if (DAY_DETAIL_CACHE[date] !== undefined) {
+    container.innerHTML = DAY_DETAIL_CACHE[date];
+    return;
+  }
+  if (DAY_DETAIL_LOADING[date]) return;
+  DAY_DETAIL_LOADING[date] = true;
   frappe.call({
     method: 'st_attendance_tracker.api.get_history_day_detail',
     args: { date: date },
     callback: function(r) {
+      DAY_DETAIL_LOADING[date] = false;
       if (!r.message) { container.innerHTML = '<div style="font-size:12px;color:#9ca3af;padding:8px">Could not load details.</div>'; return; }
       var data = r.message;
       var ml = data.morning_log || {};
@@ -943,12 +952,17 @@ function loadDayDetail(date) {
               '<div class="task-desc' + (t.status === 'Done' ? ' dn' : '') + '">' + esc(t.description) + '</div>' +
               (pills ? '<div class="task-pills">' + pills + '</div>' : '') +
             '</div>' +
-            '<span class="stag ' + getStag(t.status) + '">' + t.status + '</span>' +
+            '<span class="stag ' + getStag(t.status) + '">' + esc(t.status) + '</span>' +
           '</div>';
         }).join('');
       }
 
       container.innerHTML = timeHtml + '<div class="tasks-lbl">Tasks (' + tasks.length + ')</div>' + tasksHtml;
+      DAY_DETAIL_CACHE[date] = container.innerHTML;
+    },
+    error: function() {
+      DAY_DETAIL_LOADING[date] = false;
+      container.innerHTML = '<div style="font-size:12px;color:#b91c1c;padding:8px">Could not load details. <a href="#" onclick="loadDayDetail(\'' + date + '\');return false;">Retry</a></div>';
     }
   });
 }
@@ -992,6 +1006,19 @@ function loadHistory(reset) {
 
       var btn = document.getElementById('load-more');
       if (btn) btn.style.display = r.message.has_more ? 'block' : 'none';
+    },
+    error: function() {
+      LOADING = false;
+      var sp = document.getElementById('spinner');
+      if (sp) sp.style.display = 'none';
+      if (reset) {
+        document.getElementById('history-list').innerHTML =
+          '<div class="empty-state"><i class="ti ti-calendar-off" aria-hidden="true"></i><p>Could not load history. <a href="#" onclick="loadHistory(true);return false;">Retry</a></p></div>';
+      } else {
+        PAGE--; // undo the optimistic increment in loadMore() so Retry re-fetches the same page
+        var btn = document.getElementById('load-more');
+        if (btn) { btn.style.display = 'block'; btn.textContent = 'Could not load more — retry'; }
+      }
     }
   });
 }
