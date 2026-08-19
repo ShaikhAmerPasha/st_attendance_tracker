@@ -40,4 +40,5 @@ website_route_rules = [
     {"from_route": "/team-dashboard",       "to_route": "team_dashboard"},
     {"from_route": "/management-dashboard", "to_route": "management_dashboard"},
     {"from_route": "/my-history",           "to_route": "my_history"},
+    {"from_route": "/recurring-tasks",      "to_route": "recurring_tasks"},
 ]

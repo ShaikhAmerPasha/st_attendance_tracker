@@ -2552,6 +2552,42 @@ body {
 .remark-in.hidden {
   display: none !important;
 }
+.attach-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.attach-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.attach-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.attach-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  color: var(--text-main);
+}
+.attach-chip i {
+  cursor: pointer;
+  color: var(--text-muted);
+}
 
 /* Standalone task container and placeholder */
 .standalone-container {
@@ -2616,6 +2652,7 @@ body > .container { padding-top: 0 !important; }
     <div class="sb-lbl">Navigation</div>
     <a href="/daily-checkin" class="sb-link on"><i class="ti ti-check" aria-hidden="true"></i>Today<span class="sb-cnt">{{ total_count }}</span></a>
     <a href="/my-history" class="sb-link"><i class="ti ti-history" aria-hidden="true"></i>My history</a>
+    <a href="/recurring-tasks" class="sb-link"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring{% if recurring_count %}<span class="sb-cnt">{{ recurring_count }}</span>{% endif %}</a>
     {% if is_team_leader %}<a href="/team-dashboard" class="sb-link"><i class="ti ti-users" aria-hidden="true"></i>My team</a>{% endif %}
   </div>
 </aside>
@@ -2812,8 +2849,12 @@ body > .container { padding-top: 0 !important; }
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
             <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
-          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>
-          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark...">{{ (task.remarks or '')|e }}</textarea>
+          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)" {% if task.remarks %}checked{% endif %}>Add remark</label>
+          <textarea class="tinp remark-in {% if not task.remarks %}hidden{% endif %}" data-id="{{ task.name }}" placeholder="Optional remark..." onchange="saveRemarkEdit(this)">{{ (task.remarks or '')|e }}</textarea>
+          <div class="attach-wrap">
+            <label class="attach-btn"><i class="ti ti-paperclip" aria-hidden="true"></i>Attach<input type="file" multiple hidden onchange="uploadTaskFiles(this.files,'{{ task.name }}',this.closest('.attach-wrap').querySelector('.attach-list'));this.value=''"></label>
+            <div class="attach-list" data-id="{{ task.name }}">{% for f in task.attachments %}<span class="attach-chip" data-file="{{ f.name }}">{{ f.file_name|e }}<i class="ti ti-x" aria-hidden="true" onclick="removeTaskAttachment('{{ f.name }}','{{ task.name }}',this.parentElement)"></i></span>{% endfor %}</div>
+          </div>
         </div>
       </div>
       {% endfor %}
@@ -2846,8 +2887,12 @@ body > .container { padding-top: 0 !important; }
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
             <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
-          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>
-          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark...">{{ (task.remarks or '')|e }}</textarea>
+          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)" {% if task.remarks %}checked{% endif %}>Add remark</label>
+          <textarea class="tinp remark-in {% if not task.remarks %}hidden{% endif %}" data-id="{{ task.name }}" placeholder="Optional remark..." onchange="saveRemarkEdit(this)">{{ (task.remarks or '')|e }}</textarea>
+          <div class="attach-wrap">
+            <label class="attach-btn"><i class="ti ti-paperclip" aria-hidden="true"></i>Attach<input type="file" multiple hidden onchange="uploadTaskFiles(this.files,'{{ task.name }}',this.closest('.attach-wrap').querySelector('.attach-list'));this.value=''"></label>
+            <div class="attach-list" data-id="{{ task.name }}">{% for f in task.attachments %}<span class="attach-chip" data-file="{{ f.name }}">{{ f.file_name|e }}<i class="ti ti-x" aria-hidden="true" onclick="removeTaskAttachment('{{ f.name }}','{{ task.name }}',this.parentElement)"></i></span>{% endfor %}</div>
+          </div>
         </div>
       </div>
       {% endfor %}
@@ -2878,8 +2923,12 @@ body > .container { padding-top: 0 !important; }
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
             <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
-          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>
-          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark...">{{ (task.remarks or '')|e }}</textarea>
+          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)" {% if task.remarks %}checked{% endif %}>Add remark</label>
+          <textarea class="tinp remark-in {% if not task.remarks %}hidden{% endif %}" data-id="{{ task.name }}" placeholder="Optional remark..." onchange="saveRemarkEdit(this)">{{ (task.remarks or '')|e }}</textarea>
+          <div class="attach-wrap">
+            <label class="attach-btn"><i class="ti ti-paperclip" aria-hidden="true"></i>Attach<input type="file" multiple hidden onchange="uploadTaskFiles(this.files,'{{ task.name }}',this.closest('.attach-wrap').querySelector('.attach-list'));this.value=''"></label>
+            <div class="attach-list" data-id="{{ task.name }}">{% for f in task.attachments %}<span class="attach-chip" data-file="{{ f.name }}">{{ f.file_name|e }}<i class="ti ti-x" aria-hidden="true" onclick="removeTaskAttachment('{{ f.name }}','{{ task.name }}',this.parentElement)"></i></span>{% endfor %}</div>
+          </div>
         </div>
       </div>
       {% endfor %}
@@ -2891,6 +2940,8 @@ body > .container { padding-top: 0 !important; }
 </div>
 <footer class="app-footer">
   <button class="fbtn dk" id="btn-eod" onclick="submitEOD()"><i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit</button>
+  <button class="fbtn gh" onclick="addEodProject()" title="Add a new project (Shift+P)"><i class="ti ti-folder-plus" aria-hidden="true"></i>Project</button>
+  <button class="fbtn gh" onclick="addAdhoc()" title="Add a task (Shift+T)"><i class="ti ti-plus" aria-hidden="true"></i>Task</button>
   <button class="fbtn gh" id="btn-reset-ci" onclick="resetCheckin()" style="background:#fff5f5;color:#dc2626;border:1px solid #fecaca"><i class="ti ti-rotate-clockwise" aria-hidden="true"></i>Reset check-in</button>
 
 </footer>
@@ -3033,8 +3084,8 @@ body > .container { padding-top: 0 !important; }
 </div>
 <footer class="app-footer">
   <button class="fbtn red" id="btn-ci" onclick="submitMorning()"><i class="ti ti-login" aria-hidden="true"></i>Check in &amp; start day</button>
-  <button class="fbtn gh" onclick="addPG()"><i class="ti ti-folder-plus" aria-hidden="true"></i>Project</button>
-  <button class="fbtn gh" onclick="addT()"><i class="ti ti-plus" aria-hidden="true"></i>Task</button>
+  <button class="fbtn gh" onclick="addPG()" title="Add a new project (Shift+P)"><i class="ti ti-folder-plus" aria-hidden="true"></i>Project</button>
+  <button class="fbtn gh" onclick="addT()" title="Add a task (Shift+T)"><i class="ti ti-plus" aria-hidden="true"></i>Task</button>
   <span class="fhint" id="fhint">{{ carried_count }} carried{% if carried_count == 0 %} — add at least one{% endif %}</span>
 </footer>
 {% endif %}
@@ -3077,6 +3128,7 @@ body > .container { padding-top: 0 !important; }
 <nav class="mob-nav">
   <a href="/daily-checkin" class="mn-it on"><i class="ti ti-check" aria-hidden="true"></i>Today</a>
   <a href="/my-history" class="mn-it"><i class="ti ti-history" aria-hidden="true"></i>History</a>
+  <a href="/recurring-tasks" class="mn-it"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
   {% if is_team_leader %}<a href="/team-dashboard" class="mn-it"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
 </nav>
 <div class="wfh-ov" id="wfh-ov" style="display:none">
@@ -3715,6 +3767,7 @@ function addAdhoc(){
     '</div>'+
     '<label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>'+
     '<textarea class="tinp remark-in hidden" data-aid="'+id+'" placeholder="Optional remark..."></textarea>'+
+    '<div class="attach-wrap"><label class="attach-btn"><i class="ti ti-paperclip" aria-hidden="true"></i>Attach<input type="file" multiple hidden onchange="uploadTaskFiles(this.files,null,this.closest(\'.attach-wrap\').querySelector(\'.attach-list\'));this.value=\'\'"></label><div class="attach-list"></div></div>'+
     '</div>';
   document.getElementById('adhoc-area').appendChild(d);
   var ta = d.querySelector('textarea');
@@ -3751,6 +3804,7 @@ function addAdhocToProj(pgId, projName) {
     '</div>'+
     '<label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>'+
     '<textarea class="tinp remark-in hidden" data-aid="'+id+'" placeholder="Optional remark..."></textarea>'+
+    '<div class="attach-wrap"><label class="attach-btn"><i class="ti ti-paperclip" aria-hidden="true"></i>Attach<input type="file" multiple hidden onchange="uploadTaskFiles(this.files,null,this.closest(\'.attach-wrap\').querySelector(\'.attach-list\'));this.value=\'\'"></label><div class="attach-list"></div></div>'+
     '</div>';
   var pgAdd = pgEl.querySelector('.pg-add');
   if (pgAdd) body.insertBefore(row, pgAdd); else body.appendChild(row);
@@ -3858,7 +3912,7 @@ async function submitEOD(){
     }
     if(!desc.trim() && proj.trim()) desc = "No description added";
     var remarkChk=row.querySelector('.remark-chk'), remark=row.querySelector('.remark-in[data-aid="'+id+'"]');
-    if(desc.trim()) at.push({description:desc.trim(),status:stat,estimated_time:est,actual_time:act,remarks:(remarkChk&&remarkChk.checked&&remark)?remark.value:'',project_name:proj});
+    if(desc.trim()) at.push({description:desc.trim(),status:stat,estimated_time:est,actual_time:act,remarks:(remarkChk&&remarkChk.checked&&remark)?remark.value:'',project_name:proj,attachment_names:getRowAttachments(row).map(function(f){return f.name;})});
   });
   if(hasErrors){ toast('Please provide time taken for task completion for all completed tasks.', 'err'); return; }
   var btn=document.getElementById('btn-eod');
@@ -3896,6 +3950,67 @@ frappe.call({method:'st_attendance_tracker.api.get_team_dashboard',callback:func
 function saveDescEdit(el) {
   var id = el.dataset.id; if (!id) return;
   frappe.call({ method:'frappe.client.set_value', args:{doctype:'Daily Task',name:id,fieldname:'description',value:el.value} });
+}
+function saveRemarkEdit(el) {
+  var id = el.dataset.id; if (!id) return;
+  frappe.call({ method:'frappe.client.set_value', args:{doctype:'Daily Task',name:id,fieldname:'remarks',value:el.value} });
+}
+function uploadTaskFiles(files, taskName, containerEl) {
+  if (!files || !files.length || !containerEl) return;
+  Array.prototype.forEach.call(files, function(file) {
+    var fd = new FormData();
+    fd.append('file', file);
+    fd.append('is_private', '1');
+    if (taskName) { fd.append('doctype', 'Daily Task'); fd.append('docname', taskName); }
+    fetch('/api/method/upload_file', {
+      method: 'POST',
+      headers: { 'X-Frappe-CSRF-Token': frappe.csrf_token },
+      body: fd
+    }).then(function(r){ return r.json(); }).then(function(r){
+      if (!r.message) { toast('Upload failed for '+file.name,'err'); return; }
+      addAttachChip(containerEl, r.message, taskName);
+    }).catch(function(){ toast('Upload failed for '+file.name,'err'); });
+  });
+}
+function addAttachChip(containerEl, f, taskName, skipSave) {
+  var chip = document.createElement('span');
+  chip.className = 'attach-chip';
+  chip.dataset.file = f.name;
+  chip.appendChild(document.createTextNode(f.file_name));
+  var x = document.createElement('i');
+  x.className = 'ti ti-x'; x.setAttribute('aria-hidden', 'true');
+  x.onclick = function(){ removeTaskAttachment(f.name, taskName, chip); };
+  chip.appendChild(x);
+  containerEl.appendChild(chip);
+  if (!taskName) {
+    var list = JSON.parse(containerEl.dataset.files || '[]');
+    list.push({ name: f.name, file_name: f.file_name, file_url: f.file_url });
+    containerEl.dataset.files = JSON.stringify(list);
+    if (!skipSave && document.getElementById('btn-eod')) saveEodDraft();
+  }
+}
+function getRowAttachments(el) {
+  var list = el.querySelector('.attach-list');
+  if (!list || !list.dataset.files) return [];
+  try { return JSON.parse(list.dataset.files); } catch(e) { return []; }
+}
+function restoreRowAttachments(el, attachments, taskName) {
+  var list = el.querySelector('.attach-list');
+  if (!list || !attachments || !attachments.length) return;
+  attachments.forEach(function(f){ addAttachChip(list, f, taskName, true); });
+}
+function removeTaskAttachment(fileName, taskName, chipEl) {
+  var containerEl = chipEl ? chipEl.closest('.attach-list') : null;
+  var method = taskName ? 'st_attendance_tracker.api.delete_task_attachment' : 'frappe.client.delete';
+  var args = taskName ? {file_name:fileName, task_name:taskName} : {doctype:'File', name:fileName};
+  frappe.call({ method:method, args:args }).then(function(){
+    if (chipEl) chipEl.remove();
+    if (containerEl && !taskName) {
+      var list = JSON.parse(containerEl.dataset.files || '[]').filter(function(x){ return x.name !== fileName; });
+      containerEl.dataset.files = JSON.stringify(list);
+      if(document.getElementById('btn-eod')) saveEodDraft();
+    }
+  }).catch(function(e){ toast(e.message||'Failed to remove attachment.','err'); });
 }
 function formatTimeAMPM(t) {
   if (!t) return '—';
@@ -4242,7 +4357,7 @@ function saveEodDraft() {
     var act = (el.querySelector('.adhoc-act')||{}).value||'';
     var rmk = (el.querySelector('.remark-in')||{}).value||'';
     var rmkOn = (el.querySelector('.remark-chk')||{}).checked||false;
-    draft.push({ type: 'standalone', head: head, desc: desc, act: act, stat: stat, rmk: rmk, rmkOn: rmkOn });
+    draft.push({ type: 'standalone', head: head, desc: desc, act: act, stat: stat, rmk: rmk, rmkOn: rmkOn, att: getRowAttachments(el) });
   });
 
   document.querySelectorAll('.pg[id^="epg_new_"]').forEach(function(pg) {
@@ -4254,7 +4369,7 @@ function saveEodDraft() {
       var act = (el.querySelector('.adhoc-act')||{}).value||'';
       var rmk = (el.querySelector('.remark-in')||{}).value||'';
       var rmkOn = (el.querySelector('.remark-chk')||{}).checked||false;
-      tasks.push({ desc: desc, act: act, stat: stat, rmk: rmk, rmkOn: rmkOn });
+      tasks.push({ desc: desc, act: act, stat: stat, rmk: rmk, rmkOn: rmkOn, att: getRowAttachments(el) });
     });
     draft.push({ type: 'project', name: pName, tasks: tasks });
   });
@@ -4269,7 +4384,7 @@ function saveEodDraft() {
       var act = (el.querySelector('.adhoc-act')||{}).value||'';
       var rmk = (el.querySelector('.remark-in')||{}).value||'';
       var rmkOn = (el.querySelector('.remark-chk')||{}).checked||false;
-      tasks.push({ desc: desc, act: act, stat: stat, rmk: rmk, rmkOn: rmkOn });
+      tasks.push({ desc: desc, act: act, stat: stat, rmk: rmk, rmkOn: rmkOn, att: getRowAttachments(el) });
     });
     if(tasks.length > 0) {
       draft.push({ type: 'existing_project', pgId: pgId, tasks: tasks });
@@ -4338,6 +4453,7 @@ function loadEodDraft() {
                 var rmkIn = last.querySelector('.remark-in');
                 if(rmkIn) rmkIn.value = d.rmk || '';
              }
+             restoreRowAttachments(last, d.att, null);
           }
        } else if (d.type === 'project') {
           addEodProject();
@@ -4359,6 +4475,7 @@ function loadEodDraft() {
                       var rmkIn = lastRow.querySelector('.remark-in');
                       if(rmkIn) rmkIn.value = t.rmk || '';
                    }
+                   restoreRowAttachments(lastRow, t.att, null);
                 }
              });
           }
@@ -4378,6 +4495,7 @@ function loadEodDraft() {
                       var rmkIn = lastRow.querySelector('.remark-in');
                       if(rmkIn) rmkIn.value = t.rmk || '';
                    }
+                   restoreRowAttachments(lastRow, t.att, null);
                 }
              });
           }

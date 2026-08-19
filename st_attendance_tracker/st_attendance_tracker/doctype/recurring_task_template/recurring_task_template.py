@@ -11,10 +11,24 @@ class RecurringTaskTemplate(Document):
 
     def before_save(self):
         self._was_deactivated = False
+        self._today_dropped_from_days = False
         if not self.is_new():
-            was_active = frappe.db.get_value(self.doctype, self.name, "is_active")
-            if was_active and not self.is_active:
+            prev = frappe.db.get_value(self.doctype, self.name, ["is_active", "recurring_days"], as_dict=True)
+            if prev.is_active and not self.is_active:
                 self._was_deactivated = True
+            elif self.is_active and prev.recurring_days != (self.recurring_days or ""):
+                self._today_dropped_from_days = self._today_no_longer_scheduled(prev.recurring_days)
+
+    def _today_no_longer_scheduled(self, prev_recurring_days):
+        """True if today's weekday was covered by the old schedule but isn't by the new one.
+        Blank days list means "every day" on both sides of the comparison."""
+        from st_attendance_tracker.api import _parse_recurring_days
+        old_days = _parse_recurring_days(prev_recurring_days)
+        new_days = _parse_recurring_days(self.recurring_days)
+        weekday_num = frappe.utils.getdate(frappe.utils.today()).weekday()
+        was_covered = not old_days or weekday_num in old_days
+        is_covered = not new_days or weekday_num in new_days
+        return was_covered and not is_covered
 
     def validate(self):
         self._check_ownership()
@@ -33,7 +47,7 @@ class RecurringTaskTemplate(Document):
         self.estimated_time = _format_hours(_parse_time_to_hours(self.estimated_time))
 
     def on_update(self):
-        if getattr(self, "_was_deactivated", False):
+        if getattr(self, "_was_deactivated", False) or getattr(self, "_today_dropped_from_days", False):
             self._remove_todays_pending_instance()
 
     def _remove_todays_pending_instance(self):

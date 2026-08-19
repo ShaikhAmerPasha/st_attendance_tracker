@@ -66,16 +66,17 @@ body {
 }
 
 .tnav {
-  height: 64px;
+  height: 70px;
   background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   position: sticky;
   top: 0;
   z-index: 100;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
 }
 
 .tnav-con {
@@ -91,7 +92,7 @@ body {
 
 .tnav-logo {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 800;
   background: var(--primary-gradient);
   -webkit-background-clip: text;
@@ -101,7 +102,7 @@ body {
 
 .tnav-sep {
   width: 1px;
-  height: 16px;
+  height: 20px;
   background: var(--border);
 }
 
@@ -109,6 +110,7 @@ body {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
+  font-family: 'Plus Jakarta Sans', sans-serif;
 }
 
 .tnav-r {
@@ -122,45 +124,45 @@ body {
 .tnav-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
+  gap: 8px;
+  padding: 8px 16px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
-  background: #ffffff;
+  background: var(--bg-card);
   text-decoration: none;
   cursor: pointer;
   font-family: inherit;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: var(--shadow-sm);
 }
 
 .tnav-btn:hover {
-  background: #f8fafc;
+  background: hsl(210, 40%, 98%);
   border-color: var(--border-focus);
   color: var(--text-main);
   transform: translateY(-1px);
 }
 
 .tnav-btn i {
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .tnav-av {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--primary-gradient);
   color: #ffffff;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.2);
 }
 
 .wrap {
@@ -794,7 +796,8 @@ body {
     <span class="tnav-sep"></span>
     <span class="tnav-bc">My History</span>
     <div class="tnav-r">
-      <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-arrow-left" aria-hidden="true"></i>Back to Dashboard</a>
+      <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-check" aria-hidden="true"></i>My check-in</a>
+      <a href="/recurring-tasks" class="tnav-btn"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
       <div class="profile-dropdown" id="profile-dropdown">
         <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>

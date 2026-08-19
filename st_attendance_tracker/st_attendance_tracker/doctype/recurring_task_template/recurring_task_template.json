@@ -11,7 +11,8 @@
   "col_break_1",
   "project_name",
   "estimated_time",
-  "is_active"
+  "is_active",
+  "recurring_days"
  ],
  "fields": [
   {
@@ -59,6 +60,13 @@
    "fieldtype": "Check",
    "in_list_view": 1,
    "label": "Active"
+  },
+  {
+   "default": "",
+   "description": "Days this task regenerates on. One day per line (Monday..Saturday). Leave blank to repeat every day.",
+   "fieldname": "recurring_days",
+   "fieldtype": "Small Text",
+   "label": "Recurring Days"
   }
  ],
  "links": [],

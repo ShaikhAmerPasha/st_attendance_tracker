@@ -28,6 +28,7 @@ import html
 from html import escape as html_escape
 import json
 from frappe.utils import today, now_datetime, getdate, add_days, get_datetime
+from frappe.desk.form.load import get_attachments
 from st_attendance_tracker.time_utils import parse_duration_to_hours, resolve_zero_diff_minutes
 
 
@@ -54,6 +55,48 @@ def _assert_task_owner(task_name, employee_name):
     task_employee = frappe.db.get_value("Daily Task", task_name, "employee")
     if task_employee != employee_name:
         frappe.throw("Not authorised to edit this task.", frappe.PermissionError)
+
+
+def _assert_task_visible(task_name):
+    """Allow the task's own employee, HR Manager, or that employee's Team Leader.
+
+    Checks the HR Manager role first, same order as get_employee_task_detail —
+    an HR Manager user need not have their own Employee record, so
+    _get_employee() must not run unless the role check falls through.
+    """
+    if "HR Manager" in frappe.get_roles(frappe.session.user):
+        return
+    task_employee = frappe.db.get_value("Daily Task", task_name, "employee")
+    viewer_employee_name = _get_employee().name
+    if task_employee == viewer_employee_name:
+        return
+    if task_employee in _get_team_members(viewer_employee_name):
+        return
+    frappe.throw("Not authorised to view this task.", frappe.PermissionError)
+
+
+def _attach_task_files(tasks):
+    """Batch-fetch File attachments for a list of task dicts, setting task['attachments']."""
+    if not tasks:
+        return
+    files_by_task = {}
+    for f in frappe.get_all("File",
+        filters={"attached_to_doctype": "Daily Task", "attached_to_name": ["in", [t.name for t in tasks]]},
+        fields=["name", "file_name", "file_url", "attached_to_name"],
+    ):
+        files_by_task.setdefault(f.attached_to_name, []).append(f)
+    for t in tasks:
+        t["attachments"] = files_by_task.get(t.name, [])
+
+
+def _reparent_attachments(file_names, task_name):
+    """Point orphan-uploaded Files (no doctype/docname yet) at the now-saved task."""
+    for file_name in file_names or []:
+        if frappe.db.exists("File", file_name):
+            frappe.db.set_value("File", file_name, {
+                "attached_to_doctype": "Daily Task",
+                "attached_to_name": task_name,
+            })
 
 
 def _is_half_day_leave_today(employee_name, date):
@@ -868,6 +911,16 @@ def _safety_rollover(employee, today_date):
 
 # ── Recurring tasks (e.g. daily scrum) ─────────────────────────────────────────
 
+def _parse_recurring_days(raw):
+    """Empty/blank -> every day (empty list, caller treats as no restriction).
+    Mirrors ST Attendance Settings.hybrid_office_days' storage convention:
+    Small Text, one day name per line, Monday..Saturday, no Sunday."""
+    day_map = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5}
+    if not raw:
+        return []
+    return [day_map[d] for d in (line.strip().lower() for line in raw.strip().split("\n")) if d in day_map]
+
+
 def _ensure_recurring_tasks(employee, date):
     """
     For every active Recurring Task Template belonging to this employee,
@@ -876,12 +929,21 @@ def _ensure_recurring_tasks(employee, date):
     Recurring-type tasks never enter the carry-forward chain (see the
     task_type exclusion in _rollover_pending_tasks) — a fresh one appears
     here again tomorrow regardless of whether today's was completed.
+    A template only fires on the weekdays in its recurring_days; blank
+    recurring_days means every day (backward compatible with templates
+    created before this field existed).
     """
     templates = frappe.get_all("Recurring Task Template",
         filters={"employee": employee, "is_active": 1},
-        fields=["description", "project_name", "estimated_time"])
+        fields=["description", "project_name", "estimated_time", "recurring_days"])
+
+    weekday_num = getdate(date).weekday()
 
     for tpl in templates:
+        days = _parse_recurring_days(tpl.recurring_days)
+        if days and weekday_num not in days:
+            continue
+
         exists = frappe.db.exists("Daily Task", {
             "employee": employee,
             "task_date": date,
@@ -904,6 +966,57 @@ def _ensure_recurring_tasks(employee, date):
         new_task.insert(ignore_permissions=True)
 
     frappe.db.commit()
+
+
+# ── Recurring task self-service (employee-facing CRUD) ─────────────────────────
+# Ownership/validation is enforced by the doctype's own validate()/on_trash()
+# (RecurringTaskTemplate._check_ownership) — these wrappers don't re-check it,
+# and deliberately don't pass ignore_permissions so Frappe's own if_owner
+# doctype permission (already granted to the Employee role) applies too.
+
+@frappe.whitelist()
+def get_recurring_tasks():
+    """List the current employee's Recurring Task Templates for self-service management."""
+    employee = _get_employee()
+    rows = frappe.get_all("Recurring Task Template",
+        filters={"employee": employee.name},
+        fields=["name", "description", "project_name", "estimated_time", "is_active", "recurring_days"],
+        order_by="description asc")
+    for r in rows:
+        raw = (r.recurring_days or "").strip()
+        r["days"] = [d.strip() for d in raw.split("\n") if d.strip()] if raw else []
+    return rows
+
+
+@frappe.whitelist()
+def save_recurring_task(name=None, description="", project_name="", estimated_time="", recurring_days=None, is_active=1):
+    """Create or update (upsert by `name`) a self-service Recurring Task Template.
+    `recurring_days` arrives as a JSON-encoded list of day names (or a plain list)."""
+    employee = _get_employee()
+    if not (description or "").strip():
+        frappe.throw("Task description cannot be empty.")
+
+    days = json.loads(recurring_days) if isinstance(recurring_days, str) else (recurring_days or [])
+
+    if name:
+        doc = frappe.get_doc("Recurring Task Template", name)
+    else:
+        doc = frappe.new_doc("Recurring Task Template")
+        doc.employee = employee.name
+
+    doc.description = description.strip()
+    doc.project_name = (project_name or "").strip()
+    doc.estimated_time = estimated_time or ""
+    doc.recurring_days = "\n".join(days)
+    doc.is_active = 1 if str(is_active) in ("1", "true", "True") else 0
+    doc.save()
+    return {"success": True, "name": doc.name}
+
+
+@frappe.whitelist()
+def delete_recurring_task(name):
+    frappe.delete_doc("Recurring Task Template", name)
+    return {"success": True}
 
 
 # ── Working hours calculation ──────────────────────────────────────────────────
@@ -1289,6 +1402,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         task_doc.project_name = (t.get("project_name") or "").strip()
         task_doc.sequence = sequence_base + i + 1
         task_doc.insert(ignore_permissions=True)
+        _reparent_attachments(t.get("attachment_names"), task_doc.name)
 
     actual_login = login_time or now_datetime().strftime("%H:%M:%S")
     if len(str(actual_login)) == 5:
@@ -1470,6 +1584,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         task_doc.project_name = (t.get("project_name") or "").strip()
         task_doc.sequence = sequence_base + i + 1
         task_doc.insert(ignore_permissions=True)
+        _reparent_attachments(t.get("attachment_names"), task_doc.name)
 
     # Get login time for net hours calculation
     morning_log_name = frappe.db.get_value("Daily Task Log", {
@@ -1754,6 +1869,7 @@ def get_employee_task_detail(employee_name, date=None):
 
     for task in tasks:
         task["is_carried"] = bool(task.get("rolled_over_from"))
+    _attach_task_files(tasks)
 
     return {
         "employee":    emp,
@@ -1875,6 +1991,45 @@ def delete_carried_task(name):
 
     frappe.delete_doc("Daily Task", name, ignore_permissions=True, force=True)
     frappe.db.commit()
+    return {"success": True}
+
+
+@frappe.whitelist()
+def get_task_attachments(task_name):
+    """List files attached to a task. Visible to the owner, their Team Leader, or HR Manager."""
+    _assert_task_visible(task_name)
+    return get_attachments("Daily Task", task_name)
+
+
+@frappe.whitelist()
+def view_task_attachment(file_name, task_name):
+    """Stream a task's attached file. Visible to the owner, their Team Leader, or HR Manager.
+
+    Bypasses Frappe's private-file route on purpose: that route resolves
+    access via the Daily Task doctype's role permission table, which has no
+    row for Team Lead (and can't be given one without granting every Team
+    Lead blanket read access to every employee's tasks — has_permission
+    hooks can only deny, never grant, beyond that table). This endpoint does
+    the same precise "is this employee my report" check _assert_task_visible
+    already does elsewhere, then serves the file directly.
+    """
+    _assert_task_visible(task_name)
+    if frappe.db.get_value("File", file_name, "attached_to_name") != task_name:
+        frappe.throw("Not authorised to view this file.", frappe.PermissionError)
+    file_doc = frappe.get_doc("File", file_name)
+    frappe.local.response.filename = file_doc.file_name
+    frappe.local.response.filecontent = file_doc.get_content()
+    frappe.local.response.type = "download"
+
+
+@frappe.whitelist(methods=["POST"])
+def delete_task_attachment(file_name, task_name):
+    """Delete a task's attached file. Employee can only delete their own task's files."""
+    employee = _get_employee()
+    _assert_task_owner(task_name, employee.name)
+    if frappe.db.get_value("File", file_name, "attached_to_name") != task_name:
+        frappe.throw("Not authorised to delete this file.", frappe.PermissionError)
+    frappe.delete_doc("File", file_name, ignore_permissions=True)
     return {"success": True}
 
 
@@ -2068,6 +2223,7 @@ def _build_team_data(employees, date):
         "task_date": date,
     }, fields=["employee", "name", "description", "status",
                "task_type", "estimated_time", "actual_time", "rolled_over_from"])
+    _attach_task_files(all_tasks)
 
     tasks_by_emp = {}
     for t in all_tasks:

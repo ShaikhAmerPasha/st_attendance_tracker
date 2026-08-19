@@ -2,6 +2,7 @@ import frappe
 from frappe.utils import today, now_datetime, getdate, get_datetime
 from st_attendance_tracker.api import (
     _to_hhmm, _to_ampm, _format_hours, _is_half_day_leave_today, _is_team_leader,
+    _attach_task_files,
 )
 
 
@@ -97,6 +98,8 @@ def get_context(context):
                 "estimated_time", "actual_time", "project_name"],
         order_by="sequence asc",
     )
+    _attach_task_files(tasks)
+
     for task in tasks:
         task["is_carried"] = bool(task.get("rolled_over_from"))
         # Redisplay as "1h 30m" style, not the raw decimal-hours DB value —
@@ -221,6 +224,9 @@ def get_context(context):
     context.employee = employee
     context.date = date
     context.actual_today = actual_today
+    context.recurring_count = frappe.db.count(
+        "Recurring Task Template", {"employee": employee.name, "is_active": 1}
+    )
     context.current_time = now_datetime().strftime("%H:%M")
     context.current_time_ampm = _to_ampm(now_datetime().strftime("%H:%M:%S"))
     context.is_checked_in = bool(morning_log)
