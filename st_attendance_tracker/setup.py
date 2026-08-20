@@ -15,6 +15,7 @@ def create_custom_fields():
     _create_employee_work_type()
     _create_attendance_request_button()
     _create_employee_department_assignments()
+    _create_department_task_summary_format()
     frappe.db.commit()
 
 
@@ -67,6 +68,36 @@ def _create_employee_department_assignments():
     custom_field.insert(ignore_permissions=True)
     frappe.msgprint(
         "Custom field 'department_assignments' added to Employee doctype.",
+        alert=True
+    )
+
+
+def _create_department_task_summary_format():
+    """
+    Add task_summary_email_format select field to Department doctype.
+    Controls how the task list renders in check-in/checkout emails for
+    employees in that department — everything else in the email (heading,
+    detail card) stays identical regardless of this setting.
+    """
+    if frappe.db.exists("Custom Field", "Department-task_summary_email_format"):
+        return
+
+    custom_field = frappe.new_doc("Custom Field")
+    custom_field.dt = "Department"
+    custom_field.label = "Task Summary Email Format"
+    custom_field.fieldname = "task_summary_email_format"
+    custom_field.fieldtype = "Select"
+    custom_field.options = "\nTabular\nGrouped List"
+    custom_field.default = "Tabular"
+    custom_field.insert_after = "disabled"
+    custom_field.description = (
+        "How the task list renders in check-in/checkout emails for this "
+        "department's employees. Tabular: today's table layout. Grouped "
+        "List: project heading followed by a bulleted task list."
+    )
+    custom_field.insert(ignore_permissions=True)
+    frappe.msgprint(
+        "Custom field 'task_summary_email_format' added to Department doctype.",
         alert=True
     )
 

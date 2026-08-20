@@ -384,7 +384,7 @@ class TestQACheckinFull(FrappeTestCase):
         )
         submit_eod_log(
             lunch_from="", lunch_to="", logout_time="18:00",
-            task_updates=json.dumps([{"name": task_name, "status": "Done", "actual_time": "", "description": "Task to delete after EOD"}]),
+            task_updates=json.dumps([{"name": task_name, "status": "Done", "actual_time": "1h", "description": "Task to delete after EOD"}]),
             adhoc_tasks="[]"
         )
         with self.assertRaises(frappe.ValidationError):
@@ -480,7 +480,7 @@ class TestQACheckinFull(FrappeTestCase):
         submit_eod_log(
             lunch_from="", lunch_to="", logout_time="18:00",
             task_updates="[]",
-            adhoc_tasks=json.dumps([{"description": "Ad-hoc task done", "status": "Done"}])
+            adhoc_tasks=json.dumps([{"description": "Ad-hoc task done", "status": "Done", "actual_time": "1h"}])
         )
         adhoc = frappe.db.exists("Daily Task", {
             "employee": self.emp_name,
@@ -588,7 +588,7 @@ class TestQACheckinFull(FrappeTestCase):
         )
         submit_eod_log(
             lunch_from="12:00", lunch_to="13:00", logout_time="18:00",
-            task_updates=json.dumps([{"name": task_name, "status": "Done", "actual_time": "", "description": "Task for EOD block"}]),
+            task_updates=json.dumps([{"name": task_name, "status": "Done", "actual_time": "1h", "description": "Task for EOD block"}]),
             adhoc_tasks="[]"
         )
 

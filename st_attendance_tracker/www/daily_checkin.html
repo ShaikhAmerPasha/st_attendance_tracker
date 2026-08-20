@@ -2623,6 +2623,8 @@ body > .container { padding-top: 0 !important; }
     <span class="tnav-bc">{% if eod_done %}Day Complete{% elif is_checked_in %}Working{% else %}Check-In{% endif %}</span>
     <div class="tnav-r">
       <span class="tnav-date">{{ date }}</span>
+      {# Docs button — re-enable once Wiki is installed + patched on this site (see wiki_frappe15_compat.patch) #}
+      {# <a href="/docs/st-attendance-tracker-user-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a> #}
       <a href="/my-history" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
       {% if is_team_leader %}<a href="/team-dashboard" class="tnav-btn"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
@@ -2939,7 +2941,7 @@ body > .container { padding-top: 0 !important; }
   <div style="height:20px"></div>
 </div>
 <footer class="app-footer">
-  <button class="fbtn dk" id="btn-eod" onclick="submitEOD()"><i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit</button>
+  <button class="fbtn dk" id="btn-eod" onclick="confirmCheckout()"><i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit</button>
   <button class="fbtn gh" onclick="addEodProject()" title="Add a new project (Shift+P)"><i class="ti ti-folder-plus" aria-hidden="true"></i>Project</button>
   <button class="fbtn gh" onclick="addAdhoc()" title="Add a task (Shift+T)"><i class="ti ti-plus" aria-hidden="true"></i>Task</button>
   <button class="fbtn gh" id="btn-reset-ci" onclick="resetCheckin()" style="background:#fff5f5;color:#dc2626;border:1px solid #fecaca"><i class="ti ti-rotate-clockwise" aria-hidden="true"></i>Reset check-in</button>
@@ -3139,6 +3141,28 @@ body > .container { padding-top: 0 !important; }
     <div class="wfh-ma">
       <a href="#" id="wfh-link" class="wfh-mb pr" target="_blank"><i class="ti ti-external-link" aria-hidden="true"></i>Mark WFH in Attendance Request</a>
       <button class="wfh-mb sc" onclick="closeWFH()">Cancel — select Office instead</button>
+    </div>
+  </div>
+</div>
+<div class="wfh-ov" id="paste-confirm-ov" style="display:none">
+  <div class="wfh-mo">
+    <div class="wfh-mi"><i class="ti ti-clipboard-list" aria-hidden="true"></i></div>
+    <div class="wfh-mt">Multiple tasks detected</div>
+    <div class="wfh-ms" id="paste-confirm-msg">Paste this as separate tasks?</div>
+    <div class="wfh-ma">
+      <button class="wfh-mb pr" id="paste-confirm-yes" onclick="confirmPasteSplit()">Yes, create tasks</button>
+      <button class="wfh-mb sc" onclick="declinePasteSplit()">No, paste as one task</button>
+    </div>
+  </div>
+</div>
+<div class="wfh-ov" id="checkout-confirm-ov" style="display:none">
+  <div class="wfh-mo">
+    <div class="wfh-mi"><i class="ti ti-logout" aria-hidden="true"></i></div>
+    <div class="wfh-mt">Check out for today?</div>
+    <div class="wfh-ms">This submits your day — task statuses and time taken can't be edited afterward.</div>
+    <div class="wfh-ma">
+      <button class="wfh-mb pr" onclick="closeCheckoutConfirm(); submitEOD();">Yes, check out</button>
+      <button class="wfh-mb sc" onclick="closeCheckoutConfirm()">No, go back</button>
     </div>
   </div>
 </div>
@@ -3498,8 +3522,17 @@ function recalc(){
 document.addEventListener('input', function(e) {
   if (e.target.classList && (e.target.classList.contains('act-in') || e.target.classList.contains('adhoc-act'))) {
     recalc();
-    var row = e.target.closest('[data-id], [data-adhocid]');
-    var sel = row ? row.querySelector('.tsel') : null;
+    // .act-in/.adhoc-act carry their own data-id/data-aid (same as .tsel),
+    // not a wrapping row element — closest() would just match the input
+    // itself and never find the sibling .tsel, so look it up by the shared
+    // id value instead (server-rendered tasks use data-id, adhoc-added
+    // tasks use data-aid).
+    var sel = null;
+    if (e.target.dataset.id) {
+      sel = document.querySelector('.tsel[data-id="' + e.target.dataset.id + '"]');
+    } else if (e.target.dataset.aid) {
+      sel = document.querySelector('.tsel[data-aid="' + e.target.dataset.aid + '"]');
+    }
     if (sel && sel.value === 'Pending' && e.target.value.trim()) {
       sel.value = 'In Progress';
       onSel(sel);
@@ -4213,6 +4246,11 @@ function _stApplyPastedTasks(entries, kind, ctx) {
     }
   });
 }
+var _stPendingPaste = null;
+function _stSaveRelevantDraft() {
+  if (document.getElementById('btn-ci')) saveMorningDraft();
+  if (document.getElementById('btn-eod')) saveEodDraft();
+}
 function _stHandlePaste(e) {
   var t = e.target, kind, ctx = {};
   if (t.classList.contains('npg-desc')) {
@@ -4235,17 +4273,45 @@ function _stHandlePaste(e) {
   if (entries.length < 2) return;
 
   e.preventDefault();
-  t.value = entries[0].description;
-  autoResizeTextarea(t);
-  _stApplyPastedTasks(entries.slice(1), kind, ctx);
+  _stPendingPaste = { entries: entries, kind: kind, ctx: ctx, t: t, rawText: text };
+  document.getElementById('paste-confirm-msg').textContent = 'Paste this as ' + entries.length + ' separate tasks?';
+  document.getElementById('paste-confirm-yes').textContent = 'Yes, create ' + entries.length + ' tasks';
+  document.getElementById('paste-confirm-ov').style.display = 'flex';
+}
+function confirmPasteSplit() {
+  if (!_stPendingPaste) return;
+  var p = _stPendingPaste;
+  p.t.value = p.entries[0].description;
+  autoResizeTextarea(p.t);
+  _stApplyPastedTasks(p.entries.slice(1), p.kind, p.ctx);
 
   updCounts();
   if (typeof updProg === 'function') updProg();
-  if (document.getElementById('btn-ci')) saveMorningDraft();
-  if (document.getElementById('btn-eod')) saveEodDraft();
-  toast('Split into ' + entries.length + ' tasks.', 'ok');
+  _stSaveRelevantDraft();
+  toast('Split into ' + p.entries.length + ' tasks.', 'ok');
+  closePasteConfirm();
+}
+function declinePasteSplit() {
+  if (!_stPendingPaste) return;
+  var p = _stPendingPaste;
+  p.t.value = p.rawText;
+  autoResizeTextarea(p.t);
+  _stSaveRelevantDraft();
+  closePasteConfirm();
+}
+function closePasteConfirm() {
+  document.getElementById('paste-confirm-ov').style.display = 'none';
+  _stPendingPaste = null;
 }
 document.addEventListener('paste', _stHandlePaste, true);
+document.addEventListener('click', function(e){ if (e.target === document.getElementById('paste-confirm-ov')) closePasteConfirm(); });
+function confirmCheckout() {
+  document.getElementById('checkout-confirm-ov').style.display = 'flex';
+}
+function closeCheckoutConfirm() {
+  document.getElementById('checkout-confirm-ov').style.display = 'none';
+}
+document.addEventListener('click', function(e){ if (e.target === document.getElementById('checkout-confirm-ov')) closeCheckoutConfirm(); });
 
 /* --- KEYBOARD SHORTCUTS ---
    Tab in a task field  → add another task line (same context).
@@ -4277,7 +4343,7 @@ function _stKeyAddTask(t) {
 }
 function _stKeySubmit() {
   if (document.getElementById('btn-ci')) submitMorning();
-  else if (document.getElementById('btn-eod')) submitEOD();
+  else if (document.getElementById('btn-eod')) confirmCheckout();
 }
 window.addEventListener('keydown', function(e) {
   var t = e.target || {};

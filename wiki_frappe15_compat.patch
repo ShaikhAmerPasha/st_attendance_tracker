@@ -1,0 +1,134 @@
+# Frappe Wiki (frappe/wiki, develop branch, v3.0.0) compatibility patch for Frappe 15
+#
+# The wiki app's develop branch targets Frappe 16 and uses a few Frappe-16-only
+# APIs (frappe.utils.preview, frappe.search.sqlite_search, frappe.local.response_headers)
+# that don't exist on Frappe 15. Without this patch, saving/viewing/editing any
+# Wiki Document crashes, and the auto "Wiki User" role grant on new users crashes
+# the second time it fires (breaking any test suite that re-inserts a test user).
+#
+# Apply on any Frappe-15 bench, from the bench root, in this exact order.
+# `bench get-app` fails at its own pip-install step (pyproject.toml requires
+# Python >=3.14) before you get a chance to patch it -- that failure is
+# expected, the clone under apps/wiki still lands on disk. Everything after
+# that reruns the step get-app aborted, now against the patched source:
+#
+#   bench get-app wiki https://github.com/frappe/wiki        # fails, expected
+#   cd apps/wiki && git apply ../st_attendance_tracker/wiki_frappe15_compat.patch && cd ../..
+#   ./env/bin/python -m pip install -e apps/wiki              # get-app never finished this
+#   bench --site <site> install-app wiki
+#   cd apps/wiki && yarn install && yarn tailwind:build && cd ../..
+#   bench build --app wiki
+#
+# Safe to drop once the site is upgraded to Frappe 16+ -- every change here is a
+# try/except or hasattr guard that only activates when the modern API is absent.
+
+diff --git a/pyproject.toml b/pyproject.toml
+index 2a4f55a..407c6a4 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -4,7 +4,7 @@ authors = [
+     { name = "Frappe Technologies Pvt Ltd", email = "developers@frappe.io"}
+ ]
+ description = "Simple Wiki App"
+-requires-python = ">=3.14"
++requires-python = ">=3.10"
+ readme = "README.md"
+ dynamic = ["version"]
+ dependencies = [
+diff --git a/wiki/frappe_wiki/doctype/wiki_document/wiki_document.py b/wiki/frappe_wiki/doctype/wiki_document/wiki_document.py
+index 18eb619..139ac55 100644
+--- a/wiki/frappe_wiki/doctype/wiki_document/wiki_document.py
++++ b/wiki/frappe_wiki/doctype/wiki_document/wiki_document.py
+@@ -549,7 +549,12 @@ class WikiDocument(NestedSet):
+ 		Returns a path rather than an absolute URL so MetaTags absolutizes it
+ 		through get_url() -- that is what keeps it right on custom domains.
+ 		"""
+-		from wiki.api.og_image import _og_context, og_fingerprint
++		try:
++			from wiki.api.og_image import _og_context, og_fingerprint
++		except ImportError:
++			# frappe.utils.preview (Frappe 16+) isn't available on this site's
++			# Frappe version -- no generated OG card, page still renders fine.
++			return None
+ 
+ 		if self.is_group or self.is_external_link or not self.is_published or not self.route:
+ 			return None
+@@ -1112,8 +1117,6 @@ def download_pdf(route: str):
+ 
+ def on_wiki_document_update(doc, method):
+ 	"""Stamp the owning Wiki Space and sync desk edits to the revision system."""
+-	from wiki.api.og_image import enqueue_og_warmup
+-
+ 	stamp_wiki_space(doc)
+ 	_sync_document_to_revision(doc)
+ 	_clear_stale_website_cache(doc)
+@@ -1121,11 +1124,23 @@ def on_wiki_document_update(doc, method):
+ 	if doc.has_value_changed("content"):
+ 		clear_wiki_content_cache(doc.name)
+ 	_drop_from_search_index_on_unpublish(doc)
++	try:
++		from wiki.api.og_image import enqueue_og_warmup
++	except ImportError:
++		# frappe.utils.preview (Frappe 16+) isn't available on this site's
++		# Frappe version -- OG social-preview-card generation is unavailable,
++		# but that must not block saving a document.
++		return
+ 	enqueue_og_warmup(doc)
+ 
+ 
+ def _drop_from_search_index_on_unpublish(doc):
+-	from wiki.frappe_wiki.doctype.wiki_document.wiki_sqlite_search import remove_doc_from_index
++	try:
++		from wiki.frappe_wiki.doctype.wiki_document.wiki_sqlite_search import remove_doc_from_index
++	except ImportError:
++		# frappe.search.sqlite_search (Frappe 16+) isn't available on this
++		# site's Frappe version -- no search index exists to drop from.
++		return
+ 
+ 	if doc.has_value_changed("is_published") and not doc.is_published:
+ 		# The index lives in a separate SQLite file, outside this transaction.
+@@ -1175,7 +1190,12 @@ def _drop_generated_og_cards(doc):
+ 	Deferred like the search-index drop: the files live outside the
+ 	transaction, so a rollback must not take live cards with it.
+ 	"""
+-	from wiki.api.og_image import clear_cached_cards
++	try:
++		from wiki.api.og_image import clear_cached_cards
++	except ImportError:
++		# frappe.utils.preview (Frappe 16+) isn't available on this site's
++		# Frappe version -- no generated OG cards ever existed to clear.
++		return
+ 
+ 	doc_key = doc.doc_key
+ 	if not doc_key:
+diff --git a/wiki/utils.py b/wiki/utils.py
+index 1b038d5..3d3fa50 100644
+--- a/wiki/utils.py
++++ b/wiki/utils.py
+@@ -86,6 +86,12 @@ def check_app_permission():
+ 
+ 
+ def add_wiki_user_role(doc, event=None):
++	# Check the database, not doc.roles -- a freshly-constructed in-memory
++	# User object (e.g. frappe.get_doc({...}).insert(ignore_if_duplicate=True)
++	# against an already-existing user) has an empty roles list regardless of
++	# what's actually assigned in the DB, so that check alone is not idempotent.
++	if frappe.db.exists("Has Role", {"parent": doc.name, "parenttype": "User", "role": "Wiki User"}):
++		return
+ 	if not any(r.role == "Wiki User" for r in doc.get("roles", [])):
+ 		frappe.get_doc(
+ 			{
+diff --git a/wiki/www/wiki_app.py b/wiki/www/wiki_app.py
+index e825ec5..d5c87f9 100644
+--- a/wiki/www/wiki_app.py
++++ b/wiki/www/wiki_app.py
+@@ -13,7 +13,8 @@ ROBOTS_DIRECTIVE = "noindex, nofollow"
+ 
+ 
+ def get_context():
+-	frappe.local.response_headers.set("X-Robots-Tag", ROBOTS_DIRECTIVE)
++	if hasattr(frappe.local, "response_headers"):
++		frappe.local.response_headers.set("X-Robots-Tag", ROBOTS_DIRECTIVE)
+ 	csrf_token = frappe.sessions.get_csrf_token()
+ 	frappe.db.commit()  # nosemgrep
+ 	context = frappe._dict()

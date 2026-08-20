@@ -354,7 +354,7 @@ def _render_detail_table(rows):
 
 def _send_employee_checkin_email(employee_name, employee_display_name, login_time,
                                   checkin_action_time, work_location, half_day_session,
-                                  is_late, tasks, date):
+                                  is_late, tasks, date, department=None):
     """
     Send check-in confirmation email to the employee themselves.
     Includes a detail card (login time, work location, ...) and
@@ -375,7 +375,7 @@ def _send_employee_checkin_email(employee_name, employee_display_name, login_tim
             ("Half-Day Session", half_day_session),
             ("Status", "Late Check-in" if is_late else None),
         ])
-        task_table_html = _render_screenshot_task_table(tasks, is_checkout=False)
+        task_table_html = _get_task_summary_html(tasks, department, is_checkout=False)
 
         html = f"""
         <div style="{EMAIL_WRAPPER_STYLE}">
@@ -388,11 +388,14 @@ def _send_employee_checkin_email(employee_name, employee_display_name, login_tim
         </div>
         """
 
+        sender, reply_to = _employee_mail_identity(employee_name, employee_display_name)
         frappe.sendmail(
             recipients=[emp_email],
             subject=f"{employee_display_name} - Check-in - {frappe.utils.getdate(date).strftime('%d-%m-%Y')}",
             message=html,
             now=False,
+            sender=sender,
+            reply_to=reply_to,
         )
     except Exception as e:
         frappe.log_error(
@@ -404,7 +407,7 @@ def _send_employee_checkin_email(employee_name, employee_display_name, login_tim
 def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
                               checkout_action_time, net_hours, work_location,
                               half_day_session, tasks, date,
-                              is_late_checkout=False, submission_date=None):
+                              is_late_checkout=False, submission_date=None, department=None):
     """
     Send EOD confirmation email to the employee themselves.
     Includes a detail card (hours, work location, ...), done tasks,
@@ -439,8 +442,8 @@ def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
         lunch_to_hm = _to_ampm(lunch_to) if lunch_to else None
         lunch_break = f"{lunch_from_hm} - {lunch_to_hm}" if lunch_from_hm and lunch_to_hm else None
 
-        task_table_html = _render_screenshot_task_table(
-            tasks, is_checkout=True, lunch_from=lunch_from_hm, lunch_to=lunch_to_hm
+        task_table_html = _get_task_summary_html(
+            tasks, department, is_checkout=True, lunch_from=lunch_from_hm, lunch_to=lunch_to_hm
         )
 
         total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in tasks)
@@ -479,11 +482,15 @@ def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
           </div>
         </div>"""
 
+        sender, reply_to = _employee_mail_identity(employee_name, employee_display_name)
         frappe.sendmail(
             recipients=[emp_email],
             subject=f"{employee_display_name} - Check-out - {frappe.utils.getdate(date).strftime('%d-%m-%Y')}",
             message=html,
             now=False,
+            sender=sender,
+            reply_to=reply_to,
+            attachments=_task_attachment_specs(tasks),
         )
     except Exception as e:
         frappe.log_error(
@@ -507,6 +514,34 @@ def _get_employee_email(employee_name):
     if not email and emp.get("user_id"):
         email = frappe.db.get_value("User", emp["user_id"], "email") or emp["user_id"]
     return email
+
+
+def _employee_mail_identity(employee_name, employee_display_name):
+    """(sender, reply_to) so a notification about this employee's check-in/
+    checkout looks like it's from them, while still relaying through the
+    site's one working outgoing account (avoids From/SPF-DKIM mismatch).
+    Falls back to (None, None) if no default outgoing account is configured,
+    so frappe.sendmail just uses its normal default sender."""
+    account_email = frappe.db.get_value("Email Account", {"default_outgoing": 1}, "email_id")
+    if not account_email:
+        return None, None
+    return frappe.utils.formataddr((employee_display_name, account_email)), _get_employee_email(employee_name)
+
+
+def _task_attachment_specs(tasks):
+    """frappe.sendmail(attachments=...) entries for every file across these
+    tasks, so the email carries the actual files, not just a mention of them."""
+    return [{"fid": f["name"]} for t in (tasks or []) for f in (t.get("attachments") or [])]
+
+
+def _attachment_names_html(task):
+    """Small '📎 filename, filename' line so the reader can tell which
+    files (already MIME-attached to the email by the caller) belong to
+    which task."""
+    names = [html.escape(f["file_name"]) for f in (task.get("attachments") or [])]
+    if not names:
+        return ""
+    return f'<div style="font-size:11.5px;color:#64748b;margin-top:4px">📎 {", ".join(names)}</div>'
 
 
 def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lunch_to=None):
@@ -616,6 +651,7 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
             remark_html = ""
             if is_checkout and t.get("remarks"):
                 remark_html = f'<div style="font-size:11.5px;color:#64748b;font-style:italic;margin-top:4px">Remark: {html.escape(t.get("remarks"))}</div>'
+            remark_html += _attachment_names_html(t)
 
             row_html = f"""
             <tr>
@@ -642,6 +678,95 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
     return "".join(html_rows)
 
 
+def _render_grouped_task_summary(tasks, is_checkout=False, lunch_from=None, lunch_to=None):
+    """Task list as a project heading followed by a bulleted list of its
+    tasks — same project-grouping as _render_screenshot_task_table, no
+    table markup. Department-level alternative task-summary format."""
+    if not tasks:
+        return '<p style="font-size:13px;color:#9ca3af;font-style:italic;margin:6px 0">No tasks added yet.</p>'
+
+    groups = {}
+    for t in tasks:
+        pname = (t.get("project_name") or "").strip() or "General"
+        groups.setdefault(pname, []).append(t)
+
+    sorted_group_names = list(groups.keys())
+    lunch_html = ""
+    if lunch_from and lunch_to:
+        lunch_html = (
+            f'<div style="font-size:13px;color:#4b5563;font-style:italic;'
+            f'margin:2px 0 16px">lunch: {html.escape(lunch_from)} - {html.escape(lunch_to)}</div>'
+        )
+
+    group_blocks = []
+    for group_idx, pname in enumerate(sorted_group_names):
+        items = []
+        for t in groups[pname]:
+            desc = html.escape(t.get("description") or "")
+            badges = []
+            if t.get("rolled_over_from"):
+                badges.append('<span style="background-color:#fffbeb;color:#b45309;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid #fde68a;margin-left:6px;display:inline-block">Carried</span>')
+            if t.get("task_type") == "Ad-hoc":
+                badges.append('<span style="background-color:#faf5ff;color:#7c3aed;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid #e9d5ff;margin-left:6px;display:inline-block">Additional</span>')
+
+            if is_checkout:
+                time_val = _format_hours(t.get("actual_time") or t.get("estimated_time") or "")
+                if t.get("status") == "Done":
+                    lead = '<span style="color:#047857;font-weight:700">✔</span> '
+                    time_label = f'Actual: {time_val}' if time_val else ""
+                else:
+                    lead = ""
+                    time_label = "Pending"
+            else:
+                lead = ""
+                time_label = _format_hours(t.get("estimated_time") or "")
+                time_label = f"Est: {time_label}" if time_label else ""
+
+            remark_html = ""
+            if is_checkout and t.get("remarks"):
+                remark_html = f'<div style="font-size:11.5px;color:#64748b;font-style:italic;margin-top:2px">Remark: {html.escape(t.get("remarks"))}</div>'
+            remark_html += _attachment_names_html(t)
+
+            time_span = f' — <span style="color:#64748b">{time_label}</span>' if time_label else ""
+            badges_str = "".join(badges)
+            items.append(
+                f'<li style="position:relative;padding:6px 0 6px 18px;font-size:13.5px;color:#334155;line-height:1.5">'
+                f'<span style="position:absolute;left:2px;color:{EMAIL_ACCENT_COLOR};font-weight:700">•</span>'
+                f'{lead}{desc}{badges_str}{time_span}{remark_html}</li>'
+            )
+
+        group_blocks.append(
+            f'<div style="margin-bottom:18px">'
+            f'<div style="font-size:14.5px;font-weight:700;color:{EMAIL_ACCENT_COLOR};margin-bottom:8px;'
+            f'padding-bottom:6px;border-bottom:1px solid #e2e8f0">{html.escape(pname)}</div>'
+            f'<ul style="list-style:none;margin:0;padding:0">{"".join(items)}</ul>'
+            f'</div>'
+        )
+        # Same placement rule as the tabular layout: lunch appears after the
+        # first group for a 2-group day, after the second for 3+ groups.
+        if lunch_html:
+            show_lunch = (len(sorted_group_names) <= 2 and group_idx == 0) or \
+                         (len(sorted_group_names) > 2 and group_idx == 1)
+            if show_lunch:
+                group_blocks.append(lunch_html)
+                lunch_html = ""
+
+    if lunch_html:
+        group_blocks.append(lunch_html)
+
+    return "".join(group_blocks)
+
+
+def _get_task_summary_html(tasks, department, is_checkout=False, lunch_from=None, lunch_to=None):
+    """Pick the task-summary renderer for this department, defaulting to
+    the tabular layout when unset (covers departments that never opted in
+    and any department without the custom field populated yet)."""
+    fmt = frappe.db.get_value("Department", department, "task_summary_email_format") if department else None
+    if fmt == "Grouped List":
+        return _render_grouped_task_summary(tasks, is_checkout=is_checkout, lunch_from=lunch_from, lunch_to=lunch_to)
+    return _render_screenshot_task_table(tasks, is_checkout=is_checkout, lunch_from=lunch_from, lunch_to=lunch_to)
+
+
 def _get_team_leader_emails(employee_name):
     """
     Team Leader(s) to notify for this employee. Employees working across
@@ -665,7 +790,7 @@ def _get_team_leader_emails(employee_name):
     return emails
 
 
-def _notify_hr_and_team_leader(employee_name, employee_display_name, event, detail_rows=None, tasks=None):
+def _notify_hr_and_team_leader(employee_name, employee_display_name, event, detail_rows=None, tasks=None, department=None):
     """
     Send email to:
     1. All users with HR Manager role (auto-fetched)
@@ -709,14 +834,18 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
                 lunch_from_hm = _to_ampm(db_vals[0]) if db_vals[0] else None
                 lunch_to_hm = _to_ampm(db_vals[1]) if db_vals[1] else None
 
-        task_html = _render_screenshot_task_table(
+        task_html = _get_task_summary_html(
             tasks or [],
+            department,
             is_checkout=(event == "checkout"),
             lunch_from=lunch_from_hm,
             lunch_to=lunch_to_hm
         )
         task_label = "Today's Tasks" if event == "checkin" else "Task Summary"
         detail_table_html = _render_detail_table(detail_rows or [])
+
+        # Checkout only, since that's the only flow with an attach control.
+        attachment_specs = _task_attachment_specs(tasks) if event == "checkout" else []
 
         html = f"""
         <div style="{EMAIL_WRAPPER_STYLE}">
@@ -729,11 +858,15 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
         </div>
         """
 
+        sender, reply_to = _employee_mail_identity(employee_name, employee_display_name)
         frappe.sendmail(
             recipients=recipients,
             subject=subject,
             message=html,
             now=False,
+            sender=sender,
+            reply_to=reply_to,
+            attachments=attachment_specs,
         )
     except Exception as e:
         frappe.log_error(
@@ -1088,8 +1221,9 @@ def _calc_net_hours(login_time, logout_time, lunch_from, lunch_to, date_str):
 
         net = total_mins - lunch_mins
 
-        # Sanity ceiling — a workday can't exceed 24 hours.
-        if net < 0 or net > 24 * 60:
+        # Sanity ceiling — no real workday exceeds 18 hours; anything past
+        # that is a data/timezone glitch, not a long shift.
+        if net < 0 or net > 18 * 60:
             frappe.log_error(
                 f"Suspicious net hours calc: login={login_hm} logout={logout_hm} "
                 f"lunch_from={lf_hm} lunch_to={lt_hm} date={date_str} "
@@ -1448,6 +1582,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         "checkin",
         detail_rows,
         tasks=all_tasks,
+        department=employee.department,
     )
 
     # Send check-in confirmation to employee with task list
@@ -1461,6 +1596,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         late_flag,
         all_tasks,
         date,
+        department=employee.department,
     )
 
     return {"success": True, "login_time": _to_ampm(actual_login)}
@@ -1646,6 +1782,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
                 "estimated_time", "actual_time", "project_name", "rolled_over_from", "remarks"],
         order_by="sequence asc",
     )
+    _attach_task_files(all_tasks)
 
     total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in all_tasks)
     working_hours_str = _format_hours(total_actual_hours) or "0h"
@@ -1668,6 +1805,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         "checkout",
         detail_rows,
         tasks=all_tasks,
+        department=employee.department,
     )
 
     # Send EOD confirmation to employee with task summary
@@ -1683,6 +1821,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         date,
         is_late_checkout=is_late_checkout,
         submission_date=today(),
+        department=employee.department,
     )
 
     return {
