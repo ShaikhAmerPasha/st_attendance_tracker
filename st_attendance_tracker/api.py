@@ -25,6 +25,7 @@ Fixes:
 import frappe
 import datetime
 import html
+import re
 from html import escape as html_escape
 import json
 from frappe.utils import today, now_datetime, getdate, add_days, get_datetime
@@ -512,7 +513,8 @@ def _get_employee_email(employee_name):
         emp.get("personal_email")
     )
     if not email and emp.get("user_id"):
-        email = frappe.db.get_value("User", emp["user_id"], "email") or emp["user_id"]
+        candidate = frappe.db.get_value("User", emp["user_id"], "email") or emp["user_id"]
+        email = candidate if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", candidate or "") else None
     return email
 
 
@@ -929,6 +931,36 @@ def _get_root_task(task_name):
     return current
 
 
+def _resolve_active_checkin_date(employee_name):
+    """Which date's check-in is still 'open' (checked in, no EOD submitted
+    yet) — the date the checkin/checkout page and EOD submission should act
+    on. Only looks back to yesterday: an unresolved check-in older than
+    that is abandoned, not something to silently resume into. Without this
+    bound, a months-old forgotten checkout (or resetting today's check-in
+    and thereby un-masking one) would surface as if it were the active
+    shift, hiding today's own tasks behind a stale date — this is the same
+    "don't fabricate a real span past one legitimate day" rule already
+    applied in resolve_zero_diff_minutes (time_utils.py).
+    """
+    latest_checkin = frappe.db.get_value("Daily Task Log", {
+        "employee": employee_name,
+        "log_type": "Morning Check-In",
+        "docstatus": 1,
+        "date": [">=", add_days(today(), -1)],
+    }, "date", order_by="date desc")
+
+    if not latest_checkin:
+        return today()
+
+    has_eod = frappe.db.exists("Daily Task Log", {
+        "employee": employee_name,
+        "date": latest_checkin,
+        "log_type": "End of Day",
+        "docstatus": 1,
+    })
+    return latest_checkin if not has_eod else today()
+
+
 def _next_sequence(employee, task_date):
     """Next entry-order value for a new Daily Task on this employee/date."""
     return (frappe.db.get_value(
@@ -1133,6 +1165,8 @@ def save_recurring_task(name=None, description="", project_name="", estimated_ti
 
     if name:
         doc = frappe.get_doc("Recurring Task Template", name)
+        if doc.employee != employee.name:
+            frappe.throw("Not authorised to edit this task.", frappe.PermissionError)
     else:
         doc = frappe.new_doc("Recurring Task Template")
         doc.employee = employee.name
@@ -1148,6 +1182,10 @@ def save_recurring_task(name=None, description="", project_name="", estimated_ti
 
 @frappe.whitelist()
 def delete_recurring_task(name):
+    employee = _get_employee()
+    task_employee = frappe.db.get_value("Recurring Task Template", name, "employee")
+    if task_employee != employee.name:
+        frappe.throw("Not authorised to delete this task.", frappe.PermissionError)
     frappe.delete_doc("Recurring Task Template", name)
     return {"success": True}
 
@@ -1539,7 +1577,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         _reparent_attachments(t.get("attachment_names"), task_doc.name)
 
     actual_login = login_time or now_datetime().strftime("%H:%M:%S")
-    if len(str(actual_login)) == 5:
+    if re.fullmatch(r"\d{2}:\d{2}", str(actual_login)):
         actual_login = str(actual_login) + ":00"
 
     log = frappe.new_doc("Daily Task Log")
@@ -1611,27 +1649,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     # Lock employee record to serialize checkout/EOD processing
     frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee.name,))
 
-    # Resolve active date: latest check-in without a checkout, else today
-    latest_checkin = frappe.db.get_value("Daily Task Log", {
-        "employee": employee.name,
-        "log_type": "Morning Check-In",
-        "docstatus": 1
-    }, "date", order_by="date desc")
-
-    if latest_checkin:
-        has_eod = frappe.db.exists("Daily Task Log", {
-            "employee": employee.name,
-            "date": latest_checkin,
-            "log_type": "End of Day",
-            "docstatus": 1
-        })
-        if not has_eod:
-            date = latest_checkin
-        else:
-            date = today()
-    else:
-        date = today()
-
+    date = _resolve_active_checkin_date(employee.name)
     is_late_checkout = str(date) != str(today())
 
     if not isinstance(date, str):
@@ -2049,17 +2067,24 @@ def get_my_history(page=0):
     """, {"employee": employee.name, "today": today(),
           "limit": limit, "offset": offset}, as_dict=True)
 
-    for log in logs:
-        counts = frappe.db.sql("""
+    dates = [log.date for log in logs]
+    counts_by_date = {}
+    if dates:
+        rows = frappe.db.sql("""
             SELECT
+                task_date,
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'Done' THEN 1 ELSE 0 END) as done
             FROM `tabDaily Task`
-            WHERE employee = %(emp)s AND task_date = %(date)s
-        """, {"emp": employee.name, "date": log.date}, as_dict=True)
+            WHERE employee = %(emp)s AND task_date IN %(dates)s
+            GROUP BY task_date
+        """, {"emp": employee.name, "dates": dates}, as_dict=True)
+        counts_by_date = {row.task_date: row for row in rows}
 
-        log["total_tasks"] = counts[0].total if counts else 0
-        log["done_tasks"]  = counts[0].done  if counts else 0
+    for log in logs:
+        counts = counts_by_date.get(log.date)
+        log["total_tasks"] = counts.total if counts else 0
+        log["done_tasks"]  = counts.done  if counts else 0
 
     return {
         "logs":     logs,
@@ -2215,27 +2240,7 @@ def reset_morning_checkin():
     """Reset morning check-in by deleting check-in logs and newly created tasks for today."""
     employee = _get_employee()
     
-    # Resolve active date: latest check-in without a checkout, else today
-    latest_checkin = frappe.db.get_value("Daily Task Log", {
-        "employee": employee.name,
-        "log_type": "Morning Check-In",
-        "docstatus": 1
-    }, "date", order_by="date desc")
-
-    if latest_checkin:
-        has_eod = frappe.db.exists("Daily Task Log", {
-            "employee": employee.name,
-            "date": latest_checkin,
-            "log_type": "End of Day",
-            "docstatus": 1
-        })
-        if not has_eod:
-            date = latest_checkin
-        else:
-            date = today()
-    else:
-        date = today()
-
+    date = _resolve_active_checkin_date(employee.name)
     if not isinstance(date, str):
         date = frappe.utils.getdate(date).strftime("%Y-%m-%d")
 
@@ -2360,7 +2365,7 @@ def _build_team_data(employees, date):
     all_tasks = frappe.get_all("Daily Task", filters={
         "employee": ["in", emp_names],
         "task_date": date,
-    }, fields=["employee", "name", "description", "status",
+    }, fields=["employee", "name", "description", "status", "project_name",
                "task_type", "estimated_time", "actual_time", "rolled_over_from"])
     _attach_task_files(all_tasks)
 

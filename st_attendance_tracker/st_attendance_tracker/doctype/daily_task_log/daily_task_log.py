@@ -5,7 +5,6 @@ from st_attendance_tracker.time_utils import resolve_zero_diff_minutes
 
 
 class DailyTaskLog(Document):
-
     def validate(self):
         self._check_ownership()
         self._validate_no_duplicate()
@@ -199,9 +198,16 @@ class DailyTaskLog(Document):
         if self.log_type != "End of Day":
             self.working_hours = 0
             return
-        total_actual_hours = frappe.db.get_value(
-            "Daily Task",
-            {"employee": self.employee, "task_date": self.date},
-            "sum(actual_time)"
-        ) or 0.0
+        total_actual_hours = frappe.db.sql(
+            """SELECT SUM(actual_time) FROM `tabDaily Task`
+               WHERE employee = %s AND task_date = %s""",
+            (self.employee, self.date),
+        )[0][0] or 0.0
         self.working_hours = float(total_actual_hours)
+
+
+def on_doctype_update():
+    # Every check-in/checkout lookup in this app filters by employee + date
+    # together — a composite index matches that pattern far better than
+    # per-column indexes.
+    frappe.db.add_index("Daily Task Log", ["employee", "date"])

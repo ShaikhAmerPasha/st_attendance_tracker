@@ -7,7 +7,7 @@
  "field_order": ["full_name","email","role_label"],
  "fields": [
   {"fieldname":"full_name","fieldtype":"Data","in_list_view":1,"label":"Full Name","reqd":1},
-  {"fieldname":"email","fieldtype":"Data","in_list_view":1,"label":"Email","options":"Email","reqd":1},
+  {"fieldname":"email","fieldtype":"Email","in_list_view":1,"label":"Email","reqd":1},
   {"fieldname":"role_label","fieldtype":"Select","in_list_view":1,"label":"Role","options":"Team Lead\nManagement\nHR"}
  ],
  "istable": 1,

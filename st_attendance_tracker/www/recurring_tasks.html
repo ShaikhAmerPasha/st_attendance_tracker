@@ -628,11 +628,10 @@ body { padding-top: 0 !important; }
   </div>
 </div>
 
+<script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script>
 var ROWS = {};
 var EDIT_NAME = null;
-
-function esc(s){ if(s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 function dayAbbr(d){ return {Monday:'Mon',Tuesday:'Tue',Wednesday:'Wed',Thursday:'Thu',Friday:'Fri',Saturday:'Sat'}[d] || d; }
 
@@ -648,7 +647,7 @@ function renderCard(row){
     : '<span class="rt-day on" style="text-transform:none">Every day</span>';
 
   var isActive = row.is_active && parseInt(row.is_active);
-  return '<div class="rt-card" data-name="' + row.name + '">' +
+  return '<div class="rt-card" data-name="' + esc(row.name) + '">' +
     '<div class="rt-ico"><i class="ti ti-repeat" aria-hidden="true"></i></div>' +
     '<div class="rt-body">' +
       '<div class="rt-desc">' + esc(row.description) + '</div>' +
@@ -656,10 +655,10 @@ function renderCard(row){
       '<div class="rt-days">' + dayHtml + '</div>' +
     '</div>' +
     '<div class="rt-right">' +
-      '<span class="rt-toggle ' + (isActive?'active':'inactive') + '" onclick="toggleActive(\'' + row.name + '\')">' + (isActive?'Active':'Inactive') + '</span>' +
+      '<span class="rt-toggle ' + (isActive?'active':'inactive') + '" onclick="toggleActive(\'' + esc(row.name) + '\')">' + (isActive?'Active':'Inactive') + '</span>' +
       '<div class="rt-actions">' +
-        '<button class="rt-act-btn" title="Edit" onclick="openModal(ROWS[\'' + row.name + '\'])"><i class="ti ti-pencil" aria-hidden="true"></i></button>' +
-        '<button class="rt-act-btn danger" title="Delete" onclick="deleteTask(\'' + row.name + '\')"><i class="ti ti-trash" aria-hidden="true"></i></button>' +
+        '<button class="rt-act-btn" title="Edit" onclick="openModal(ROWS[\'' + esc(row.name) + '\'])"><i class="ti ti-pencil" aria-hidden="true"></i></button>' +
+        '<button class="rt-act-btn danger" title="Delete" onclick="deleteTask(\'' + esc(row.name) + '\')"><i class="ti ti-trash" aria-hidden="true"></i></button>' +
       '</div>' +
     '</div>' +
   '</div>';

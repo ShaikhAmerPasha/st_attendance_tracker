@@ -1218,6 +1218,7 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8 !important; }
 
 </style>
+<script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script>
 var ALL_EMPS = [];
 var CUR_FILTER = 'all';
@@ -1229,10 +1230,8 @@ function getBadge(status){
   var v=map[status]||'mb-lv Unknown'; var parts=v.split(' '); var cls=parts.shift();
   return '<span class="mc-badge '+cls+'">'+parts.join(' ')+'</span>';
 }
-function getTaskIcon(s){ if(s==='Done') return 'ti-circle-check ico-g'; if(s==='In Progress') return 'ti-circle-half ico-b'; return 'ti-circle ico-a'; }
 function getStag(s){ if(s==='Done') return 'st-dn'; if(s==='In Progress') return 'st-ip'; return 'st-pe'; }
 function isPendingTask(t){ return ['Pending','In Progress','Rolled Over'].indexOf(t.status)!==-1; }
-function esc(s){ if(s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 function renderTeam(){
   var list = document.getElementById('member-list');
@@ -1244,7 +1243,7 @@ function renderTeam(){
     var pct=tasks.length>0?Math.round(done/tasks.length*100):0;
     var timeInfo='';
     if(emp.status==='leave') timeInfo='<i class="ti ti-beach" aria-hidden="true"></i>Approved leave';
-    else if(emp.login_time) timeInfo='<i class="ti ti-login" aria-hidden="true"></i>In: '+emp.login_time+(emp.logout_time?' &nbsp;·&nbsp; <i class="ti ti-logout" aria-hidden="true"></i>Out: '+emp.logout_time:'');
+    else if(emp.login_time) timeInfo='<i class="ti ti-login" aria-hidden="true"></i>In: '+esc(emp.login_time)+(emp.logout_time?' &nbsp;·&nbsp; <i class="ti ti-logout" aria-hidden="true"></i>Out: '+esc(emp.logout_time):'');
     else timeInfo='<i class="ti ti-clock" aria-hidden="true"></i>Not checked in';
 
     // Task rows
@@ -1271,9 +1270,9 @@ function renderTeam(){
       }).join('');
     }
 
-    var mlTime=emp.login_time||'—', loTime=emp.logout_time||'—', netH=emp.net_hours||'—';
+    var mlTime=esc(emp.login_time)||'—', loTime=esc(emp.logout_time)||'—', netH=esc(emp.net_hours)||'—';
 
-    return '<div class="member-card" data-emp="'+emp.name+'" onclick="toggleCard(this,\''+emp.name+'\')" id="mc-'+emp.name+'">'+
+    return '<div class="member-card" data-emp="'+esc(emp.name)+'" onclick="toggleCard(this,\''+esc(emp.name)+'\')" id="mc-'+esc(emp.name)+'">'+
       '<div class="mc-head">'+
         '<div class="mc-av '+getAv(emp.employee_name)+'">'+getInitials(emp.employee_name)+'</div>'+
         '<div class="mc-info">'+
@@ -1328,8 +1327,8 @@ function updateRightPanel(empName){
     '<div class="rp-sec">'+
       '<div class="rp-lbl">Time</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'+
-        '<div class="sc"><div class="sc-n" style="font-size:15px">'+(emp.login_time||'—')+'</div><div class="sc-l">Login</div></div>'+
-        '<div class="sc"><div class="sc-n" style="font-size:15px">'+(emp.logout_time||'—')+'</div><div class="sc-l">Logout</div></div>'+
+        '<div class="sc"><div class="sc-n" style="font-size:15px">'+(esc(emp.login_time)||'—')+'</div><div class="sc-l">Login</div></div>'+
+        '<div class="sc"><div class="sc-n" style="font-size:15px">'+(esc(emp.logout_time)||'—')+'</div><div class="sc-l">Logout</div></div>'+
       '</div>'+
     '</div>'+
     (late.length ? '<div class="rp-sec"><div class="rp-lbl">Late arrivals</div>'+

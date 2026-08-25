@@ -2,7 +2,7 @@ import frappe
 from frappe.utils import today, now_datetime, getdate, get_datetime
 from st_attendance_tracker.api import (
     _to_hhmm, _to_ampm, _format_hours, _is_half_day_leave_today, _is_team_leader,
-    _attach_task_files,
+    _attach_task_files, _resolve_active_checkin_date,
 )
 
 
@@ -30,24 +30,8 @@ def get_context(context):
         )
 
     actual_today = today()
-    date = actual_today
-    latest_checkin = frappe.db.get_value("Daily Task Log", {
-        "employee": employee.name,
-        "log_type": "Morning Check-In",
-        "docstatus": 1
-    }, ["name", "date"], order_by="date desc", as_dict=True)
-
-    if latest_checkin:
-        has_eod = frappe.db.exists("Daily Task Log", {
-            "employee": employee.name,
-            "date": latest_checkin.date,
-            "log_type": "End of Day",
-            "docstatus": 1
-        })
-        if not has_eod:
-            date = latest_checkin.date
-
-    is_late_checkout = bool(latest_checkin) and (str(date) != str(actual_today))
+    date = _resolve_active_checkin_date(employee.name)
+    is_late_checkout = str(date) != str(actual_today)
     date_obj = getdate(date)
 
     # ── Work location configuration ───────────────────────────────────────
@@ -86,6 +70,8 @@ def get_context(context):
     # Check if employee has an approved half-day leave today
     try:
         is_half_day_leave = _is_half_day_leave_today(employee.name, date)
+    except frappe.PermissionError:
+        raise
     except Exception:
         is_half_day_leave = False
 
@@ -210,6 +196,8 @@ def get_context(context):
             "status": "Approved",
             "docstatus": 1
         }, "leave_type")
+    except frappe.PermissionError:
+        raise
     except Exception:
         pass
 

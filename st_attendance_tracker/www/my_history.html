@@ -821,6 +821,7 @@ body {
   </div>
   <button class="load-more-btn" id="load-more" style="display:none" onclick="loadMore()">Load more records</button>
 </div>
+<script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script>
 var PAGE = 0;
 var LOADING = false;
@@ -842,35 +843,10 @@ function getBadge(log) {
   return '<span class="day-badge db-part">Checked in</span>';
 }
 
-function getTaskIcon(s) {
-  if (s === 'Done')        return 'ti-circle-check ico-g';
-  if (s === 'In Progress') return 'ti-circle-half ico-b';
-  return 'ti-circle ico-a';
-}
-
 function getStag(s) {
   if (s === 'Done')        return 'st-dn';
   if (s === 'In Progress') return 'st-ip';
   return 'st-pe';
-}
-
-function esc(s){ if(s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-function formatTimeHM(t) {
-  if (!t) return '—';
-  if (/AM|PM/i.test(t)) return t;
-  var parts = String(t).split(':');
-  if (parts.length >= 2) {
-    var h = parseInt(parts[0], 10);
-    var m = parseInt(parts[1], 10);
-    if (isNaN(h) || isNaN(m)) return String(t);
-    var ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12;
-    h = h ? h : 12;
-    var hStr = h < 10 ? '0' + h : h;
-    var mStr = m < 10 ? '0' + m : m;
-    return hStr + ':' + mStr + ' ' + ampm;
-  }
-  return String(t);
 }
 
 function renderLog(log) {
@@ -884,7 +860,7 @@ function renderLog(log) {
   if (log.logout_time) metas.push('<span class="dm"><i class="ti ti-logout" aria-hidden="true"></i>' + formatTimeHM(log.logout_time) + '</span>');
   if (log.net_hours)   metas.push('<span class="dm"><i class="ti ti-clock" aria-hidden="true"></i>' + log.net_hours + '</span>');
 
-  return '<div class="day-card" data-date="' + log.date + '" onclick="toggleDay(this)">' +
+  return '<div class="day-card" data-date="' + esc(log.date) + '" onclick="toggleDay(this)">' +
     '<div class="day-head">' +
       '<div class="day-date-box"><div class="day-d">' + d.day + '</div><div class="day-m">' + d.month + '</div></div>' +
       '<div class="day-info">' +
@@ -897,7 +873,7 @@ function renderLog(log) {
       '</div>' +
     '</div>' +
     (total > 0 ? '<div class="prog-mini"><div class="pm-trk"><div class="pm-fill" style="width:' + pct + '%"></div></div><span class="pm-lbl">' + done + ' / ' + total + ' tasks done</span></div>' : '') +
-    '<div class="day-detail" id="dd-' + log.date + '"><div style="text-align:center;padding:14px;color:#9ca3af;font-size:12px"><i class="ti ti-loader" style="animation:spin .7s linear infinite" aria-hidden="true"></i></div></div>' +
+    '<div class="day-detail" id="dd-' + esc(log.date) + '"><div style="text-align:center;padding:14px;color:#9ca3af;font-size:12px"><i class="ti ti-loader" style="animation:spin .7s linear infinite" aria-hidden="true"></i></div></div>' +
   '</div>';
 }
 
@@ -965,7 +941,7 @@ function loadDayDetail(date) {
     },
     error: function() {
       DAY_DETAIL_LOADING[date] = false;
-      container.innerHTML = '<div style="font-size:12px;color:#b91c1c;padding:8px">Could not load details. <a href="#" onclick="loadDayDetail(\'' + date + '\');return false;">Retry</a></div>';
+      container.innerHTML = '<div style="font-size:12px;color:#b91c1c;padding:8px">Could not load details. <a href="#" onclick="loadDayDetail(\'' + esc(date) + '\');return false;">Retry</a></div>';
     }
   });
 }

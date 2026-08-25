@@ -41,15 +41,16 @@ def execute():
         for term in ['minutes', 'minute', 'mins', 'min', 'm']:
             s = s.replace(term, 'm')
 
+        remainder = s
         if 'h' in s:
             parts = s.split('h')
             try:
                 h = float(parts[0].strip())
             except ValueError:
                 pass
-            s = parts[1]
-        if 'm' in s:
-            parts = s.split('m')
+            remainder = parts[1]
+        if 'm' in remainder:
+            parts = remainder.split('m')
             try:
                 m = float(parts[0].strip())
             except ValueError:

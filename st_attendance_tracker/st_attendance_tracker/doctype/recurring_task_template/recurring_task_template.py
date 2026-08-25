@@ -8,6 +8,8 @@ class RecurringTaskTemplate(Document):
             self.employee = frappe.db.get_value(
                 "Employee", {"user_id": frappe.session.user}, "name"
             )
+            if not self.employee:
+                frappe.throw("No Employee record linked to your user account.")
 
     def before_save(self):
         self._was_deactivated = False

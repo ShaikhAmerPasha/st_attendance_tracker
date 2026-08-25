@@ -1102,6 +1102,7 @@ body {
     </div>
   </div>
 </div>
+<script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script>
 var ALL_DEPTS = [];
 var CUR_FILTER = 'all';
@@ -1112,10 +1113,8 @@ function getInitials(n){ var p=(n||'').split(' ').filter(Boolean); return p.leng
 function getAv(n){ var cls=['av-g','av-b','av-a','av-p','av-r'], s=0; for(var i=0;i<n.length;i++) s+=n.charCodeAt(i); return cls[s%cls.length]; }
 function getDot(status){ var m={checked_in:'dot-g',late:'dot-a',missing:'dot-r',leave:'dot-x',eod_done:'dot-g'}; return m[status]||'dot-x'; }
 function getDotLabel(status){ var m={checked_in:'Checked in',late:'Late',missing:'Missing',leave:'On leave',eod_done:'Checkout done'}; return m[status]||status; }
-function getTaskIcon(s){ if(s==='Done') return 'ti-circle-check ico-g'; if(s==='In Progress') return 'ti-circle-half ico-b'; return 'ti-circle ico-a'; }
 function getStag(s){ if(s==='Done') return 'st-dn'; if(s==='In Progress') return 'st-ip'; return 'st-pe'; }
 function isPendingTask(t){ return ['Pending','In Progress','Rolled Over'].indexOf(t.status)!==-1; }
-function esc(s){ if(s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 var DEPT_ICONS = ['ti-code','ti-users','ti-speakerphone','ti-tools','ti-truck','ti-building-factory'];
 
 function renderDepts(){
@@ -1133,9 +1132,9 @@ function renderDepts(){
 
     var empCells = filtered.map(function(emp){
       var selCls = SEL_EMP===emp.name?' sel':'';
-      var timeStr = emp.login_time ? emp.login_time : (emp.status==='leave'?'On leave':'Not in');
+      var timeStr = emp.login_time ? esc(emp.login_time) : (emp.status==='leave'?'On leave':'Not in');
       var done=emp.done_tasks||0, tot=emp.total_tasks||0, ep=tot>0?Math.round(done/tot*100):0;
-      return '<div class="ec'+selCls+'" data-emp="'+emp.name+'" onclick="selectEmp(this,\''+emp.name+'\')">'+
+      return '<div class="ec'+selCls+'" data-emp="'+esc(emp.name)+'" onclick="selectEmp(this,\''+esc(emp.name)+'\')">'+
         '<div class="ec-top"><div class="ec-av '+getAv(emp.employee_name)+'">'+getInitials(emp.employee_name)+'</div>'+
         '<span class="ec-name">'+esc(emp.employee_name)+'</span></div>'+
         '<div class="ec-status"><span class="dot '+getDot(emp.status)+'"></span><span style="color:#374151">'+getDotLabel(emp.status)+'</span></div>'+
@@ -1170,24 +1169,6 @@ function selectEmp(cell, empName){
     args:{ employee_name:empName, date:document.getElementById('sel-date').value },
     callback:function(r){ if(gen === SEL_EMP_GEN && r.message) renderDetail(r.message); }
   });
-}
-
-function formatTimeHM(t) {
-  if (!t) return '—';
-  if (/AM|PM/i.test(t)) return t;
-  var parts = String(t).split(':');
-  if (parts.length >= 2) {
-    var h = parseInt(parts[0], 10);
-    var m = parseInt(parts[1], 10);
-    if (isNaN(h) || isNaN(m)) return String(t);
-    var ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12;
-    h = h ? h : 12;
-    var hStr = h < 10 ? '0' + h : h;
-    var mStr = m < 10 ? '0' + m : m;
-    return hStr + ':' + mStr + ' ' + ampm;
-  }
-  return String(t);
 }
 
 function renderDetail(data){

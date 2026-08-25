@@ -9,6 +9,8 @@ class DailyTask(Document):
             self.employee = frappe.db.get_value(
                 "Employee", {"user_id": frappe.session.user}, "name"
             )
+            if not self.employee:
+                frappe.throw("No Employee record linked to your user account.")
         if not self.origin_date:
             self.origin_date = self.task_date
 
@@ -95,3 +97,9 @@ class DailyTask(Document):
                 "Cannot modify tasks after End of Day is submitted.",
                 frappe.ValidationError
             )
+
+
+def on_doctype_update():
+    # Every list/lookup in this app filters by employee + task_date together —
+    # a composite index matches that pattern far better than per-column indexes.
+    frappe.db.add_index("Daily Task", ["employee", "task_date"])

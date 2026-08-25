@@ -7,6 +7,7 @@ app_license = "MIT"
 
 # ── Desk branding polish (spacing/radius/font only, no color changes) ─────────
 app_include_css = "/assets/st_attendance_tracker/css/branding.css"
+app_include_js = "/assets/st_attendance_tracker/js/desk_checkin_button.js"
 
 # ── Custom fields on Employee doctype ─────────────────────────────────────────
 # Automatically created on bench migrate
@@ -16,6 +17,8 @@ after_migrate = ["st_attendance_tracker.setup.create_custom_fields"]
 doc_events = {
     "Employee": {
         "validate": "st_attendance_tracker.setup.validate_department_assignments",
+        "on_update": "st_attendance_tracker.setup.sync_team_lead_role",
+        "on_trash": "st_attendance_tracker.setup.sync_team_lead_role",
     }
 }
 

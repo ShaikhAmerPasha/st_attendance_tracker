@@ -134,6 +134,49 @@ def _create_attendance_request_button():
     )
 
 
+def sync_team_lead_role(doc, method=None):
+    """
+    Employee "on_update"/"on_trash" doc_event (see hooks.py). Keeps the
+    "Team Lead" role assigned exactly to employees who currently have at
+    least one active direct report (reports_to) — used to gate role-based
+    content (e.g. Wiki spaces) by the same "is a team leader" definition
+    the rest of the app already uses for reports_to.
+
+    This role is fully derived, not manually maintained: any manual grant
+    on someone without active reports gets removed on their next save.
+    (A prior attempt at a role-based Team Leader check was reverted — see
+    validate_department_assignments — because manually-tagged roles didn't
+    match reality. Deriving it here instead of trusting manual tagging is
+    the fix for that; backfill_team_lead_role patch does the same for
+    already-existing data.)
+    """
+    managers_to_check = set()
+    if doc.reports_to:
+        managers_to_check.add(doc.reports_to)
+    if method != "on_trash":
+        before = doc.get_doc_before_save()
+        if before and before.reports_to and before.reports_to != doc.reports_to:
+            managers_to_check.add(before.reports_to)
+
+    for manager_name in managers_to_check:
+        _sync_team_lead_role_for(manager_name)
+
+
+def _sync_team_lead_role_for(employee_name):
+    """Add/remove the Team Lead role on one employee's user to match whether they currently have any active direct reports."""
+    user_id = frappe.db.get_value("Employee", employee_name, "user_id")
+    if not user_id:
+        return
+
+    has_reports = frappe.db.exists("Employee", {"reports_to": employee_name, "status": "Active"})
+    has_role = "Team Lead" in frappe.get_roles(user_id)
+
+    if has_reports and not has_role:
+        frappe.get_doc("User", user_id).add_roles("Team Lead")
+    elif not has_reports and has_role:
+        frappe.get_doc("User", user_id).remove_roles("Team Lead")
+
+
 def validate_department_assignments(doc, method=None):
     """
     Employee "validate" doc_event (see hooks.py). Child table rows

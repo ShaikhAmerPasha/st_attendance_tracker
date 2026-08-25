@@ -972,7 +972,7 @@ body {
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
-  margin-bottom: 8px;
+  margin-bottom: 16px;
   transition: all 0.25s ease;
 }
 
@@ -984,8 +984,8 @@ body {
 .pg-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
+  gap: 16px;
+  padding: 16px 24px;
   background: hsl(210, 40%, 98%);
   border-bottom: 1px solid var(--border);
   cursor: pointer;
@@ -998,14 +998,14 @@ body {
 }
 
 .pg-ico {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 15px;
+  font-size: 18px;
 }
 
 .pi0 { background: hsl(217, 91%, 95%); color: hsl(217, 91%, 45%); }
@@ -1049,7 +1049,7 @@ body {
 }
 
 .pg-body {
-  padding: 8px 12px;
+  padding: 16px 24px;
 }
 
 .col-hdr {
@@ -1060,11 +1060,11 @@ body {
 .trow, .stask {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px 10px;
+  gap: 16px;
+  padding: 20px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  margin-bottom: 6px;
+  margin-bottom: 14px;
   background: var(--bg-card);
   box-shadow: var(--shadow-sm);
   transition: all 0.2s ease;
@@ -1118,7 +1118,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
 }
 
 textarea.desc-edit, textarea.carried-desc, textarea.npg-desc, textarea.ns-desc, textarea.adhoc-d {
@@ -1152,7 +1152,7 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
 .ttags {
   display: flex;
   gap: 6px;
-  margin-top: 2px;
+  margin-top: 4px;
   flex-wrap: wrap;
 }
 
@@ -1210,10 +1210,10 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
 .trow-meta, .stask-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-left: 36px;
+  gap: 16px;
+  padding-left: 38px;
   border-top: 1px dashed var(--border);
-  padding-top: 6px;
+  padding-top: 14px;
   flex-wrap: wrap;
 }
 
@@ -1385,7 +1385,7 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  margin-bottom: 8px;
+  margin-bottom: 16px;
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
@@ -1393,8 +1393,8 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
 .npg-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
+  gap: 12px;
+  padding: 16px 24px;
   background: hsl(210, 40%, 98%);
   border-bottom: 1px solid var(--border);
 }
@@ -1451,14 +1451,14 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
 }
 
 .npg-body {
-  padding: 8px 12px;
+  padding: 20px;
 }
 
 .npg-row {
   display: flex;
   align-items: start;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .npg-row:last-child {
@@ -2623,7 +2623,8 @@ body > .container { padding-top: 0 !important; }
     <span class="tnav-bc">{% if eod_done %}Day Complete{% elif is_checked_in %}Working{% else %}Check-In{% endif %}</span>
     <div class="tnav-r">
       <span class="tnav-date">{{ date }}</span>
-      <a href="/docs/st-attendance-tracker-user-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
+      {# Docs button — re-enable once Wiki is installed + patched on this site (see wiki_frappe15_compat.patch) #}
+      {# <a href="/docs/st-attendance-tracker-user-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a> #}
       <a href="/my-history" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
       {% if is_team_leader %}<a href="/team-dashboard" class="tnav-btn"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
@@ -2827,7 +2828,7 @@ body > .container { padding-top: 0 !important; }
     </div>
   </div>
   {% if total_count > 0 %}
-  <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Status</div><div class="ch">Estimated</div><div class="ch">Actual time</div><div class="ch"></div></div>
+  <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Status</div><div class="ch">Estimated</div><div class="ch">Time taken for task completion</div><div class="ch"></div></div>
   {% endif %}
   {% set pico = ['pi0','pi1','pi2','pi3','pi4','pi5'] %}
   {% if recurring_tasks %}
@@ -2844,14 +2845,14 @@ body > .container { padding-top: 0 !important; }
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="stask-meta">
-          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
+          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed - Task is finished</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress - Task is ongoing</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending - Task not started</option></select>
           <span class="ttag ttag-c" title="A fresh copy of this task appears automatically every day">Recurs daily</span>
           <div class="tmeta-fields">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
-            <div class="tmeta-field"><label>Actual time</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
-          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>
-          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark..." onchange="saveRemarkEdit(this)">{{ (task.remarks or '')|e }}</textarea>
+          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)" {% if task.remarks %}checked{% endif %}>Add remark</label>
+          <textarea class="tinp remark-in {% if not task.remarks %}hidden{% endif %}" data-id="{{ task.name }}" placeholder="Optional remark..." onchange="saveRemarkEdit(this)">{{ (task.remarks or '')|e }}</textarea>
           <div class="attach-wrap">
             <label class="attach-btn"><i class="ti ti-paperclip" aria-hidden="true"></i>Attach<input type="file" multiple hidden onchange="uploadTaskFiles(this.files,'{{ task.name }}',this.closest('.attach-wrap').querySelector('.attach-list'));this.value=''"></label>
             <div class="attach-list" data-id="{{ task.name }}">{% for f in task.attachments %}<span class="attach-chip" data-file="{{ f.name }}">{{ f.file_name|e }}<i class="ti ti-x" aria-hidden="true" onclick="removeTaskAttachment('{{ f.name }}','{{ task.name }}',this.parentElement)"></i></span>{% endfor %}</div>
@@ -2882,14 +2883,14 @@ body > .container { padding-top: 0 !important; }
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="trow-meta">
-          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
-          <label class="carry-fwd-label" title="Uncheck 'Carry forward' on a task to drop it instead of carrying it to tomorrow"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward</label>
+          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed - Task is finished</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress - Task is ongoing</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending - Task not started</option></select>
+          <label class="carry-fwd-label" title="Uncheck 'Carry forward' on a task to drop it instead of carrying it to tomorrow"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward to tomorrow</label>
           <div class="tmeta-fields">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
-            <div class="tmeta-field"><label>Actual time</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
-          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>
-          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark..." onchange="saveRemarkEdit(this)">{{ (task.remarks or '')|e }}</textarea>
+          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)" {% if task.remarks %}checked{% endif %}>Add remark</label>
+          <textarea class="tinp remark-in {% if not task.remarks %}hidden{% endif %}" data-id="{{ task.name }}" placeholder="Optional remark..." onchange="saveRemarkEdit(this)">{{ (task.remarks or '')|e }}</textarea>
           <div class="attach-wrap">
             <label class="attach-btn"><i class="ti ti-paperclip" aria-hidden="true"></i>Attach<input type="file" multiple hidden onchange="uploadTaskFiles(this.files,'{{ task.name }}',this.closest('.attach-wrap').querySelector('.attach-list'));this.value=''"></label>
             <div class="attach-list" data-id="{{ task.name }}">{% for f in task.attachments %}<span class="attach-chip" data-file="{{ f.name }}">{{ f.file_name|e }}<i class="ti ti-x" aria-hidden="true" onclick="removeTaskAttachment('{{ f.name }}','{{ task.name }}',this.parentElement)"></i></span>{% endfor %}</div>
@@ -2918,14 +2919,14 @@ body > .container { padding-top: 0 !important; }
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="stask-meta">
-          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending</option></select>
-          <label class="carry-fwd-label" title="Uncheck 'Carry forward' on a task to drop it instead of carrying it to tomorrow"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward</label>
+          <select class="tsel" data-id="{{ task.name }}" onchange="onSel(this)"><option value="Done" {% if task.status=='Done' %}selected{% endif %}>Completed - Task is finished</option><option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>In Progress - Task is ongoing</option><option value="Pending" {% if task.status=='Pending' %}selected{% endif %}>Pending - Task not started</option></select>
+          <label class="carry-fwd-label" title="Uncheck 'Carry forward' on a task to drop it instead of carrying it to tomorrow"{% if task.status=='Done' %} style="display:none"{% endif %}><input type="checkbox" class="carry-fwd-chk" data-id="{{ task.name }}" checked>Carry forward to tomorrow</label>
           <div class="tmeta-fields">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp est-in" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
-            <div class="tmeta-field"><label>Actual time</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
+            <div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp act-in" data-id="{{ task.name }}" value="{{ (task.actual_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
-          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>
-          <textarea class="tinp remark-in hidden" data-id="{{ task.name }}" placeholder="Optional remark..." onchange="saveRemarkEdit(this)">{{ (task.remarks or '')|e }}</textarea>
+          <label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)" {% if task.remarks %}checked{% endif %}>Add remark</label>
+          <textarea class="tinp remark-in {% if not task.remarks %}hidden{% endif %}" data-id="{{ task.name }}" placeholder="Optional remark..." onchange="saveRemarkEdit(this)">{{ (task.remarks or '')|e }}</textarea>
           <div class="attach-wrap">
             <label class="attach-btn"><i class="ti ti-paperclip" aria-hidden="true"></i>Attach<input type="file" multiple hidden onchange="uploadTaskFiles(this.files,'{{ task.name }}',this.closest('.attach-wrap').querySelector('.attach-list'));this.value=''"></label>
             <div class="attach-list" data-id="{{ task.name }}">{% for f in task.attachments %}<span class="attach-chip" data-file="{{ f.name }}">{{ f.file_name|e }}<i class="ti ti-x" aria-hidden="true" onclick="removeTaskAttachment('{{ f.name }}','{{ task.name }}',this.parentElement)"></i></span>{% endfor %}</div>
@@ -2988,7 +2989,7 @@ body > .container { padding-top: 0 !important; }
   {% else %}
   {% if tasks|length > 0 %}
   {% if recurring_tasks %}
-  <div style="margin-bottom:8px">
+  <div style="margin-bottom:16px">
     <div class="stlbl"><i class="ti ti-refresh" aria-hidden="true"></i>Recurring</div>
     <div class="standalone-container">
       {% for task in recurring_tasks %}
@@ -2998,17 +2999,20 @@ body > .container { padding-top: 0 !important; }
           <div class="tdesc-wrap">
             <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description|e }}</textarea><div class="ttags"><span class="ttag ttag-c">Recurs daily</span></div>
           </div>
-          <div class="tmeta-fields" style="margin-top:0">
+          <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+        </div>
+        <div class="stask-meta">
+          <span style="font-size:12px;color:#9ca3af">Recurring</span>
+          <div class="tmeta-fields">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
-          <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
       </div>
       {% endfor %}
     </div>
   </div>
   {% endif %}
-  <div class="tbar" style="margin-bottom:6px"><span class="tbar-t"><i class="ti ti-history" aria-hidden="true"></i>Carried from previous days</span></div>
+  <div class="tbar" style="margin-bottom:10px"><span class="tbar-t"><i class="ti ti-history" aria-hidden="true"></i>Carried from previous days</span></div>
   <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Project</div><div class="ch">Estimated</div><div class="ch"></div><div class="ch"></div></div>
   {% for pname, ptasks in projects.items() %}
   <div class="pg npg" id="cpg{{ loop.index }}" data-pgid="cpg{{ loop.index }}">
@@ -3028,10 +3032,13 @@ body > .container { padding-top: 0 !important; }
           <div class="tdesc-wrap">
             <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description|e }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>
           </div>
-          <div class="tmeta-fields" style="margin-top:0">
+          <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+        </div>
+        <div class="trow-meta">
+          <span style="font-size:12px;color:#9ca3af">{{ pname|e }}</span>
+          <div class="tmeta-fields">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
-          <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
       </div>
       {% endfor %}
@@ -3042,7 +3049,7 @@ body > .container { padding-top: 0 !important; }
   </div>
   {% endfor %}
   {% if standalone %}
-  <div style="margin-top:8px">
+  <div style="margin-top:16px">
     <div class="stlbl"><i class="ti ti-minus" aria-hidden="true"></i>Standalone tasks</div>
     <div class="standalone-container">
       {% for task in standalone %}
@@ -3052,10 +3059,13 @@ body > .container { padding-top: 0 !important; }
           <div class="tdesc-wrap">
             <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description|e }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>
           </div>
-          <div class="tmeta-fields" style="margin-top:0">
+          <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
+        </div>
+        <div class="stask-meta">
+          <span style="font-size:12px;color:#9ca3af">Standalone</span>
+          <div class="tmeta-fields">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
-          <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
       </div>
       {% endfor %}
@@ -3157,7 +3167,6 @@ body > .container { padding-top: 0 !important; }
   </div>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
-<script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script>
 var LOGIN_TIME = "{{ login_time or current_time }}";
 var LOG_DATE = "{{ date }}";
@@ -3177,6 +3186,7 @@ try {
   WLC = {value:'Office',readonly:false,options:['Office','WFH'],validate:true,note:'Select work location.'};
 }
 var SEL_WL = WLC.value || 'Office';
+function esc(s) { if (s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function wlLabel(o) {
   if (o === 'WFH' && WLC.hybrid_routine_day) return 'Hybrid (WFH)';
   return o;
@@ -3559,18 +3569,9 @@ function toggleLunchFields() {
 }
 
 function toggleRemark(chk) {
-  var row = chk.closest('.trow, .stask, [data-adhocid]');
+  var row = chk.closest('[data-id], [data-adhocid]');
   var ta = row ? row.querySelector('.remark-in') : null;
-  if (ta) {
-    if (chk.checked) {
-      ta.classList.remove('hidden');
-    } else {
-      ta.classList.add('hidden');
-      ta.value = ''; // clear remark if unchecked
-      if (typeof saveRemarkEdit === 'function') saveRemarkEdit(ta);
-      if (typeof saveEodDraft === 'function') saveEodDraft();
-    }
-  }
+  if (ta) ta.classList.toggle('hidden', !chk.checked);
 }
 
 function toggleProfileDropdown(e) {
@@ -3692,7 +3693,6 @@ function updCounts(){
   var d=document.getElementById('tc-n'); if(d) d.textContent=tot;
   var s=document.getElementById('tc-s'); if(s) s.textContent=tot>0?(CARRIED>0?'carried + new':'queued'):'add below';
   var h=document.getElementById('fhint'); if(h) h.textContent=tot+' task'+(tot!==1?'s':'')+(tot===0?' — add at least one':'');
-  if (document.getElementById('btn-ci')) saveMorningDraft();
 }
 var pgC=0, tkC=0;
 function addPG() {
@@ -3714,8 +3714,7 @@ function addTaskToPG(gid) {
   r.innerHTML='<textarea class="npg-ti npg-desc" data-tid="'+tid+'" data-pg="'+gid+'" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit"></textarea>'+
     '<input class="npg-ei" data-tid="'+tid+'" placeholder="e.g. 1h 30m, 45m">'+
     '<span class="npg-trm" onclick="this.closest(\'.npg-row\').remove();updCounts()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';
-  var addBtn = c.querySelector('.pg-add, .npg-add');
-  if (addBtn && addBtn.parentElement === c) c.insertBefore(r, addBtn); else c.appendChild(r);
+  c.appendChild(r);
   var ta = r.querySelector('textarea');
   ta.focus();
   autoResizeTextarea(ta);
@@ -3785,7 +3784,6 @@ async function submitMorning() {
     var r=await frappe.call({method:'st_attendance_tracker.api.submit_morning_log',args:{new_tasks:JSON.stringify(newTasks),login_time:loginVal,work_location:curWL,carried_updates:JSON.stringify(cUp),half_day_session:hdSessionVal}});
     if(r.message&&r.message.success){ 
       localStorage.removeItem('st_morning_draft');
-      localStorage.removeItem('st_morning_edits');
       toast('Checked in at '+r.message.login_time+'. Have a great day!','ok',2000); 
       setTimeout(function(){ location.reload(); },1800); 
     }
@@ -3804,9 +3802,9 @@ function addAdhoc(){
     '<div class="trm adhoc-rm" onclick="this.closest(\'.stask\').remove(); updProg();" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
     '</div>'+
     '<div class="stask-meta">'+
-    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this); saveEodDraft()"><option value="Done">Completed</option><option value="In Progress">In Progress</option><option value="Pending" selected>Pending</option></select>'+
+    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this); saveEodDraft()"><option value="Done">Completed - Task is finished</option><option value="In Progress">In Progress - Task is ongoing</option><option value="Pending" selected>Pending - Task not started</option></select>'+
     '<div class="tmeta-fields">'+
-    '<div class="tmeta-field"><label>Actual time</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 1h 30m, 45m"></div>'+
+    '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 1h 30m, 45m"></div>'+
     '</div>'+
     '<label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>'+
     '<textarea class="tinp remark-in hidden" data-aid="'+id+'" placeholder="Optional remark..."></textarea>'+
@@ -3841,9 +3839,9 @@ function addAdhocToProj(pgId, projName) {
     '<div class="trm adhoc-rm" onclick="this.closest(\'[data-adhocid]\').remove(); updProg();" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
     '</div>'+
     '<div class="trow-meta">'+
-    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this); saveEodDraft()"><option value="Done">Completed</option><option value="In Progress">In Progress</option><option value="Pending" selected>Pending</option></select>'+
+    '<select class="tsel" data-aid="'+id+'" onchange="onSel(this); saveEodDraft()"><option value="Done">Completed - Task is finished</option><option value="In Progress">In Progress - Task is ongoing</option><option value="Pending" selected>Pending - Task not started</option></select>'+
     '<div class="tmeta-fields">'+
-    '<div class="tmeta-field"><label>Actual time</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 1h 30m, 45m"></div>'+
+    '<div class="tmeta-field"><label>Time taken for task completion</label><input type="text" class="tinp adhoc-act" data-aid="'+id+'" placeholder="e.g. 1h 30m, 45m"></div>'+
     '</div>'+
     '<label class="remark-toggle"><input type="checkbox" class="remark-chk" onchange="toggleRemark(this)">Add remark</label>'+
     '<textarea class="tinp remark-in hidden" data-aid="'+id+'" placeholder="Optional remark..."></textarea>'+
@@ -4420,17 +4418,6 @@ function saveMorningDraft() {
     newTasks.push({ type: 'standalone', head: (ns.querySelector('.ns-head')||{}).value||'', desc: (ns.querySelector('.ns-desc')||{}).value||'', est: (ns.querySelector('.ns-ei')||{}).value||'' });
   });
   localStorage.setItem('st_morning_draft', JSON.stringify(newTasks));
-
-  var existingEdits = {};
-  document.querySelectorAll('.stask[data-id]').forEach(function(row){
-    var id = row.dataset.id;
-    var desc = (row.querySelector('.carried-desc')||{}).value||'';
-    var est = (row.querySelector('.carried-est')||{}).value||'';
-    if(desc || est) {
-      existingEdits[id] = {desc: desc, est: est};
-    }
-  });
-  localStorage.setItem('st_morning_edits', JSON.stringify(existingEdits));
 }
 
 function saveEodDraft() {
@@ -4515,20 +4502,6 @@ function loadMorningDraft() {
           }
        }
     });
-    
-    var editsStr = localStorage.getItem('st_morning_edits');
-    if (editsStr) {
-      var edits = JSON.parse(editsStr);
-      Object.keys(edits).forEach(function(id) {
-        var row = document.querySelector('.stask[data-id="'+id+'"]');
-        if(row) {
-          var descEl = row.querySelector('.carried-desc');
-          var estEl = row.querySelector('.carried-est');
-          if(edits[id].desc && descEl) { descEl.value = edits[id].desc; autoResizeTextarea(descEl); }
-          if(edits[id].est && estEl) estEl.value = edits[id].est;
-        }
-      });
-    }
   } catch(e){}
 }
 
@@ -4611,18 +4584,6 @@ document.addEventListener('input', function(e) {
   if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') {
     if(document.getElementById('btn-ci')) saveMorningDraft();
     if(document.getElementById('btn-eod')) saveEodDraft();
-  }
-});
-
-document.addEventListener('change', function(e) {
-  var t = e.target;
-  if (t.classList.contains('npg-ei') || t.classList.contains('ns-ei') || t.classList.contains('est-in') || t.classList.contains('act-in') || t.classList.contains('adhoc-act') || t.classList.contains('pg-ei') || t.classList.contains('carried-est')) {
-    var val = t.value.trim();
-    if (val && /^\d+(\.\d+)?$/.test(val)) {
-      t.value = val + 'm';
-      if(document.getElementById('btn-ci')) saveMorningDraft();
-      if(document.getElementById('btn-eod')) saveEodDraft();
-    }
   }
 });
 loadMorningDraft();
