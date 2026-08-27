@@ -6,8 +6,8 @@ app_email = "ameer@standardtouch.com"
 app_license = "MIT"
 
 # ── Desk branding polish (spacing/radius/font only, no color changes) ─────────
-app_include_css = "/assets/st_attendance_tracker/css/branding.css"
-app_include_js = "/assets/st_attendance_tracker/js/desk_checkin_button.js"
+app_include_css = ["/assets/st_attendance_tracker/css/branding.css"]
+app_include_js = ["/assets/st_attendance_tracker/js/st_attendance_tracker.js"]
 
 # ── Custom fields on Employee doctype ─────────────────────────────────────────
 # Automatically created on bench migrate

@@ -1,0 +1,1 @@
+['libs.bundle.js', 'desk.bundle.js', 'list.bundle.js', 'form.bundle.js', 'controls.bundle.js', 'report.bundle.js', 'telemetry.bundle.js', 'billing.bundle.js', 'erpnext.bundle.js', '/assets/desar_manufacturing/js/desar.js', 'hrms.bundle.js', '/assets/st_attendance_tracker/js/st_attendance_tracker.js']

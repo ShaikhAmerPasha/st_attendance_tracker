@@ -748,76 +748,160 @@ body {
   border-color: var(--warning-border);
 }
 
-/* ── TIME DETAILS CARD (CHECKOUT) ── */
+/* ── TIME DETAILS STRIP (CHECKOUT) ── */
 .eod-f {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 28px;
+  padding: 16px 20px;
   box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.ef-hdr {
+.ef-strip {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--text-main);
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.ef-hdr i {
-  font-size: 20px;
+.ef-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ef-tag i {
+  font-size: 17px;
   color: var(--primary);
 }
 
-.ef-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+.ef-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  flex-shrink: 0;
 }
 
-.ef-f label {
-  display: block;
+.ef-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.ef-field-label {
   font-size: 11px;
   font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 8px;
-}
-
-.ef-f label .opt {
-  font-size: 10px;
   color: var(--text-light);
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: 0;
-  margin-left: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.ef-f input[type=time] {
-  width: 100%;
+.ef-field input[type=time] {
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 12px 16px;
-  font-size: 14px;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-main);
   font-family: inherit;
   outline: none;
   background: hsl(210, 40%, 98%);
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
+  width: 120px;
 }
 
-.ef-f input[type=time]:focus {
+.ef-field input[type=time]:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
   background: var(--bg-card);
+}
+
+.ef-field input[type=time][readonly] {
+  background: hsl(210, 40%, 95%);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.ef-rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  background: hsl(243, 75%, 97%);
+  border: 1px solid hsl(243, 75%, 92%);
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.ef-rec i {
+  font-size: 13px;
+}
+
+.ef-lunch-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: hsl(210, 40%, 98%);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.ef-lunch-toggle:hover {
+  border-color: var(--border-focus);
+  background: hsl(210, 40%, 96%);
+}
+
+.ef-lunch-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  margin: 0;
+}
+
+.ef-lunch-fields {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.ef-lunch-fields.hidden {
+  display: none !important;
+}
+
+.ef-lunch-sep {
+  font-size: 11px;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.ef-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* ── PROGRESS BAR CARD ── */
@@ -831,9 +915,6 @@ body {
   border-radius: var(--radius-lg);
   padding: 20px 24px;
   box-shadow: var(--shadow-sm);
-  position: sticky;
-  top: 102px;
-  z-index: 50;
 }
 
 .pb-mini {
@@ -1048,8 +1129,32 @@ body {
   display: none;
 }
 
+.stlbl {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.standalone-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
 .pg-body {
-  padding: 8px 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .col-hdr {
@@ -1060,19 +1165,19 @@ body {
 .trow, .stask {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  margin-bottom: 6px;
-  background: var(--bg-card);
-  box-shadow: var(--shadow-sm);
-  transition: all 0.2s ease;
+  gap: 6px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.trow:last-child, .stask:last-child {
+  border-bottom: none;
 }
 
 .trow:hover, .stask:hover {
-  border-color: var(--primary-hover);
-  box-shadow: var(--shadow-md);
+  background: hsl(210, 40%, 99%);
 }
 
 .trow-main, .stask-main {
@@ -1210,11 +1315,10 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
 .trow-meta, .stask-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-left: 36px;
-  border-top: 1px dashed var(--border);
-  padding-top: 6px;
+  gap: 12px;
+  padding-left: 38px;
   flex-wrap: wrap;
+  margin-top: 2px;
 }
 
 .tsel {
@@ -1312,18 +1416,18 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 24px;
+  padding: 12px;
   cursor: pointer;
   color: var(--primary);
-  border-top: 1px dashed var(--border);
+  border-top: 1px solid var(--border);
   font-size: 13px;
-  font-weight: 700;
-  background: hsl(210, 40%, 99%);
+  font-weight: 600;
+  background: transparent;
   transition: all 0.2s;
 }
 
 .pg-add:hover {
-  background: var(--primary-light);
+  background: hsl(210, 40%, 98%);
   color: var(--primary-hover);
 }
 
@@ -2308,10 +2412,14 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
   .tmeta-field input {
     width: 85px !important;
   }
-  .ef-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
+  .ef-strip {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
+  .ef-sep { display: none; }
+  .ef-field { width: 100%; }
+  .ef-field input[type=time] { flex: 1; }
   .mob-nav {
     display: flex;
     position: fixed;
@@ -2486,32 +2594,7 @@ body {
 }
 
 /* Optional Lunch Toggle Styles */
-.lunch-toggle-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  margin-bottom: 12px;
-}
-.lunch-checkbox {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: var(--primary);
-}
-.lunch-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  user-select: none;
-}
-.lunch-fields-container {
-  transition: all 0.2s ease-in-out;
-}
-.lunch-fields-container.hidden {
-  display: none !important;
-}
+/* lunch toggle styles moved into .ef-lunch-toggle above */
 .late-checkout-banner {
   margin-bottom: 12px;
   padding: 10px 14px;
@@ -2621,6 +2704,18 @@ body > .container { padding-top: 0 !important; }
     <span class="tnav-logo">ST Tracker</span>
     <span class="tnav-sep"></span>
     <span class="tnav-bc">{% if eod_done %}Day Complete{% elif is_checked_in %}Working{% else %}Check-In{% endif %}</span>
+    <div class="tnav-pb" id="tnav-pb" style="display:none; align-items:center; gap:12px; margin-left:16px; border-left:1px solid var(--border); padding-left:16px; opacity:0; transition:opacity 0.2s;">
+      <div style="width:80px; height:6px; background:hsl(210, 40%, 94%); border-radius:999px; overflow:hidden;">
+        <div id="tnav-pb-fill" style="height:100%; background:linear-gradient(90deg, var(--success), hsl(150, 84%, 45%)); width:0%; transition:width 0.4s;"></div>
+      </div>
+      <span id="tnav-pb-n" style="font-size:12px; font-weight:800; font-family:'Plus Jakarta Sans', sans-serif;" title="Tasks Completed">0/0</span>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Net</span>
+        <span id="tnav-pb-nh" style="font-size:13px; font-weight:800; font-family:'Plus Jakarta Sans', sans-serif; color:var(--primary);">0h 0m</span>
+        <span style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-left:8px;">Tasks</span>
+        <span id="tnav-pb-th" style="font-size:13px; font-weight:800; font-family:'Plus Jakarta Sans', sans-serif; color:var(--primary);">—</span>
+      </div>
+    </div>
     <div class="tnav-r">
       <span class="tnav-date">{{ date }}</span>
       <a href="/docs/st-attendance-tracker-user-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
@@ -2770,45 +2865,51 @@ body > .container { padding-top: 0 !important; }
   </div>
   {% endif %}
   <div class="eod-f">
-    <div class="ef-hdr"><i class="ti ti-clock" aria-hidden="true"></i>Time details</div>
-
-    <div class="lunch-toggle-row">
-      <input type="checkbox" id="include_lunch" class="lunch-checkbox" onchange="toggleLunchFields()">
-      <label for="include_lunch" class="lunch-label">Include Lunch Break</label>
+    <div class="ef-strip">
+      <div class="ef-tag"><i class="ti ti-clock" aria-hidden="true"></i>Time</div>
+      <div class="ef-sep"></div>
+      <div class="ef-field">
+        <span class="ef-field-label">Logout</span>
+        <input type="time" id="logout_time" value="{{ current_time }}" readonly>
+      </div>
+      <label class="ef-lunch-toggle">
+        <input type="checkbox" id="include_lunch" onchange="toggleLunchFields()">
+        <span>Lunch break</span>
+      </label>
+      <div class="ef-lunch-fields hidden" id="lunch-fields-wrap">
+        <div class="ef-field">
+          <span class="ef-field-label">From</span>
+          <input type="time" id="lunch_from" value="14:00" oninput="recalc()">
+        </div>
+        <span class="ef-lunch-sep">→</span>
+        <div class="ef-field">
+          <span class="ef-field-label">To</span>
+          <input type="time" id="lunch_to" value="15:00" oninput="recalc()">
+        </div>
+      </div>
+      <div class="ef-rec" id="rec-lo-banner">
+        <i class="ti ti-info-circle" aria-hidden="true"></i>
+        <span>Rec. logout <strong id="rec-lo-val">—</strong></span>
+      </div>
     </div>
-
-    <div class="ef-grid">
-      <div class="ef-f"><label>Logout time *</label><input type="time" id="logout_time" value="{{ current_time }}" readonly></div>
-      <div class="ef-f lunch-fields-container hidden"><label>Lunch from <span class="opt">optional</span></label><input type="time" id="lunch_from" value="14:00" oninput="recalc()"></div>
-      <div class="ef-f lunch-fields-container hidden"><label>Lunch to <span class="opt">optional</span></label><input type="time" id="lunch_to" value="15:00" oninput="recalc()"></div>
-    </div>
-    <div id="lunch-warn" style="display:none; margin-top:6px; padding:8px 12px; background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-md); font-size:12px; color:#dc2626; align-items:center; gap:6px;"></div>
-    
-
-    <div id="rec-lo-banner" style="margin-top: 12px; padding: 10px 14px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: var(--radius-md); font-size: 12px; color: #4f46e5; display: flex; align-items: center; gap: 8px;">
-      <i class="ti ti-info-circle" style="font-size: 16px;"></i>
-      <span>
-        Based on your login at <strong>{{ login_time }}</strong>{% if is_half_day_leave %} (Half-Day Leave detected){% endif %},
-        your recommended logout time is <strong id="rec-lo-val">—</strong>.
-      </span>
-    </div>
+    <div id="lunch-warn" style="display:none; padding:6px 12px; background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); font-size:11px; color:#dc2626; align-items:center; gap:6px;"></div>
     {% if is_half_day_leave and half_day_session %}
-    <div style="margin-top: 8px; padding: 8px 14px; font-size: 12px; color: #4f46e5;">
-      <strong>{{ half_day_session }}</strong>: checking in as <strong>{{ work_location }}</strong>.
-      {% if half_day_session == "Second Half" %}First Half{% else %}Second Half{% endif %} is your approved leave.
+    <div class="ef-info-row" style="font-size: 12px; color: var(--primary);">
+      <i class="ti ti-calendar-half" style="font-size:14px" aria-hidden="true"></i>
+      <span><strong>{{ half_day_session }}</strong> · {{ work_location }} · {% if half_day_session == "Second Half" %}First Half{% else %}Second Half{% endif %} is leave</span>
     </div>
     {% endif %}
     {% if is_half_day_leave and not half_day_session %}
-    <div style="margin-top: 12px; padding: 10px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-md); display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-      <span style="font-size: 12px; color: #92400e; flex: 1; min-width: 200px;">
-        Your half-day leave is approved but not yet applied to today's check-in. Select which half you're working, and it'll be recorded as <strong>{{ work_location }}</strong> (your check-in location) for that half.
+    <div class="ef-info-row" style="padding:8px 12px; background:#fffbeb; border:1px solid #fde68a; border-radius:var(--radius-sm);">
+      <span style="font-size: 11px; color: #92400e; flex: 1;">
+        Half-day leave approved — select which half you're working (recorded as <strong>{{ work_location }}</strong>).
       </span>
-      <select id="hd-session-update-sel" style="height: 34px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 8px; font-size: 12px;">
+      <select id="hd-session-update-sel" style="height: 30px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 8px; font-size: 11px;">
         <option value="">Select half...</option>
         <option value="First Half">First Half</option>
         <option value="Second Half">Second Half</option>
       </select>
-      <button class="btn" id="btn-apply-hd" onclick="applyHalfDaySession()">Apply Half-Day</button>
+      <button class="btn" id="btn-apply-hd" onclick="applyHalfDaySession()" style="font-size:11px; padding:4px 12px;">Apply</button>
     </div>
     {% endif %}
   </div>
@@ -2897,7 +2998,7 @@ body > .container { padding-top: 0 !important; }
         </div>
       </div>
       {% endfor %}
-      <div class="pg-add" data-pgid="epg{{ loop.index }}" data-pname="{{ pname|e }}" onclick="addAdhocToProj(this.dataset.pgid,this.dataset.pname)" style="color:#7c3aed;background:#faf5ff;border-top:1px dashed #e9d5ff">
+      <div class="pg-add" data-pgid="epg{{ loop.index }}" data-pname="{{ pname|e }}" onclick="addAdhocToProj(this.dataset.pgid,this.dataset.pname)">
         <i class="ti ti-zap" aria-hidden="true"></i>Add additional task to this project
       </div>
     </div>
@@ -3498,6 +3599,7 @@ function recalc(){
 
     var topNh = document.getElementById('top-nh'); if (topNh) topNh.textContent = netStr;
     var pbNh = document.getElementById('pb-nh'); if (pbNh) pbNh.textContent = netStr;
+    var tnavNh = document.getElementById('tnav-pb-nh'); if (tnavNh) tnavNh.textContent = netStr;
 
     // Sum task actual hours dynamically
     var totalActualMin = 0;
@@ -3512,6 +3614,7 @@ function recalc(){
     var thVal = formatMinsToHoursMins(totalActualMin);
     var topTh = document.getElementById('top-th'); if (topTh) topTh.textContent = thVal;
     var pbTh = document.getElementById('pb-th'); if (pbTh) pbTh.textContent = thVal;
+    var tnavTh = document.getElementById('tnav-pb-th'); if (tnavTh) tnavTh.textContent = thVal;
   }
 }
 // Total Task Hours only summed .act-in/.adhoc-act values when recalc() ran —
@@ -3540,14 +3643,14 @@ document.addEventListener('input', function(e) {
 
 function toggleLunchFields() {
   var chk = document.getElementById('include_lunch');
-  var containers = document.querySelectorAll('.lunch-fields-container');
-  containers.forEach(function(el) {
+  var wrap = document.getElementById('lunch-fields-wrap');
+  if (wrap) {
     if (chk && chk.checked) {
-      el.classList.remove('hidden');
+      wrap.classList.remove('hidden');
     } else {
-      el.classList.add('hidden');
+      wrap.classList.add('hidden');
     }
-  });
+  }
   // Set default to 2 PM - 3 PM if checked and empty
   if (chk && chk.checked) {
     var lf = document.getElementById('lunch_from');
@@ -3600,6 +3703,8 @@ function updProg(){
   var tot=sels.length, pct=tot>0?Math.round(done/tot*100):0;
   var f=document.getElementById('pb-fill'); if(f) f.style.width=pct+'%';
   var l=document.getElementById('pb-n'); if(l) l.textContent=done+' / '+tot;
+  var tf=document.getElementById('tnav-pb-fill'); if(tf) tf.style.width=pct+'%';
+  var tl=document.getElementById('tnav-pb-n'); if(tl) tl.textContent=done+' / '+tot;
   
   var tsd=document.getElementById('ts-done'); if(tsd) tsd.textContent=done;
   var tsp=document.getElementById('ts-prog'); if(tsp) tsp.textContent=prog;
@@ -4199,6 +4304,23 @@ setTimeout(initTextareaResizer, 100);
 setTimeout(initTextareaResizer, 500);
 setTimeout(initTextareaResizer, 1500);
 
+window.addEventListener('scroll', function() {
+  var pbRow = document.querySelector('.pb-row');
+  var tnavPb = document.getElementById('tnav-pb');
+  if (pbRow && tnavPb) {
+    var rect = pbRow.getBoundingClientRect();
+    if (rect.bottom < 70) {
+      tnavPb.style.display = 'flex';
+      // tiny timeout to allow display:flex to apply before setting opacity for transition
+      setTimeout(function() { tnavPb.style.opacity = '1'; }, 10);
+    } else {
+      tnavPb.style.opacity = '0';
+      // hide completely after transition
+      setTimeout(function() { if (tnavPb.style.opacity === '0') tnavPb.style.display = 'none'; }, 200);
+    }
+  }
+});
+
 /* --- PASTE MULTIPLE TASKS ---
    Pasting 2+ lines into a task description field splits them into one
    row per line instead of one multi-line description. A trailing
@@ -4414,7 +4536,12 @@ function saveMorningDraft() {
     pg.querySelectorAll('.npg-row').forEach(function(row){
       tasks.push({ desc: (row.querySelector('.npg-desc')||{}).value||'', est: (row.querySelector('.npg-ei')||{}).value||'' });
     });
-    newTasks.push({type:'project', name: pn, tasks: tasks});
+    if (pg.dataset.pgid && pg.dataset.pgid.startsWith('cpg')) {
+      if (tasks.length === 0) return;
+      newTasks.push({type:'existing_project', pgId: pg.dataset.pgid, tasks: tasks});
+    } else {
+      newTasks.push({type:'project', name: pn, tasks: tasks});
+    }
   });
   document.querySelectorAll('.ns[data-stid]').forEach(function(ns){
     newTasks.push({ type: 'standalone', head: (ns.querySelector('.ns-head')||{}).value||'', desc: (ns.querySelector('.ns-desc')||{}).value||'', est: (ns.querySelector('.ns-ei')||{}).value||'' });
@@ -4496,6 +4623,18 @@ function loadMorningDraft() {
              if(d.head) last.querySelector('.ns-head').value = d.head;
              if(d.desc) { last.querySelector('.ns-desc').value = d.desc; autoResizeTextarea(last.querySelector('.ns-desc')); }
              if(d.est) last.querySelector('.ns-ei').value = d.est;
+          }
+       } else if (d.type === 'existing_project') {
+          var pg = document.getElementById(d.pgId);
+          if(pg) {
+             d.tasks.forEach(function(t) {
+                addTaskToPG(d.pgId);
+                var pgRows = pg.querySelectorAll('.npg-row'); var lastRow = pgRows[pgRows.length-1];
+                if(lastRow) {
+                   if(t.desc) { lastRow.querySelector('.npg-desc').value = t.desc; autoResizeTextarea(lastRow.querySelector('.npg-desc')); }
+                   if(t.est) lastRow.querySelector('.npg-ei').value = t.est;
+                }
+             });
           }
        } else if (d.type === 'project') {
           addPG();

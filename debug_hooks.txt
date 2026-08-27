@@ -1,0 +1,2 @@
+Installed: ['frappe', 'excel_header_app', 'erpnext', 'desar_manufacturing', 'hrms', 'st_attendance_tracker', 'client_mobile', 'site_ops_mobile', 'tac_app', 'st_analytics_app', 'wiki']
+Hooks app_include_js: ['libs.bundle.js', 'desk.bundle.js', 'list.bundle.js', 'form.bundle.js', 'controls.bundle.js', 'report.bundle.js', 'telemetry.bundle.js', 'billing.bundle.js', 'erpnext.bundle.js', '/assets/desar_manufacturing/js/desar.js', 'hrms.bundle.js', '/assets/st_attendance_tracker/js/st_attendance_tracker.js']

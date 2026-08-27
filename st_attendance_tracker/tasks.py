@@ -9,6 +9,8 @@ HR reports go to all users with HR Manager role.
 Employee reminders go directly to each employee's work email.
 """
 
+from datetime import timedelta
+
 import frappe
 from frappe.utils import today, getdate, now_datetime
 from st_attendance_tracker.api import _to_hhmm
@@ -24,6 +26,8 @@ def send_employee_checkin_reminder():
     Emails each employee individually who hasn't checked in today.
     """
     date = today()
+    if _skip_if_not_due((10, 30)) or _already_sent_today("last_checkin_reminder_date", date):
+        return
     day_label = getdate(date).strftime("%A, %d %B %Y")
 
     expected = _get_expected_employees(date)
@@ -111,6 +115,8 @@ def send_morning_combined_report():
     Sent at 11:30 AM IST Mon-Sat to all HR Manager role users.
     """
     date = today()
+    if _skip_if_not_due((11, 30)) or _already_sent_today("last_morning_report_date", date):
+        return
     expected = _get_expected_employees(date)
     if not expected:
         return
@@ -229,6 +235,8 @@ def send_morning_combined_report():
 def send_eod_missing_report():
     """EOD missing report sent at 10:00 PM IST Mon-Sat to all HR Manager role users."""
     date = today()
+    if _skip_if_not_due((22, 0)) or _already_sent_today("last_eod_missing_report_date", date):
+        return
     expected = _get_expected_employees(date)
     if not expected:
         return
@@ -304,6 +312,8 @@ def send_employee_checkout_reminder():
     Emails each employee individually who checked in today but hasn't checked out yet.
     """
     date = today()
+    if _skip_if_not_due((22, 30)) or _already_sent_today("last_checkout_reminder_date", date):
+        return
     day_label = getdate(date).strftime("%A, %d %B %Y")
 
     expected = _get_expected_employees(date)
@@ -389,6 +399,39 @@ def send_employee_checkout_reminder():
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _skip_if_not_due(scheduled_time, grace_minutes=1):
+    """True if called meaningfully earlier than `scheduled_time` (hour, minute) —
+    a sign of a spurious early re-fire (e.g. a worker restart/redeploy re-queuing
+    the job) rather than the real scheduled run, which Frappe's own scheduler
+    already gates from firing early under normal operation. Small grace window
+    absorbs ordinary scheduler tick jitter."""
+    hour, minute = scheduled_time
+    due_at = now_datetime().replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return now_datetime() < due_at - timedelta(minutes=grace_minutes)
+
+
+def _already_sent_today(field_name, date):
+    """Lock ST Attendance Settings and check/mark a scheduled job as sent
+    for `date`. Returns True if already sent (caller should skip); otherwise
+    marks it sent and returns False.
+
+    Guards against the scheduler firing a job twice the same day (a worker
+    restart/redeploy can re-queue a job before its last_execution commits) —
+    the row lock serializes concurrent fires instead of racing on a plain
+    check, and the marker write rides in the same transaction the scheduler
+    wrapper commits after the job returns / rolls back if it raises, so a
+    failed send never gets falsely marked sent.
+    """
+    frappe.db.sql(
+        "select value from `tabSingles` where doctype = %s for update",
+        ("ST Attendance Settings",),
+    )
+    if frappe.db.get_single_value("ST Attendance Settings", field_name) == getdate(date):
+        return True
+    frappe.db.set_single_value("ST Attendance Settings", field_name, date)
+    return False
+
 
 def _get_expected_employees(date):
     """Active employees excluding those on approved leave or holiday today."""

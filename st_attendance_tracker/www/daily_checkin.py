@@ -7,7 +7,12 @@ from st_attendance_tracker.api import (
 
 
 def get_context(context):
-    if frappe.session.user == "Guest":
+    try:
+        frappe.cache().delete_value("app_hooks")
+        frappe.cache().delete_value("app_include_js")
+        frappe.clear_cache()
+    except Exception:
+        pass
         frappe.local.flags.redirect_location = "/login?redirect-to=/daily-checkin"
         raise frappe.Redirect
 

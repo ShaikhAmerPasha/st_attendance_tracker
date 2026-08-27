@@ -681,82 +681,152 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
 
 
 def _render_grouped_task_summary(tasks, is_checkout=False, lunch_from=None, lunch_to=None):
-    """Task list as a project heading followed by a bulleted list of its
-    tasks — same project-grouping as _render_screenshot_task_table, no
-    table markup. Department-level alternative task-summary format."""
-    if not tasks:
-        return '<p style="font-size:13px;color:#9ca3af;font-style:italic;margin:6px 0">No tasks added yet.</p>'
+    """Task list grouped by project, rendered as clean plain-text-style HTML.
 
+    Designed for readability on mobile email clients: no absolute positioning,
+    no colored badge spans, no tables. Projects are bold headings; tasks are
+    dash-prefixed lines with metadata on a subtle second line.
+
+    Department-level alternative to the tabular layout — selected via the
+    "Task Summary Email Format = Grouped List" setting on Department.
+    """
+    if not tasks:
+        return (
+            '<p style="font-size:14px;color:#9ca3af;font-style:italic;'
+            'margin:8px 0;font-family:\'Segoe UI\',Arial,sans-serif">'
+            'No tasks added yet.</p>'
+        )
+
+    # ── Group tasks by project, preserving insertion order ──────────────
     groups = {}
     for t in tasks:
         pname = (t.get("project_name") or "").strip() or "General"
         groups.setdefault(pname, []).append(t)
 
     sorted_group_names = list(groups.keys())
+
+    # Common inline styles — defined once, reused everywhere.
+    FONT = "font-family:'Segoe UI',Arial,sans-serif"
+    # Outer wrapper: generous line-height, fills parent.
+    WRAP = f"{FONT};line-height:1.6;color:#1f2937"
+    # Project heading: bold, slightly larger, thin bottom rule.
+    PROJ_HEAD = (
+        f"{FONT};font-size:15px;font-weight:700;color:#1e293b;"
+        "padding:0 0 5px 0;margin:0 0 8px 0;"
+        "border-bottom:1px solid #e2e8f0"
+    )
+    # Task description line (pre-wrap preserves spaces and newlines).
+    TASK_LINE = f"{FONT};font-size:14px;color:#334155;margin:0;padding:0;white-space:pre-wrap"
+    # Subtle metadata line (time, status, labels, remarks).
+    META_LINE = f"{FONT};font-size:12px;color:#64748b;margin:2px 0 0 18px;padding:0"
+    # Lunch break separator.
+    LUNCH = f"{FONT};font-size:13px;color:#64748b;font-style:italic;margin:4px 0 14px 0;padding:0"
+
+    # ── Build lunch HTML (inserted between project blocks) ─────────────
     lunch_html = ""
     if lunch_from and lunch_to:
         lunch_html = (
-            f'<div style="font-size:13px;color:#4b5563;font-style:italic;'
-            f'margin:2px 0 16px">lunch: {html.escape(lunch_from)} - {html.escape(lunch_to)}</div>'
+            f'<p style="{LUNCH}">Lunch: {html.escape(lunch_from)} – '
+            f'{html.escape(lunch_to)}</p>'
         )
 
+    # ── Render each project group ──────────────────────────────────────
     group_blocks = []
     for group_idx, pname in enumerate(sorted_group_names):
-        items = []
-        for t in groups[pname]:
-            desc = html.escape(t.get("description") or "")
-            badges = []
+        lines = []
+        for task_idx, t in enumerate(groups[pname]):
+            # Replace \n with <br> to ensure email clients render newlines correctly.
+            # white-space: pre-wrap will also handle any consecutive spaces.
+            desc = html.escape(t.get("description") or "").replace('\n', '<br>')
+
+            # ── Inline labels (plain text, parenthesised) ──────────────
+            labels = []
+            if t.get("task_type") == "Recurring":
+                labels.append("Recurring")
             if t.get("rolled_over_from"):
-                badges.append('<span style="background-color:#fffbeb;color:#b45309;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid #fde68a;margin-left:6px;display:inline-block">Carried</span>')
+                labels.append("Carried")
             if t.get("task_type") == "Ad-hoc":
-                badges.append('<span style="background-color:#faf5ff;color:#7c3aed;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;border:1px solid #e9d5ff;margin-left:6px;display:inline-block">Additional</span>')
+                labels.append("Additional")
+            label_text = f' ({", ".join(labels)})' if labels else ""
 
+            # ── Status / time info ─────────────────────────────────────
+            meta_parts = []
             if is_checkout:
-                time_val = _format_hours(t.get("actual_time") or t.get("estimated_time") or "")
                 if t.get("status") == "Done":
-                    lead = '<span style="color:#047857;font-weight:700">✔</span> '
-                    time_label = f'Actual: {time_val}' if time_val else ""
+                    meta_parts.append("✔ Done")
                 else:
-                    lead = ""
-                    time_label = "Pending"
+                    meta_parts.append("○ Pending")
+
+                time_val = _format_hours(t.get("actual_time") or "")
+                if time_val:
+                    meta_parts.append(f"Actual: {time_val}")
+                else:
+                    est_val = _format_hours(t.get("estimated_time") or "")
+                    if est_val:
+                        meta_parts.append(f"Est: {est_val}")
             else:
-                lead = ""
-                time_label = _format_hours(t.get("estimated_time") or "")
-                time_label = f"Est: {time_label}" if time_label else ""
+                est_val = _format_hours(t.get("estimated_time") or "")
+                if est_val:
+                    meta_parts.append(f"Est: {est_val}")
 
-            remark_html = ""
+            # ── Remark ─────────────────────────────────────────────────
             if is_checkout and t.get("remarks"):
-                remark_html = f'<div style="font-size:11.5px;color:#64748b;font-style:italic;margin-top:2px">Remark: {html.escape(t.get("remarks"))}</div>'
-            remark_html += _attachment_names_html(t)
+                meta_parts.append(f"Remark: {html.escape(t.get('remarks'))}")
 
-            time_span = f' — <span style="color:#64748b">{time_label}</span>' if time_label else ""
-            badges_str = "".join(badges)
-            items.append(
-                f'<li style="position:relative;padding:6px 0 6px 18px;font-size:13.5px;color:#334155;line-height:1.5">'
-                f'<span style="position:absolute;left:2px;color:{EMAIL_ACCENT_COLOR};font-weight:700">•</span>'
-                f'{lead}{desc}{badges_str}{time_span}{remark_html}</li>'
+            # ── Attachments ────────────────────────────────────────────
+            att_names = [html.escape(f["file_name"]) for f in (t.get("attachments") or [])]
+            if att_names:
+                meta_parts.append(f'📎 {", ".join(att_names)}')
+
+            # ── Assemble the task block ────────────────────────────────
+            # Task number + description on the primary line
+            num = task_idx + 1
+            task_html = (
+                f'<p style="{TASK_LINE}">'
+                f'&nbsp;&nbsp;{num}. {desc}{html.escape(label_text)}'
+                f'</p>'
             )
 
-        group_blocks.append(
-            f'<div style="margin-bottom:18px">'
-            f'<div style="font-size:14.5px;font-weight:700;color:{EMAIL_ACCENT_COLOR};margin-bottom:8px;'
-            f'padding-bottom:6px;border-bottom:1px solid #e2e8f0">{html.escape(pname)}</div>'
-            f'<ul style="list-style:none;margin:0;padding:0">{"".join(items)}</ul>'
+            # Metadata on a second, lighter line (if any)
+            if meta_parts:
+                task_html += (
+                    f'<p style="{META_LINE}">'
+                    f'{" · ".join(meta_parts)}'
+                    f'</p>'
+                )
+
+            lines.append(task_html)
+
+        # ── Assemble the project block ─────────────────────────────────
+        task_count = len(groups[pname])
+        count_note = f' — {task_count} task{"s" if task_count != 1 else ""}'
+        project_block = (
+            f'<div style="margin:0 0 18px 0">'
+            f'<p style="{PROJ_HEAD}">'
+            f'{html.escape(pname)}'
+            f'<span style="font-weight:400;font-size:12px;color:#94a3b8">'
+            f'{count_note}</span></p>'
+            f'{"".join(lines)}'
             f'</div>'
         )
+        group_blocks.append(project_block)
+
         # Same placement rule as the tabular layout: lunch appears after the
         # first group for a 2-group day, after the second for 3+ groups.
         if lunch_html:
-            show_lunch = (len(sorted_group_names) <= 2 and group_idx == 0) or \
-                         (len(sorted_group_names) > 2 and group_idx == 1)
+            show_lunch = (
+                (len(sorted_group_names) <= 2 and group_idx == 0) or
+                (len(sorted_group_names) > 2 and group_idx == 1)
+            )
             if show_lunch:
                 group_blocks.append(lunch_html)
                 lunch_html = ""
 
+    # Append lunch if it hasn't been placed yet (single-group edge case).
     if lunch_html:
         group_blocks.append(lunch_html)
 
-    return "".join(group_blocks)
+    return f'<div style="{WRAP}">{"".join(group_blocks)}</div>'
 
 
 def _get_task_summary_html(tasks, department, is_checkout=False, lunch_from=None, lunch_to=None):

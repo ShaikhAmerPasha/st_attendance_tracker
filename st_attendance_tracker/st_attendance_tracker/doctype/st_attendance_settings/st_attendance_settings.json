@@ -14,7 +14,13 @@
   "morning_report_note",
   "eod_report_note",
   "section_recipients_info",
-  "recipients_note"
+  "recipients_note",
+  "section_scheduler_guard",
+  "last_checkin_reminder_date",
+  "last_morning_report_date",
+  "col_scheduler_guard",
+  "last_eod_missing_report_date",
+  "last_checkout_reminder_date"
  ],
  "fields": [
   {
@@ -85,6 +91,40 @@
    "fieldname": "recipients_note",
    "fieldtype": "Small Text",
    "label": "Recipients",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_scheduler_guard",
+   "fieldtype": "Section Break",
+   "label": "Scheduled Report Guard"
+  },
+  {
+   "description": "Last date each scheduled email actually sent. Prevents duplicate sends if the scheduler fires a job twice the same day.",
+   "fieldname": "last_checkin_reminder_date",
+   "fieldtype": "Date",
+   "label": "Check-In Reminder Last Sent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_morning_report_date",
+   "fieldtype": "Date",
+   "label": "Morning Report Last Sent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_scheduler_guard",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_eod_missing_report_date",
+   "fieldtype": "Date",
+   "label": "EOD Missing Report Last Sent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_checkout_reminder_date",
+   "fieldtype": "Date",
+   "label": "Checkout Reminder Last Sent",
    "read_only": 1
   }
  ],
