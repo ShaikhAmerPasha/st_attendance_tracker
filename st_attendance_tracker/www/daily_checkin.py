@@ -2,19 +2,16 @@ import frappe
 from frappe.utils import today, now_datetime, getdate, get_datetime
 from st_attendance_tracker.api import (
     _to_hhmm, _to_ampm, _format_hours, _is_half_day_leave_today, _is_team_leader,
-    _attach_task_files, _resolve_active_checkin_date,
+    _attach_task_files, _resolve_active_checkin_date, _get_work_log, _task_entry_dict,
+    _get_attendance_settings,
 )
 
 
 def get_context(context):
-    try:
-        frappe.cache().delete_value("app_hooks")
-        frappe.cache().delete_value("app_include_js")
-        frappe.clear_cache()
-    except Exception:
-        pass
-        frappe.local.flags.redirect_location = "/login?redirect-to=/daily-checkin"
-        raise frappe.Redirect
+    # NOTE: frappe.clear_cache() was removed here — it was wiping the site-wide
+    # Redis cache (doctype meta, sessions, boot info for ALL users) on every
+    # single page load of the app's busiest page. context.no_cache = 1 (below)
+    # is the correct way to prevent stale page-level caching.
 
     # Management → redirect immediately to management dashboard
     user_roles = frappe.get_roles(frappe.session.user)
@@ -45,24 +42,15 @@ def get_context(context):
     # ── Safety rollover — ALWAYS runs against today() ─────────────────────
     # Even if the page renders an older open check-in date, we must still
     # carry forward any missed Pending/In-Progress tasks to today's date.
-    existing_morning_today = frappe.db.exists("Daily Task Log", {
-        "employee": employee.name, "date": actual_today,
-        "log_type": "Morning Check-In", "docstatus": 1,
-    })
-    if not existing_morning_today:
+    today_log = _get_work_log(employee.name, actual_today)
+    if not (today_log and today_log.morning_submitted):
         from st_attendance_tracker.api import _safety_rollover, _ensure_recurring_tasks
         _safety_rollover(employee.name, actual_today)
         _ensure_recurring_tasks(employee.name, actual_today)
 
-
-    morning_log = frappe.db.exists("Daily Task Log", {
-        "employee": employee.name, "date": date,
-        "log_type": "Morning Check-In", "docstatus": 1,
-    })
-    eod_log = frappe.db.exists("Daily Task Log", {
-        "employee": employee.name, "date": date,
-        "log_type": "End of Day", "docstatus": 1,
-    })
+    work_log = _get_work_log(employee.name, date)
+    morning_log = bool(work_log and work_log.morning_submitted)
+    eod_log = bool(work_log and work_log.eod_submitted)
 
     login_time_val  = ""
     net_hours_val   = ""
@@ -82,58 +70,37 @@ def get_context(context):
 
 
     # Always load tasks for today — needed for pre-checkin carried display
-    tasks = frappe.get_all("Daily Task",
-        filters={"employee": employee.name, "task_date": date},
-        fields=["name", "description", "status", "task_type",
-                "origin_date", "rolled_over_from", "remarks",
-                "estimated_time", "actual_time", "project_name"],
-        order_by="sequence asc",
-    )
+    tasks = [_task_entry_dict(row, date) for row in work_log.tasks] if work_log else []
     _attach_task_files(tasks)
 
     for task in tasks:
-        task["is_carried"] = bool(task.get("rolled_over_from"))
         # Redisplay as "1h 30m" style, not the raw decimal-hours DB value —
         # keeps the box round-trippable with _parse_time_to_hours on re-save.
         task["estimated_time_display"] = _format_hours(task.get("estimated_time"))
         task["actual_time_display"] = _format_hours(task.get("actual_time"))
-        if task.get("rolled_over_from") and task.get("origin_date"):
-            task["days_pending"] = (
-                frappe.utils.getdate(date) -
-                frappe.utils.getdate(task["origin_date"])
-            ).days
-        else:
-            task["days_pending"] = 0
+        task["days_pending"] = (
+            (frappe.utils.getdate(date) - frappe.utils.getdate(task["origin_date"])).days
+            if task["is_carried"] else 0
+        )
 
     if morning_log:
-        raw_login = frappe.db.get_value(
-            "Daily Task Log", morning_log, "login_time"
-        ) or ""
         # FIX: _to_ampm converts timedelta → 'HH:MM AM/PM' with leading zero.
         # The old str(timedelta)[:5] produced '9:30:' (trailing colon) for
         # single-digit hours, breaking both display and recalc().
-        login_time_val = _to_ampm(raw_login)
-        work_location_val = frappe.db.get_value(
-            "Daily Task Log", morning_log, "work_location"
-        ) or "Office"
-        half_day_session_val = frappe.db.get_value(
-            "Daily Task Log", morning_log, "half_day_session"
-        ) or ""
+        login_time_val = _to_ampm(work_log.login_time or "")
+        work_location_val = work_log.work_location or "Office"
+        half_day_session_val = work_log.half_day_session or ""
     else:
         work_location_val = work_location_config.get("value", "Office")
 
     working_hours_val = ""
     if eod_log:
-        eod_data = frappe.db.get_value(
-            "Daily Task Log", eod_log,
-            ["net_hours", "logout_time", "lunch_from", "lunch_to", "working_hours"], as_dict=True
-        )
-        net_hours_val   = eod_data.net_hours    or ""
+        net_hours_val   = work_log.net_hours or ""
         # FIX: use _to_ampm for all time fields — timedelta → 'HH:MM AM/PM'
-        logout_time_val = _to_ampm(eod_data.logout_time)
-        lunch_from_val  = _to_ampm(eod_data.lunch_from)
-        lunch_to_val    = _to_ampm(eod_data.lunch_to)
-        working_hours_val = _format_hours(eod_data.working_hours) or "0h"
+        logout_time_val = _to_ampm(work_log.logout_time)
+        lunch_from_val  = _to_ampm(work_log.lunch_from)
+        lunch_to_val    = _to_ampm(work_log.lunch_to)
+        working_hours_val = _format_hours(work_log.working_hours) or "0h"
 
     # Recurring tasks get their own section at the top, not scattered into
     # whichever project they happen to belong to.
@@ -206,12 +173,7 @@ def get_context(context):
     except Exception:
         pass
 
-    has_reset_today = bool(frappe.db.exists("Daily Task Log", {
-        "employee": employee.name,
-        "date": date,
-        "log_type": "Morning Check-In",
-        "docstatus": 2
-    }))
+    has_reset_today = bool(work_log and work_log.was_reset_today)
 
     context.no_cache = 1
     context.employee = employee
@@ -320,7 +282,7 @@ def _get_work_location_config(employee, date_obj):
         else:
             # Non-office day — WFH is their normal routine, no AR needed.
             # Still allow them to choose Office if they want to come in.
-            # NOTE: value/options must stay within Daily Task Log.work_location's
+            # NOTE: value/options must stay within Daily Work Log.work_location's
             # allowed Select values ("", "Office", "WFH", "Remote"). The friendlier
             # "Hybrid (WFH)" wording is applied client-side as a display label only —
             # the underlying value saved to the database is always "WFH".
@@ -386,9 +348,7 @@ def _get_hybrid_office_days():
         "thursday": 3, "friday": 4, "saturday": 5,
     }
     try:
-        raw = frappe.db.get_single_value(
-            "ST Attendance Settings", "hybrid_office_days"
-        ) or "Tuesday\nThursday"
+        raw = _get_attendance_settings().get("hybrid_office_days") or "Tuesday\nThursday"
         days = []
         for line in raw.strip().split("\n"):
             d = line.strip().lower()

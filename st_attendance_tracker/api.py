@@ -28,9 +28,9 @@ import html
 import re
 from html import escape as html_escape
 import json
-from frappe.utils import today, now_datetime, getdate, add_days, get_datetime
+from frappe.utils import today, now_datetime, getdate, add_days, cint
 from frappe.desk.form.load import get_attachments
-from st_attendance_tracker.time_utils import parse_duration_to_hours, resolve_zero_diff_minutes
+from st_attendance_tracker.time_utils import parse_duration_to_hours
 
 
 # ── Employee helper ────────────────────────────────────────────────────────────
@@ -51,9 +51,16 @@ def _get_employee():
     return emp
 
 
+def _task_owner_employee(task_name):
+    """Resolve a Task Entry child row's owning employee via its parent
+    Daily Work Log — child rows don't carry `employee` directly."""
+    parent = frappe.db.get_value("Task Entry", task_name, "parent")
+    return frappe.db.get_value("Daily Work Log", parent, "employee") if parent else None
+
+
 def _assert_task_owner(task_name, employee_name):
     """Block cross-employee task mutation via db.set_value (BOLA guard)."""
-    task_employee = frappe.db.get_value("Daily Task", task_name, "employee")
+    task_employee = _task_owner_employee(task_name)
     if task_employee != employee_name:
         frappe.throw("Not authorised to edit this task.", frappe.PermissionError)
 
@@ -67,7 +74,7 @@ def _assert_task_visible(task_name):
     """
     if "HR Manager" in frappe.get_roles(frappe.session.user):
         return
-    task_employee = frappe.db.get_value("Daily Task", task_name, "employee")
+    task_employee = _task_owner_employee(task_name)
     viewer_employee_name = _get_employee().name
     if task_employee == viewer_employee_name:
         return
@@ -82,7 +89,7 @@ def _attach_task_files(tasks):
         return
     files_by_task = {}
     for f in frappe.get_all("File",
-        filters={"attached_to_doctype": "Daily Task", "attached_to_name": ["in", [t.name for t in tasks]]},
+        filters={"attached_to_doctype": "Task Entry", "attached_to_name": ["in", [t.name for t in tasks]]},
         fields=["name", "file_name", "file_url", "attached_to_name"],
     ):
         files_by_task.setdefault(f.attached_to_name, []).append(f)
@@ -95,9 +102,103 @@ def _reparent_attachments(file_names, task_name):
     for file_name in file_names or []:
         if frappe.db.exists("File", file_name):
             frappe.db.set_value("File", file_name, {
-                "attached_to_doctype": "Daily Task",
+                "attached_to_doctype": "Task Entry",
                 "attached_to_name": task_name,
             })
+
+
+# ── Daily Work Log helpers ──────────────────────────────────────────────────────
+# One `Daily Work Log` document per (employee, date), holding check-in/checkout
+# fields plus the day's `Task Entry` child rows — replaces the old
+# `Daily Task Log` (submit/cancel, one doc per log_type) + standalone
+# `Daily Task` (one doc per task) pair. See specs/daily-work-log-refactor.md.
+
+def _get_work_log(employee, date):
+    """Fetch the Daily Work Log doc for (employee, date), or None."""
+    name = frappe.db.exists("Daily Work Log", {"employee": employee, "date": date})
+    return frappe.get_doc("Daily Work Log", name) if name else None
+
+
+def _get_or_new_work_log(employee, date):
+    """Fetch the Daily Work Log for (employee, date), or an unsaved in-memory
+    one if none exists yet — caller is responsible for saving it."""
+    log = _get_work_log(employee, date)
+    if log:
+        return log
+    log = frappe.new_doc("Daily Work Log")
+    log.employee = employee
+    log.date = date
+    return log
+
+
+def _save_work_log(log):
+    log.flags.ignore_permissions = True
+    if log.is_new():
+        log.insert(ignore_permissions=True)
+    else:
+        log.save(ignore_permissions=True)
+
+
+def _next_sequence(work_log):
+    """Next entry-order value for a new Task Entry row on this work log."""
+    return max([row.sequence or 0 for row in work_log.tasks], default=0)
+
+
+def _task_entry_dict(row, parent_date):
+    """Flat dict view of a Task Entry child row (ORM row or plain dict from
+    frappe.get_all), shaped like the old standalone Daily Task doctype so
+    downstream code (dashboards, emails, my-history) needs no changes.
+    `rolled_over_from` is synthesised as a truthy marker — every existing
+    caller only ever checks it for truthiness, never reads the value. Real
+    lineage is tracked via `series_id`/`origin_date` now (spec Section 4).
+    """
+    get = row.get if hasattr(row, "get") else (lambda k, d=None: getattr(row, k, d))
+    origin = get("origin_date")
+    is_carried = bool(origin) and str(origin) != str(parent_date)
+    return frappe._dict({
+        "name": get("name"),
+        "description": get("description"),
+        "status": get("status"),
+        "task_type": get("task_type"),
+        "origin_date": origin,
+        "rolled_over_from": "carried" if is_carried else None,
+        "is_carried": is_carried,
+        "remarks": get("remarks"),
+        "estimated_time": get("estimated_time"),
+        "actual_time": get("actual_time"),
+        "project_name": get("project_name"),
+        "series_id": get("series_id"),
+    })
+
+
+def _is_series_done(series_id):
+    """True if any copy of this task's lineage has ever been marked Done."""
+    return bool(series_id) and bool(frappe.db.exists("Task Entry", {
+        "series_id": series_id, "status": "Done",
+    }))
+
+
+def _cascade_series_done(series_id, as_of_date):
+    """Mark every past/current copy of a task's lineage Done, and delete every
+    future carried-forward copy that hasn't been touched yet. Replaces the old
+    rolled_over_from ancestor-walk + future-chain delete with two indexed
+    queries instead of walking a chain. See spec Section 4.2."""
+    if not series_id:
+        return
+    frappe.db.sql("""
+        UPDATE `tabTask Entry` te
+        INNER JOIN `tabDaily Work Log` dwl ON dwl.name = te.parent
+        SET te.status = 'Done'
+        WHERE te.series_id = %s AND dwl.date <= %s
+    """, (series_id, as_of_date))
+    future_rows = frappe.db.sql("""
+        SELECT te.name FROM `tabTask Entry` te
+        INNER JOIN `tabDaily Work Log` dwl ON dwl.name = te.parent
+        WHERE te.series_id = %s AND dwl.date > %s
+          AND te.status IN ('Pending', 'In Progress', 'Rolled Over')
+    """, (series_id, as_of_date), as_dict=True)
+    for row in future_rows:
+        frappe.db.delete("Task Entry", {"name": row.name})
 
 
 def _is_half_day_leave_today(employee_name, date):
@@ -137,7 +238,23 @@ def _get_team_members(employee_name):
     the dashboard only checked reports_to, so a Team Leader defined solely
     via the Department Assignment table got emailed about an employee they
     couldn't actually see on /team-dashboard.
+
+    Results are cached in Redis for 5 minutes to avoid repeating 2-3 DB
+    queries on every call (this function is invoked multiple times per
+    request from _assert_task_visible, get_page_state, get_team_dashboard,
+    and both www/*.py context builders). Team membership changes
+    infrequently — a few minutes of staleness is acceptable for read paths.
     """
+    cache_key = f"st_att:team_members:{employee_name}"
+    # expires=True: without it, a miss gets memoized as None in frappe.local's
+    # per-request cache, and set_value()'s TTL below never clears that memo —
+    # so a later call in the same request would keep returning the stale
+    # None even after Redis has the real value (see _get_attendance_settings
+    # for the full explanation; same bug, same fix).
+    cached = frappe.cache().get_value(cache_key, expires=True)
+    if cached is not None:
+        return cached
+
     reports_to_names = frappe.get_all("Employee", filters={
         "reports_to": employee_name, "status": "Active",
     }, pluck="name")
@@ -149,12 +266,41 @@ def _get_team_members(employee_name):
         "name": ["in", eda_parents], "status": "Active",
     }, pluck="name") if eda_parents else []
 
-    return list(set(reports_to_names) | set(eda_names))
+    result = list(set(reports_to_names) | set(eda_names))
+    frappe.cache().set_value(cache_key, result, expires_in_sec=300)
+    return result
 
 
 def _is_team_leader(employee_name):
     """True if this person leads at least one active employee (reports_to or EDA)."""
     return bool(_get_team_members(employee_name))
+
+
+# ── ST Attendance Settings cache ────────────────────────────────────────────────
+
+def _get_attendance_settings():
+    """All ST Attendance Settings fields, cached — read on nearly every
+    check-in/checkout/dashboard load but change only a handful of times
+    a year. Invalidated explicitly on save (see clear_attendance_settings_cache),
+    not a TTL guess, so HR sees changes immediately."""
+    cache_key = "st_att:settings"
+    # expires=True: without it, RedisWrapper.get_value() on a miss caches the
+    # `None` into frappe.local's per-request memory cache (redis_wrapper.py),
+    # and since set_value() with a TTL never clears that local entry, every
+    # later get_value() call *in the same request* would keep returning the
+    # stale None from local memory without ever checking Redis again — even
+    # though Redis now holds the real value written just below. Only matters
+    # right after a cache-cold miss; a warm cache is unaffected either way.
+    cached = frappe.cache().get_value(cache_key, expires=True)
+    if cached is not None:
+        return cached
+    settings = frappe.get_single("ST Attendance Settings").as_dict()
+    frappe.cache().set_value(cache_key, settings, expires_in_sec=3600)
+    return settings
+
+
+def clear_attendance_settings_cache(doc=None, method=None):
+    frappe.cache().delete_value("st_att:settings")
 
 
 # ── HR Manager emails ──────────────────────────────────────────────────────────
@@ -304,6 +450,12 @@ def _format_action_timestamp(dt):
     return dt.strftime("%d %b %Y, %I:%M %p")
 
 
+def _format_email_date(date):
+    """dd-mm-yyyy for the 'Date'/'Shift Date' row in email detail cards —
+    matches the format already used in every email subject line."""
+    return frappe.utils.getdate(date).strftime("%d-%m-%Y")
+
+
 # ── Notification helper ────────────────────────────────────────────────────────
 
 # Shared, single-tone styling — every email uses the same font/width/accent color.
@@ -369,7 +521,7 @@ def _send_employee_checkin_email(employee_name, employee_display_name, login_tim
         login_hm = _to_ampm(login_time)
         detail_table_html = _render_detail_table([
             ("Employee", employee_display_name),
-            ("Date", date),
+            ("Date", _format_email_date(date)),
             ("Login Time", login_hm),
             ("Checked-In At", _format_action_timestamp(checkin_action_time)),
             ("Work Location", work_location),
@@ -421,21 +573,11 @@ def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
 
         done_tasks = [t for t in tasks if t.get("status") == "Done"]
 
-        # Fetch lunch and check-in times from Daily Task Log
-        db_vals = frappe.db.get_value("Daily Task Log", {
-            "employee": employee_name,
-            "date": date,
-            "log_type": "End of Day",
-            "docstatus": 1
-        }, ["lunch_from", "lunch_to"])
-        lunch_from, lunch_to = db_vals if db_vals else (None, None)
-
-        login_time = frappe.db.get_value("Daily Task Log", {
-            "employee": employee_name,
-            "date": date,
-            "log_type": "Morning Check-In",
-            "docstatus": 1
-        }, "login_time")
+        # Fetch lunch and check-in times from the day's Daily Work Log
+        work_log = _get_work_log(employee_name, date)
+        lunch_from = work_log.lunch_from if work_log else None
+        lunch_to = work_log.lunch_to if work_log else None
+        login_time = work_log.login_time if work_log else None
 
         login_hm = _to_ampm(login_time) if login_time else None
         logout_hm = _to_ampm(logout_time)
@@ -452,7 +594,7 @@ def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
 
         detail_table_html = _render_detail_table([
             ("Employee", employee_display_name),
-            ("Shift Date", date),
+            ("Shift Date", _format_email_date(date)),
             ("Login Time", login_hm),
             ("Logout Time", logout_hm),
             ("Checked-Out At", _format_action_timestamp(checkout_action_time)),
@@ -896,15 +1038,10 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
         lunch_to_hm = None
         if event == "checkout":
             date = email_date
-            db_vals = frappe.db.get_value("Daily Task Log", {
-                "employee": employee_name,
-                "date": date,
-                "log_type": "End of Day",
-                "docstatus": 1
-            }, ["lunch_from", "lunch_to"])
-            if db_vals:
-                lunch_from_hm = _to_ampm(db_vals[0]) if db_vals[0] else None
-                lunch_to_hm = _to_ampm(db_vals[1]) if db_vals[1] else None
+            work_log = _get_work_log(employee_name, date)
+            if work_log:
+                lunch_from_hm = _to_ampm(work_log.lunch_from) if work_log.lunch_from else None
+                lunch_to_hm = _to_ampm(work_log.lunch_to) if work_log.lunch_to else None
 
         task_html = _get_task_summary_html(
             tasks or [],
@@ -970,37 +1107,6 @@ def _get_next_working_date(employee, from_date):
     return candidate
 
 
-# ── Root task tracer ───────────────────────────────────────────────────────────
-
-def _get_root_task(task_name):
-    """
-    Walk up the rolled_over_from chain to find the original task.
-    Prevents task pending 10 days from being duplicated 10 times.
-    """
-    # Bounds the walk against corrupted/cyclic data only — a task carried
-    # forward every working day for 10 years is still far short of this,
-    # so it never silently truncates a legitimate chain.
-    MAX_CHAIN_DEPTH = 3650
-    current = task_name
-    depth = 0
-    while depth < MAX_CHAIN_DEPTH:
-        parent = frappe.db.get_value("Daily Task", current, "rolled_over_from")
-        if not parent:
-            return current
-        # Check if the parent task still exists in the database.
-        # If it has been deleted, we treat 'current' as the root/original task.
-        if not frappe.db.exists("Daily Task", parent):
-            return current
-        current = parent
-        depth += 1
-    frappe.log_error(
-        f"_get_root_task: chain from {task_name} exceeded {MAX_CHAIN_DEPTH} hops, "
-        f"likely a cyclic rolled_over_from reference; stopped at {current}",
-        "ST Attendance Tracker — root task chain overflow"
-    )
-    return current
-
-
 def _resolve_active_checkin_date(employee_name):
     """Which date's check-in is still 'open' (checked in, no EOD submitted
     yet) — the date the checkin/checkout page and EOD submission should act
@@ -1012,30 +1118,15 @@ def _resolve_active_checkin_date(employee_name):
     "don't fabricate a real span past one legitimate day" rule already
     applied in resolve_zero_diff_minutes (time_utils.py).
     """
-    latest_checkin = frappe.db.get_value("Daily Task Log", {
+    latest = frappe.db.get_value("Daily Work Log", {
         "employee": employee_name,
-        "log_type": "Morning Check-In",
-        "docstatus": 1,
+        "morning_submitted": 1,
         "date": [">=", add_days(today(), -1)],
-    }, "date", order_by="date desc")
+    }, ["date", "eod_submitted"], order_by="date desc", as_dict=True)
 
-    if not latest_checkin:
+    if not latest:
         return today()
-
-    has_eod = frappe.db.exists("Daily Task Log", {
-        "employee": employee_name,
-        "date": latest_checkin,
-        "log_type": "End of Day",
-        "docstatus": 1,
-    })
-    return latest_checkin if not has_eod else today()
-
-
-def _next_sequence(employee, task_date):
-    """Next entry-order value for a new Daily Task on this employee/date."""
-    return (frappe.db.get_value(
-        "Daily Task", {"employee": employee, "task_date": task_date}, "max(sequence)"
-    ) or 0)
+    return latest.date if not latest.eod_submitted else today()
 
 
 # ── Rollover on EOD ────────────────────────────────────────────────────────────
@@ -1046,48 +1137,52 @@ def _rollover_pending_tasks(employee, date):
 
     next_date = _get_next_working_date(employee, date)
 
-    pending = frappe.get_all("Daily Task", filters={
-        "employee": employee,
-        "task_date": date,
-        "status": ["in", ["Pending", "In Progress"]],
-        "task_type": ["!=", "Recurring"],
-    }, fields=["name", "description", "task_type", "origin_date",
-               "remarks", "rolled_over_from", "estimated_time", "project_name"])
+    work_log = _get_work_log(employee, date)
+    if not work_log:
+        return 0
 
+    pending = [row for row in work_log.tasks
+               if row.status in ("Pending", "In Progress") and row.task_type != "Recurring"]
+    if not pending:
+        return 0
+
+    next_log = _get_or_new_work_log(employee, next_date)
+    existing_series = {row.series_id for row in next_log.tasks}
+
+    # Source-row status changes below go through frappe.db.set_value, not
+    # work_log.save() — this source day's Daily Work Log may already be
+    # eod_submitted=1 (that's exactly what triggered this rollover call),
+    # and re-saving a locked parent through the ORM would hit its own lock
+    # guard. Task Entry has no controller validation of its own to skip, so
+    # a direct field write is safe here — the same pattern the old
+    # standalone-Daily-Task model used for this exact "housekeeping, not a
+    # user edit" case.
     rolled = 0
-    for task in pending:
-        root = _get_root_task(task.name)
-        root_status = frappe.db.get_value("Daily Task", root, "status")
-        if root_status == "Done":
-            frappe.db.set_value("Daily Task", task.name, "status", "Done")
+    for row in pending:
+        if _is_series_done(row.series_id):
+            if row.status != "Done":
+                frappe.db.set_value("Task Entry", row.name, "status", "Done")
             continue
 
-        already = frappe.db.exists("Daily Task", {
-            "employee": employee,
-            "task_date": next_date,
-            "rolled_over_from": root,
-        })
-        root_date = frappe.db.get_value("Daily Task", root, "task_date")
-        if already or str(root_date) == str(next_date):
+        if row.series_id in existing_series or str(row.origin_date) == str(next_date):
             continue
 
-        new_task = frappe.new_doc("Daily Task")
-        new_task.employee      = employee
-        new_task.task_date     = next_date
-        new_task.description   = task.description
-        new_task.task_type     = "Planned"
-        new_task.status        = "Pending"
-        new_task.origin_date   = task.origin_date or date
-        new_task.rolled_over_from = root
-        new_task.estimated_time   = task.estimated_time or ""
-        new_task.project_name     = task.project_name or ""
-        new_task.remarks = f"[Carried from {task.origin_date or date}]"
-        new_task.sequence = _next_sequence(employee, next_date) + 1
-        new_task.insert(ignore_permissions=True)
-        frappe.db.set_value("Daily Task", task.name, "status", "Rolled Over")
+        new_row = next_log.append("tasks", {})
+        new_row.series_id = row.series_id
+        new_row.origin_date = row.origin_date or date
+        new_row.description = row.description
+        new_row.task_type = "Planned"
+        new_row.status = "Pending"
+        new_row.estimated_time = row.estimated_time or ""
+        new_row.project_name = row.project_name or ""
+        new_row.remarks = f"[Carried from {row.origin_date or date}]"
+        new_row.sequence = _next_sequence(next_log) + 1
+        existing_series.add(row.series_id)
+        frappe.db.set_value("Task Entry", row.name, "status", "Rolled Over")
         rolled += 1
 
     if rolled:
+        _save_work_log(next_log)
         frappe.db.commit()
     return rolled
 
@@ -1102,44 +1197,51 @@ def _safety_rollover(employee, today_date):
     # Lock the employee record to serialize page-load safety rollovers and prevent duplicate entries
     frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee,))
 
-    missed = frappe.get_all("Daily Task", filters={
+    stale_log_names = frappe.get_all("Daily Work Log", filters={
         "employee": employee,
-        "task_date": ["<", today_date],
-        "status": ["in", ["Pending", "In Progress"]],
-        "task_type": ["!=", "Recurring"],
-    }, fields=["name", "description", "task_type", "origin_date",
-               "remarks", "task_date", "estimated_time", "project_name"])
+        "date": ["<", today_date],
+    }, pluck="name")
+    if not stale_log_names:
+        return
 
-    for task in missed:
-        root = _get_root_task(task.name)
-        root_status = frappe.db.get_value("Daily Task", root, "status")
-        if root_status == "Done":
-            frappe.db.set_value("Daily Task", task.name, "status", "Done")
-            continue
+    today_log = _get_or_new_work_log(employee, today_date)
+    existing_series = {row.series_id for row in today_log.tasks}
+    appended = False
 
-        already = frappe.db.exists("Daily Task", {
-            "employee": employee,
-            "task_date": today_date,
-            "rolled_over_from": root,
-        })
-        root_date = frappe.db.get_value("Daily Task", root, "task_date")
-        if already or str(root_date) == str(today_date):
-            continue
+    # Source-row status changes go through frappe.db.set_value, not
+    # source.save() — a stale day can itself already be eod_submitted=1,
+    # and re-saving a locked parent through the ORM would hit its own lock
+    # guard. See the matching comment in _rollover_pending_tasks.
+    for log_name in stale_log_names:
+        source = frappe.get_doc("Daily Work Log", log_name)
+        for row in source.tasks:
+            if row.status not in ("Pending", "In Progress") or row.task_type == "Recurring":
+                continue
 
-        new_task = frappe.new_doc("Daily Task")
-        new_task.employee      = employee
-        new_task.task_date     = today_date
-        new_task.description   = task.description
-        new_task.task_type     = "Planned"
-        new_task.status        = "Pending"
-        new_task.origin_date   = task.origin_date or task.task_date
-        new_task.rolled_over_from = root
-        new_task.estimated_time   = task.estimated_time or ""
-        new_task.project_name    = task.project_name or ""
-        new_task.remarks = f"[Auto-carried from {task.origin_date or task.task_date}]"
-        new_task.sequence = _next_sequence(employee, today_date) + 1
-        new_task.insert(ignore_permissions=True)
-        frappe.db.set_value("Daily Task", task.name, "status", "Rolled Over")
+            if _is_series_done(row.series_id):
+                if row.status != "Done":
+                    frappe.db.set_value("Task Entry", row.name, "status", "Done")
+                continue
+
+            if row.series_id in existing_series or str(row.origin_date) == str(today_date):
+                continue
+
+            new_row = today_log.append("tasks", {})
+            new_row.series_id = row.series_id
+            new_row.origin_date = row.origin_date or source.date
+            new_row.description = row.description
+            new_row.task_type = "Planned"
+            new_row.status = "Pending"
+            new_row.estimated_time = row.estimated_time or ""
+            new_row.project_name = row.project_name or ""
+            new_row.remarks = f"[Auto-carried from {row.origin_date or source.date}]"
+            new_row.sequence = _next_sequence(today_log) + 1
+            existing_series.add(row.series_id)
+            frappe.db.set_value("Task Entry", row.name, "status", "Rolled Over")
+            appended = True
+
+    if appended:
+        _save_work_log(today_log)
 
     frappe.db.commit()
 
@@ -1170,37 +1272,62 @@ def _ensure_recurring_tasks(employee, date):
     """
     templates = frappe.get_all("Recurring Task Template",
         filters={"employee": employee, "is_active": 1},
-        fields=["description", "project_name", "estimated_time", "recurring_days"])
+        fields=["name", "description", "project_name", "estimated_time", "recurring_days"])
 
     weekday_num = getdate(date).weekday()
-
+    due = []
     for tpl in templates:
         days = _parse_recurring_days(tpl.recurring_days)
         if days and weekday_num not in days:
             continue
+        due.append(tpl)
 
-        exists = frappe.db.exists("Daily Task", {
-            "employee": employee,
-            "task_date": date,
-            "task_type": "Recurring",
-            "description": tpl.description,
-        })
-        if exists:
+    work_log = _get_or_new_work_log(employee, date)
+    existing_by_template = {row.recurring_template: row for row in work_log.tasks
+                             if row.task_type == "Recurring" and row.recurring_template}
+
+    changed = False
+    for tpl in due:
+        row = existing_by_template.get(tpl.name)
+        if row:
+            # Template may have been edited since this instance was created —
+            # keep an untouched (still Pending) instance in sync rather than
+            # leaving a stale copy of the old description/project/estimate.
+            if row.status == "Pending" and (
+                row.description != tpl.description
+                or row.project_name != (tpl.project_name or "")
+                or row.estimated_time != (tpl.estimated_time or "")
+            ):
+                row.description = tpl.description
+                row.project_name = tpl.project_name or ""
+                row.estimated_time = tpl.estimated_time or ""
+                changed = True
             continue
 
-        new_task = frappe.new_doc("Daily Task")
-        new_task.employee      = employee
-        new_task.task_date     = date
-        new_task.description   = tpl.description
-        new_task.task_type     = "Recurring"
-        new_task.status        = "Pending"
-        new_task.origin_date   = date
-        new_task.estimated_time = tpl.estimated_time or ""
-        new_task.project_name   = tpl.project_name or ""
-        new_task.sequence = _next_sequence(employee, date) + 1
-        new_task.insert(ignore_permissions=True)
+        row = work_log.append("tasks", {})
+        row.series_id = frappe.generate_hash(length=32)
+        row.origin_date = date
+        row.description = tpl.description
+        row.task_type = "Recurring"
+        row.status = "Pending"
+        row.estimated_time = tpl.estimated_time or ""
+        row.project_name = tpl.project_name or ""
+        row.recurring_template = tpl.name
+        row.sequence = _next_sequence(work_log) + 1
+        changed = True
 
-    frappe.db.commit()
+    # A template that's since been deleted, deactivated, or edited to no
+    # longer recur on this weekday shouldn't leave a stale instance behind —
+    # but only touch it if the employee hasn't started it yet.
+    due_names = {tpl.name for tpl in due}
+    for template_name, row in existing_by_template.items():
+        if template_name not in due_names and row.status == "Pending":
+            work_log.tasks.remove(row)
+            changed = True
+
+    if changed:
+        _save_work_log(work_log)
+        frappe.db.commit()
 
 
 # ── Recurring task self-service (employee-facing CRUD) ─────────────────────────
@@ -1247,6 +1374,11 @@ def save_recurring_task(name=None, description="", project_name="", estimated_ti
     doc.recurring_days = "\n".join(days)
     doc.is_active = 1 if str(is_active) in ("1", "true", "True") else 0
     doc.save()
+    # Sync today's not-yet-started instance immediately — covers a
+    # description/estimate edit, a day-change that drops today, or
+    # deactivation — rather than waiting for the employee's next
+    # /daily-checkin page load.
+    _ensure_recurring_tasks(employee.name, today())
     return {"success": True, "name": doc.name}
 
 
@@ -1256,99 +1388,80 @@ def delete_recurring_task(name):
     task_employee = frappe.db.get_value("Recurring Task Template", name, "employee")
     if task_employee != employee.name:
         frappe.throw("Not authorised to delete this task.", frappe.PermissionError)
-    frappe.delete_doc("Recurring Task Template", name)
+    # force=True: historical Task Entry rows keep a soft `recurring_template`
+    # reference for provenance (spec: sync, not a hard dependency) — without
+    # this, Frappe's link-check would block deleting any template that's
+    # ever produced a task.
+    frappe.delete_doc("Recurring Task Template", name, force=True)
+    # Sync today's not-yet-started instance immediately rather than waiting
+    # for the employee's next /daily-checkin page load.
+    _ensure_recurring_tasks(employee.name, today())
     return {"success": True}
 
 
-# ── Working hours calculation ──────────────────────────────────────────────────
+# ── Additional work self-service (employee-facing CRUD) ────────────────────────
+# Independent of Daily Task Log — never reopens or recalculates a submitted
+# EOD log's net_hours/working_hours. Ownership/validation is enforced by the
+# doctype's own validate()/on_trash() (AdditionalWork._check_ownership) —
+# these wrappers don't re-check it, and deliberately don't pass
+# ignore_permissions so Frappe's own if_owner doctype permission applies too.
 
-def _calc_net_hours(login_time, logout_time, lunch_from, lunch_to, date_str):
-    """
-    Calculates net working hours = (logout - login) - lunch duration.
+ADDITIONAL_WORK_PAGE_SIZE = 15
 
-    All time arguments are normalised through _to_hhmm() before being
-    passed to get_datetime(). This fixes the core bug where Frappe's DB
-    returns Time fields as datetime.timedelta objects, and
-    str(timedelta(seconds=34200)) = '9:30:00' whose first 5 chars are
-    '9:30:' (trailing colon) — an unparseable string that silently raised
-    an exception and caused net_hours to be stored as ''.
-    """
-    try:
-        login_hm  = _to_hhmm(login_time)
-        logout_hm = _to_hhmm(logout_time)
 
-        if not login_hm or not logout_hm:
-            frappe.log_error(
-                f"_to_hhmm returned empty: login_hm={login_hm!r} logout_hm={logout_hm!r}",
-                "ST NetHours Debug"
-            )
-            return ""
+@frappe.whitelist()
+def get_additional_work(page=0):
+    """Paginated list of the current employee's Additional Work entries,
+    newest work_date first."""
+    employee = _get_employee()
+    page = int(page or 0)
+    rows = frappe.get_all("Additional Work",
+        filters={"employee": employee.name},
+        fields=["name", "work_date", "project_name", "hours_spent", "description", "remarks"],
+        order_by="work_date desc, creation desc",
+        start=page * ADDITIONAL_WORK_PAGE_SIZE,
+        page_length=ADDITIONAL_WORK_PAGE_SIZE + 1)
 
-        base = str(date_str) + " "
-        login_dt  = get_datetime(base + login_hm)
-        logout_dt = get_datetime(base + logout_hm)
-        total_mins = int((logout_dt - login_dt).total_seconds() / 60)
-        # Handle overnight/night-shift (logout < login crosses midnight)
-        if total_mins < 0:
-            total_mins += 24 * 60
-        elif total_mins == 0:
-            total_mins = resolve_zero_diff_minutes(date_str)
+    has_more = len(rows) > ADDITIONAL_WORK_PAGE_SIZE
+    rows = rows[:ADDITIONAL_WORK_PAGE_SIZE]
+    total_hours = sum(r.hours_spent or 0 for r in rows)
+    return {"entries": rows, "total_hours": total_hours, "has_more": has_more}
 
-        lunch_mins = 0
-        lf_hm = lt_hm = ""
-        if lunch_from and lunch_to:
-            lf_hm = _to_hhmm(lunch_from)
-            lt_hm = _to_hhmm(lunch_to)
-            if lf_hm and lt_hm:
-                # Convert all to minutes to check offsets (same as daily_task_log.py validation)
-                def time_to_mins(t_str):
-                    parts = t_str.split(":")
-                    return int(parts[0]) * 60 + int(parts[1])
 
-                login_mins = time_to_mins(login_hm)
-                logout_mins = time_to_mins(logout_hm)
-                lf_mins = time_to_mins(lf_hm)
-                lt_mins = time_to_mins(lt_hm)
+@frappe.whitelist()
+def save_additional_work(name=None, work_date=None, project_name="", hours_spent="", description="", remarks=""):
+    """Create or update (upsert by `name`) a self-service Additional Work entry."""
+    employee = _get_employee()
+    if not (description or "").strip():
+        frappe.throw("Description cannot be empty.")
+    if not work_date:
+        frappe.throw("Work date is required.")
 
-                shift_len = (logout_mins - login_mins) if logout_mins >= login_mins \
-                            else (logout_mins + 24 * 60 - login_mins)
+    if name:
+        doc = frappe.get_doc("Additional Work", name)
+        if doc.employee != employee.name:
+            frappe.throw("Not authorised to edit this entry.", frappe.PermissionError)
+    else:
+        doc = frappe.new_doc("Additional Work")
+        doc.employee = employee.name
 
-                lf_abs = (lf_mins - login_mins) if lf_mins >= login_mins \
-                         else (lf_mins + 24 * 60 - login_mins)
-                lt_abs = (lt_mins - login_mins) if lt_mins >= login_mins \
-                         else (lt_mins + 24 * 60 - login_mins)
+    doc.work_date = work_date
+    doc.project_name = (project_name or "").strip()
+    doc.hours_spent = hours_spent or ""
+    doc.description = description.strip()
+    doc.remarks = (remarks or "").strip()
+    doc.save()
+    return {"success": True, "name": doc.name}
 
-                if lt_abs < lf_abs:
-                    lt_abs += 24 * 60
 
-                lunch_duration = lt_abs - lf_abs
-
-                # Only deduct lunch if it is valid and falls completely within the work shift
-                if 0 < lunch_duration and lf_abs >= 0 and lt_abs <= shift_len:
-                    lunch_mins = lunch_duration
-
-        net = total_mins - lunch_mins
-
-        # Sanity ceiling — no real workday exceeds 18 hours; anything past
-        # that is a data/timezone glitch, not a long shift.
-        if net < 0 or net > 18 * 60:
-            frappe.log_error(
-                f"Suspicious net hours calc: login={login_hm} logout={logout_hm} "
-                f"lunch_from={lf_hm} lunch_to={lt_hm} date={date_str} "
-                f"total_mins={total_mins} lunch_mins={lunch_mins} net={net}",
-                "ST Attendance Tracker — net hours sanity check"
-            )
-            return ""
-
-        result = f"{net // 60}h {net % 60}m"
-        return result
-    except Exception as e:
-        frappe.log_error(
-            f"exception: {e} | login={login_time!r} logout={logout_time!r} "
-            f"lunch={lunch_from!r}-{lunch_to!r}",
-            "ST NetHours Debug"
-        )
-        return ""
+@frappe.whitelist()
+def delete_additional_work(name):
+    employee = _get_employee()
+    entry_employee = frappe.db.get_value("Additional Work", name, "employee")
+    if entry_employee != employee.name:
+        frappe.throw("Not authorised to delete this entry.", frappe.PermissionError)
+    frappe.delete_doc("Additional Work", name)
+    return {"success": True}
 
 
 # ── WFH validation ─────────────────────────────────────────────────────────────
@@ -1360,9 +1473,7 @@ def _get_hybrid_office_days():
         "thursday": 3, "friday": 4, "saturday": 5,
     }
     try:
-        raw = frappe.db.get_single_value(
-            "ST Attendance Settings", "hybrid_office_days"
-        ) or "Tuesday\nThursday"
+        raw = _get_attendance_settings().get("hybrid_office_days") or "Tuesday\nThursday"
         days = []
         for line in raw.strip().split("\n"):
             d = line.strip().lower()
@@ -1437,18 +1548,18 @@ def get_page_state():
     employee = _get_employee()
     date = today()
 
-    morning_log = frappe.db.exists("Daily Task Log", {
-        "employee": employee.name, "date": date,
-        "log_type": "Morning Check-In", "docstatus": 1,
-    })
+    work_log = _get_work_log(employee.name, date)
+    morning_done = bool(work_log and work_log.morning_submitted)
 
     # Safety rollover — only before check-in
-    if not morning_log:
+    if not morning_done:
         _safety_rollover(employee.name, date)
         _ensure_recurring_tasks(employee.name, date)
+        work_log = _get_work_log(employee.name, date)
+        morning_done = bool(work_log and work_log.morning_submitted)
 
     # Auto-heal checkin if HR deleted it
-    if morning_log:
+    if morning_done:
         checkin_today = frappe.db.exists("Employee Checkin", {
             "employee": employee.name,
             "log_type": "IN",
@@ -1459,39 +1570,19 @@ def get_page_state():
             ]],
         })
         if not checkin_today:
-            login_time = frappe.db.get_value(
-                "Daily Task Log", morning_log, "login_time"
-            )
-            _make_checkin(employee.name, "IN", login_time)
+            _make_checkin(employee.name, "IN", work_log.login_time)
 
-    eod_log = frappe.db.exists("Daily Task Log", {
-        "employee": employee.name, "date": date,
-        "log_type": "End of Day", "docstatus": 1,
-    })
+    eod_done = bool(work_log and work_log.eod_submitted)
 
     tasks = []
-    if morning_log:
-        tasks = frappe.get_all("Daily Task",
-            filters={"employee": employee.name, "task_date": date},
-            fields=["name", "description", "status", "task_type",
-                    "origin_date", "rolled_over_from", "remarks",
-                    "estimated_time", "actual_time"],
-            order_by="sequence asc",
-        )
-        for task in tasks:
-            task["is_carried"] = bool(task.get("rolled_over_from"))
-            if task.get("rolled_over_from") and task.get("origin_date"):
-                task["days_pending"] = (
-                    getdate(date) - getdate(task["origin_date"])
-                ).days
-            else:
-                task["days_pending"] = 0
+    if work_log:
+        tasks = [_task_entry_dict(row, date) for row in work_log.tasks]
+        for t in tasks:
+            t["days_pending"] = (
+                (getdate(date) - getdate(t["origin_date"])).days if t["is_carried"] else 0
+            )
 
-    login_time_val = ""
-    if morning_log:
-        login_time_val = frappe.db.get_value(
-            "Daily Task Log", morning_log, "login_time"
-        ) or ""
+    login_time_val = work_log.login_time if morning_done else ""
 
     # Fetch active employee shift & leave status
     shift_info = None
@@ -1521,18 +1612,13 @@ def get_page_state():
     except Exception:
         frappe.log_error(frappe.get_traceback(), "ST Attendance Tracker — leave lookup failed")
 
-    has_reset_today = bool(frappe.db.exists("Daily Task Log", {
-        "employee": employee.name,
-        "date": date,
-        "log_type": "Morning Check-In",
-        "docstatus": 2
-    }))
+    has_reset_today = bool(work_log and work_log.was_reset_today)
 
     return {
         "employee":       employee,
         "date":           date,
-        "morning_done":   bool(morning_log),
-        "eod_done":       bool(eod_log),
+        "morning_done":   morning_done,
+        "eod_done":       eod_done,
         "tasks":          tasks,
         "current_time":   now_datetime().strftime("%H:%M"),
         # FIX: use _to_ampm so single-digit-hour timedeltas (e.g. 9:30:00)
@@ -1543,6 +1629,84 @@ def get_page_state():
         "leave_today":    leave_today,
         "has_reset_today": has_reset_today,
     }
+
+
+# ── Notification jobs (run off the request path) ────────────────────────────────
+# Building these emails means base64-encoding every attached image/zip/PDF into
+# an Email Queue record — with a multi-megabyte checkout attachment that alone
+# can take several seconds, which used to happen twice (HR/TL email + employee
+# email) inside the same synchronous check-in/checkout HTTP request. Both
+# submit_morning_log and submit_eod_log now enqueue these instead of calling
+# them directly, so the employee's checkout finishes as soon as their data is
+# saved — the emails still go out, just from a background worker a moment
+# later. enqueue_after_commit=True guarantees the worker never reads the
+# just-saved Daily Work Log before this request's transaction is durable.
+
+def _send_checkin_notifications(employee_name, date, checkin_action_time):
+    employee = frappe.db.get_value("Employee", employee_name,
+        ["name", "employee_name", "department"], as_dict=True)
+    work_log = _get_work_log(employee_name, date)
+    if not employee or not work_log:
+        return
+
+    all_tasks = [_task_entry_dict(row, date) for row in work_log.tasks]
+    detail_rows = [
+        ("Employee", employee.employee_name),
+        ("Date", _format_email_date(date)),
+        ("Login Time", _to_ampm(work_log.login_time)),
+        ("Checked-In At", _format_action_timestamp(checkin_action_time)),
+        ("Work Location", work_log.work_location),
+        ("Half-Day Session", work_log.half_day_session),
+        ("Status", "Late Check-in" if work_log.is_late else None),
+    ]
+    _notify_hr_and_team_leader(
+        employee.name, employee.employee_name, "checkin",
+        detail_rows, tasks=all_tasks, department=employee.department,
+    )
+    _send_employee_checkin_email(
+        employee.name, employee.employee_name, work_log.login_time, checkin_action_time,
+        work_log.work_location, work_log.half_day_session, work_log.is_late, all_tasks, date,
+        department=employee.department,
+    )
+
+
+def _send_eod_notifications(employee_name, date, checkout_action_time, is_late_checkout):
+    employee = frappe.db.get_value("Employee", employee_name,
+        ["name", "employee_name", "department"], as_dict=True)
+    work_log = _get_work_log(employee_name, date)
+    if not employee or not work_log:
+        return
+
+    all_tasks = [_task_entry_dict(row, date) for row in work_log.tasks]
+    _attach_task_files(all_tasks)
+
+    done_count = sum(1 for t in all_tasks if t.status == "Done")
+    total_count = len(all_tasks)
+    total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in all_tasks)
+    working_hours_str = _format_hours(total_actual_hours) or "0h"
+
+    detail_rows = [
+        ("Employee", employee.employee_name),
+        ("Date", _format_email_date(date)),
+        ("Login Time", _to_ampm(work_log.login_time) if work_log.login_time else None),
+        ("Logout Time", _to_ampm(work_log.logout_time)),
+        ("Checked-Out At", _format_action_timestamp(checkout_action_time)),
+        ("Work Location", work_log.work_location),
+        ("Net Working Hours", work_log.net_hours),
+        ("Total Task Hours", working_hours_str),
+        ("Half-Day Session", work_log.half_day_session),
+        ("Tasks Completed", f"{done_count}/{total_count}"),
+    ]
+    _notify_hr_and_team_leader(
+        employee.name, employee.employee_name, "checkout",
+        detail_rows, tasks=all_tasks, department=employee.department,
+    )
+    _send_employee_eod_email(
+        employee.name, employee.employee_name, work_log.logout_time, checkout_action_time,
+        work_log.net_hours, work_log.work_location, work_log.half_day_session, all_tasks, date,
+        is_late_checkout=is_late_checkout, submission_date=today(),
+        department=employee.department,
+    )
 
 
 # ── Morning submit ─────────────────────────────────────────────────────────────
@@ -1567,10 +1731,8 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
     _safety_rollover(employee.name, date)
     _ensure_recurring_tasks(employee.name, date)
 
-    if frappe.db.exists("Daily Task Log", {
-        "employee": employee.name, "date": date,
-        "log_type": "Morning Check-In", "docstatus": 1,
-    }):
+    work_log = _get_or_new_work_log(employee.name, date)
+    if work_log.morning_submitted:
         frappe.throw("You have already checked in today.")
 
     # ── WFH Validation ──────────────────────────────────────────────────
@@ -1603,108 +1765,68 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
     carried = json.loads(carried_updates) if isinstance(carried_updates, str) else (carried_updates or [])
 
     # Count total tasks (new + already in DB from rollover)
-    carried_count = frappe.db.count("Daily Task", {
-        "employee": employee.name,
-        "task_date": date,
-    })
+    carried_count = len(work_log.tasks)
 
     if not tasks and carried_count == 0:
         frappe.throw("Please add at least one planned task before checking in.")
 
     # Update carried task descriptions/estimates if employee edited them
+    rows_by_name = {row.name: row for row in work_log.tasks if row.name}
     for c in carried:
         task_name = c.get("name")
         if not task_name:
             continue
-        _assert_task_owner(task_name, employee.name)
-        update = {}
+        row = rows_by_name.get(task_name)
+        if not row:
+            frappe.throw("Not authorised to edit this task.", frappe.PermissionError)
         if (c.get("description") or "").strip():
-            update["description"] = c["description"].strip()
+            row.description = c["description"].strip()
         if c.get("estimated_time") is not None:
-            update["estimated_time"] = _parse_time_to_hours(c.get("estimated_time", ""))
+            row.estimated_time = _parse_time_to_hours(c.get("estimated_time", ""))
         if c.get("project_name") is not None:
-            update["project_name"] = c.get("project_name", "").strip()
-        if update:
-            frappe.db.set_value("Daily Task", task_name, update)
+            row.project_name = c.get("project_name", "").strip()
 
     # Insert new tasks, preserving the order the employee entered them in
-    sequence_base = _next_sequence(employee.name, date)
+    sequence_base = _next_sequence(work_log)
+    new_rows_with_attachments = []
     for i, t in enumerate(tasks):
         desc = (t.get("description") or "").strip()
         if not desc:
             continue
-        task_doc = frappe.new_doc("Daily Task")
-        task_doc.employee       = employee.name
-        task_doc.task_date      = date
-        task_doc.description    = desc
-        task_doc.task_type      = "Planned"
-        task_doc.status         = "Pending"
-        task_doc.origin_date    = date
-        task_doc.estimated_time = t.get("estimated_time", "")
-        task_doc.project_name = (t.get("project_name") or "").strip()
-        task_doc.sequence = sequence_base + i + 1
-        task_doc.insert(ignore_permissions=True)
-        _reparent_attachments(t.get("attachment_names"), task_doc.name)
+        row = work_log.append("tasks", {})
+        row.series_id = frappe.generate_hash(length=32)
+        row.origin_date = date
+        row.description = desc
+        row.task_type = "Planned"
+        row.status = "Pending"
+        row.estimated_time = t.get("estimated_time", "")
+        row.project_name = (t.get("project_name") or "").strip()
+        row.sequence = sequence_base + i + 1
+        new_rows_with_attachments.append((row, t.get("attachment_names")))
 
     actual_login = login_time or now_datetime().strftime("%H:%M:%S")
     if re.fullmatch(r"\d{2}:\d{2}", str(actual_login)):
         actual_login = str(actual_login) + ":00"
 
-    log = frappe.new_doc("Daily Task Log")
-    log.employee          = employee.name
-    log.date              = date
-    log.log_type          = "Morning Check-In"
-    log.login_time        = actual_login
-    log.work_location     = work_location
-    log.half_day_session  = _resolve_half_day_session(employee.name, date, half_day_session)
-    log.insert(ignore_permissions=True)
-    log.flags.ignore_permissions = True
-    log.submit()
+    work_log.login_time = actual_login
+    work_log.work_location = work_location
+    work_log.half_day_session = _resolve_half_day_session(employee.name, date, half_day_session)
+    work_log.morning_submitted = 1
+    _save_work_log(work_log)
+
+    for row, attachment_names in new_rows_with_attachments:
+        _reparent_attachments(attachment_names, row.name)
 
     _make_checkin(employee.name, "IN", actual_login)
     frappe.db.commit()
 
-    # Fetch today's full task list (planned + carried) once, reused below
-    all_tasks = frappe.get_all("Daily Task",
-        filters={"employee": employee.name, "task_date": date},
-        fields=["name", "description", "status", "task_type",
-                "estimated_time", "project_name", "rolled_over_from"],
-        order_by="sequence asc",
-    )
-
-    # Notification — includes today's tasks + carried-forward tasks
-    late_flag = frappe.db.get_value("Daily Task Log", log.name, "is_late")
-    resolved_half_day = log.half_day_session
-    detail_rows = [
-        ("Employee", employee.employee_name),
-        ("Date", date),
-        ("Login Time", _to_ampm(actual_login)),
-        ("Checked-In At", _format_action_timestamp(checkin_action_time)),
-        ("Work Location", work_location),
-        ("Half-Day Session", resolved_half_day),
-        ("Status", "Late Check-in" if late_flag else None),
-    ]
-    _notify_hr_and_team_leader(
-        employee.name,
-        employee.employee_name,
-        "checkin",
-        detail_rows,
-        tasks=all_tasks,
-        department=employee.department,
-    )
-
-    # Send check-in confirmation to employee with task list
-    _send_employee_checkin_email(
-        employee.name,
-        employee.employee_name,
-        actual_login,
-        checkin_action_time,
-        work_location,
-        resolved_half_day,
-        late_flag,
-        all_tasks,
-        date,
-        department=employee.department,
+    frappe.enqueue(
+        _send_checkin_notifications,
+        queue="short",
+        enqueue_after_commit=True,
+        employee_name=employee.name,
+        date=date,
+        checkin_action_time=checkin_action_time,
     )
 
     return {"success": True, "login_time": _to_ampm(actual_login)}
@@ -1730,21 +1852,23 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     elif not logout_time:
         frappe.throw("Logout time is required.")
 
-    if frappe.db.exists("Daily Task Log", {
-        "employee": employee.name, "date": date,
-        "log_type": "End of Day", "docstatus": 1,
-    }):
+    work_log = _get_or_new_work_log(employee.name, date)
+    if work_log.eod_submitted:
         frappe.throw(f"You have already checked out for {date}.")
 
     updates = json.loads(task_updates) if isinstance(task_updates, str) else task_updates
     adhocs  = json.loads(adhoc_tasks)  if isinstance(adhoc_tasks, str)  else adhoc_tasks
 
     # Update existing task statuses + actual time
+    rows_by_name = {row.name: row for row in work_log.tasks if row.name}
+    newly_done_series = []
     for t in updates:
         name = t.get("name")
         if not name:
             continue
-        _assert_task_owner(name, employee.name)
+        row = rows_by_name.get(name)
+        if not row:
+            frappe.throw("Not authorised to edit this task.", frappe.PermissionError)
         status = t.get("status", "Pending")
         actual_time = t.get("actual_time", "")
         if status == "Done" and not _parse_time_to_hours(actual_time):
@@ -1757,159 +1881,70 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         # drop it instead of letting _rollover_pending_tasks pick it up.
         if status in ("Pending", "In Progress") and not t.get("carry_forward", True):
             status = "Dropped"
-        update_fields = {
-            "status":      status,
-            "actual_time": _parse_time_to_hours(actual_time),
-            "remarks":     t.get("remarks", ""),
-        }
+
+        row.status = status
+        row.actual_time = _parse_time_to_hours(actual_time)
+        row.remarks = t.get("remarks", "")
         # Allow description edit during EOD
-        if t.get("description", "").strip():
-            update_fields["description"] = t["description"].strip()
-        frappe.db.set_value("Daily Task", name, update_fields)
+        if (t.get("description") or "").strip():
+            row.description = t["description"].strip()
 
-        if t.get("status") == "Done":
-            root = _get_root_task(name)
-            if root:
-                # Find all future tasks rolled over from this root and delete them
-                future_tasks = frappe.get_all("Daily Task", filters={
-                    "rolled_over_from": root,
-                    "task_date": [">", date],
-                    "status": ["in", ["Pending", "In Progress", "Rolled Over"]]
-                }, fields=["name"])
-                for ft in future_tasks:
-                    frappe.delete_doc("Daily Task", ft.name, ignore_permissions=True, force=True)
-
-            ancestor = frappe.db.get_value("Daily Task", name, "rolled_over_from")
-            depth = 0
-            while ancestor and depth < 365:
-                # If an ancestor task was deleted, stop traversing to prevent issues
-                if not frappe.db.exists("Daily Task", ancestor):
-                    break
-                frappe.db.set_value("Daily Task", ancestor, "status", "Done")
-                ancestor = frappe.db.get_value("Daily Task", ancestor, "rolled_over_from")
-                depth += 1
+        if status == "Done":
+            newly_done_series.append(row.series_id)
 
     # Insert ad-hoc tasks, preserving the order the employee entered them in
-    sequence_base = _next_sequence(employee.name, date)
+    sequence_base = _next_sequence(work_log)
+    new_rows_with_attachments = []
     for i, t in enumerate(adhocs):
         desc = (t.get("description") or "").strip()
         if not desc:
             continue
-        task_doc = frappe.new_doc("Daily Task")
-        task_doc.employee    = employee.name
-        task_doc.task_date   = date
-        task_doc.description = desc
-        task_doc.task_type   = "Ad-hoc"
-        task_doc.status      = t.get("status", "Done")
-        task_doc.origin_date = date
-        task_doc.estimated_time = t.get("estimated_time", "")
-        task_doc.actual_time = t.get("actual_time", "")
-        task_doc.remarks     = t.get("remarks", "")
-        task_doc.project_name = (t.get("project_name") or "").strip()
-        task_doc.sequence = sequence_base + i + 1
-        task_doc.insert(ignore_permissions=True)
-        _reparent_attachments(t.get("attachment_names"), task_doc.name)
+        row = work_log.append("tasks", {})
+        row.series_id = frappe.generate_hash(length=32)
+        row.origin_date = date
+        row.description = desc
+        row.task_type = "Ad-hoc"
+        row.status = t.get("status", "Done")
+        row.estimated_time = t.get("estimated_time", "")
+        row.actual_time = t.get("actual_time", "")
+        row.remarks = t.get("remarks", "")
+        row.project_name = (t.get("project_name") or "").strip()
+        row.sequence = sequence_base + i + 1
+        new_rows_with_attachments.append((row, t.get("attachment_names")))
 
-    # Get login time for net hours calculation
-    morning_log_name = frappe.db.get_value("Daily Task Log", {
-        "employee": employee.name, "date": date,
-        "log_type": "Morning Check-In", "docstatus": 1,
-    }, "name")
-    login_time_raw = ""
-    half_day_session = ""
-    work_location = ""
-    if morning_log_name:
-        morning_log = frappe.db.get_value(
-            "Daily Task Log", morning_log_name,
-            ["login_time", "half_day_session", "work_location"], as_dict=True
-        )
-        login_time_raw = morning_log.login_time or ""
-        half_day_session = morning_log.half_day_session or ""
-        work_location = morning_log.work_location or ""
+    login_time_raw = work_log.login_time or ""
+    half_day_session = work_log.half_day_session or ""
+    work_location = work_log.work_location or ""
 
-    # FIX: normalise all time values through _to_hhmm before calc
-    # Frappe DB returns Time fields as datetime.timedelta; JS sends 'HH:MM' strings.
-    # _calc_net_hours now handles both, but normalising here is belt-and-suspenders.
-    net_hours = _calc_net_hours(
-        login_time_raw, logout_time, lunch_from, lunch_to, date
-    ) if login_time_raw else ""
+    # net_hours is (re)computed by DailyWorkLog.validate() on save — no need
+    # to pre-compute it here (the old two-doc model did, but its result was
+    # always immediately overwritten by the log doc's own validate() anyway).
+    work_log.lunch_from = lunch_from or ""
+    work_log.lunch_to = lunch_to or ""
+    work_log.logout_time = logout_time
+    work_log.eod_submitted = 1
 
-    log = frappe.new_doc("Daily Task Log")
-    log.employee    = employee.name
-    log.date        = date
-    log.log_type    = "End of Day"
-    log.login_time  = login_time_raw
-    log.lunch_from  = lunch_from  or ""
-    log.lunch_to    = lunch_to    or ""
-    log.logout_time = logout_time
-    log.net_hours   = net_hours
-    log.insert(ignore_permissions=True)
-    log.flags.ignore_permissions = True
-    log.submit()
+    _save_work_log(work_log)
+    net_hours = work_log.net_hours or ""
 
-    # DailyTaskLog.validate() recalculates and overwrites net_hours on its own
-    # (see daily_task_log.py _calculate_net_hours) — re-sync the local variable
-    # so the response + notification emails below match what was actually saved.
-    net_hours = log.net_hours or net_hours
+    for row, attachment_names in new_rows_with_attachments:
+        _reparent_attachments(attachment_names, row.name)
+
+    for series_id in newly_done_series:
+        _cascade_series_done(series_id, date)
 
     _make_checkin(employee.name, "OUT", logout_time)
     pending_count = _rollover_pending_tasks(employee.name, date)
     frappe.db.commit()
 
-    done_count = frappe.db.count("Daily Task", {
-        "employee": employee.name, "task_date": date, "status": "Done"
-    })
-    total_count = frappe.db.count("Daily Task", {
-        "employee": employee.name, "task_date": date,
-    })
-
-    # Fetch full task list once — used by both HR/TL notification and employee email
-    all_tasks = frappe.get_all("Daily Task",
-        filters={"employee": employee.name, "task_date": date},
-        fields=["name", "description", "status", "task_type",
-                "estimated_time", "actual_time", "project_name", "rolled_over_from", "remarks"],
-        order_by="sequence asc",
-    )
-    _attach_task_files(all_tasks)
-
-    total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in all_tasks)
-    working_hours_str = _format_hours(total_actual_hours) or "0h"
-
-    detail_rows = [
-        ("Employee", employee.employee_name),
-        ("Date", date),
-        ("Login Time", _to_ampm(login_time_raw) if login_time_raw else None),
-        ("Logout Time", _to_ampm(logout_time)),
-        ("Checked-Out At", _format_action_timestamp(checkout_action_time)),
-        ("Work Location", work_location),
-        ("Net Working Hours", net_hours),
-        ("Total Task Hours", working_hours_str),
-        ("Half-Day Session", half_day_session),
-        ("Tasks Completed", f"{done_count}/{total_count}"),
-    ]
-    _notify_hr_and_team_leader(
-        employee.name,
-        employee.employee_name,
-        "checkout",
-        detail_rows,
-        tasks=all_tasks,
-        department=employee.department,
-    )
-
-    # Send EOD confirmation to employee with task summary
-    _send_employee_eod_email(
-        employee.name,
-        employee.employee_name,
-        logout_time,
-        checkout_action_time,
-        net_hours,
-        work_location,
-        half_day_session,
-        all_tasks,
-        date,
+    frappe.enqueue(
+        _send_eod_notifications,
+        queue="short",
+        enqueue_after_commit=True,
+        employee_name=employee.name,
+        date=date,
+        checkout_action_time=checkout_action_time,
         is_late_checkout=is_late_checkout,
-        submission_date=today(),
-        department=employee.department,
     )
 
     return {
@@ -1970,11 +2005,11 @@ def get_management_dashboard(date=None):
         filters={"status": "Active"},
         fields=["name", "employee_name", "department"],
     )
-    checked_in = frappe.get_all("Daily Task Log", filters={
-        "date": date, "log_type": "Morning Check-In", "docstatus": 1,
+    checked_in = frappe.get_all("Daily Work Log", filters={
+        "date": date, "morning_submitted": 1,
     }, pluck="employee")
-    eod_done = frappe.get_all("Daily Task Log", filters={
-        "date": date, "log_type": "End of Day", "docstatus": 1,
+    eod_done = frappe.get_all("Daily Work Log", filters={
+        "date": date, "eod_submitted": 1,
     }, pluck="employee")
     on_leave = frappe.get_all("Leave Application", filters={
         "from_date": ["<=", date], "to_date": [">=", date],
@@ -2008,16 +2043,14 @@ def get_management_dashboard(date=None):
         except Exception:
             return 0
 
-    eod_logs = frappe.db.get_all("Daily Task Log", filters={
+    eod_logs = frappe.db.get_all("Daily Work Log", filters={
         "date": date,
-        "log_type": "End of Day",
-        "docstatus": 1
+        "eod_submitted": 1,
     }, fields=["employee", "employee_name", "net_hours", "logout_time"])
 
-    checkin_logs = frappe.db.get_all("Daily Task Log", filters={
+    checkin_logs = frappe.db.get_all("Daily Work Log", filters={
         "date": date,
-        "log_type": "Morning Check-In",
-        "docstatus": 1
+        "morning_submitted": 1,
     }, fields=["employee", "login_time"])
 
     login_map = {c.employee: c.login_time for c in checkin_logs}
@@ -2044,9 +2077,7 @@ def get_management_dashboard(date=None):
     # Sort rankings descending by net minutes
     rankings.sort(key=lambda x: x["net_minutes"], reverse=True)
 
-    standard_workday_hours = frappe.db.get_single_value(
-        "ST Attendance Settings", "standard_workday_hours"
-    ) or 8
+    standard_workday_hours = _get_attendance_settings().get("standard_workday_hours") or 8
 
     return {
         "departments": result,
@@ -2078,25 +2109,24 @@ def get_employee_task_detail(employee_name, date=None):
     emp = frappe.db.get_value("Employee", employee_name,
         ["name", "employee_name", "department", "designation"], as_dict=True)
 
-    morning_log = frappe.db.get_value("Daily Task Log", {
-        "employee": employee_name, "date": date,
-        "log_type": "Morning Check-In", "docstatus": 1,
-    }, ["login_time", "is_late", "name"], as_dict=True)
+    work_log = _get_work_log(employee_name, date)
 
-    eod_log = frappe.db.get_value("Daily Task Log", {
-        "employee": employee_name, "date": date,
-        "log_type": "End of Day", "docstatus": 1,
-    }, ["logout_time", "lunch_from", "lunch_to", "net_hours", "name"], as_dict=True)
-
-    tasks = frappe.get_all("Daily Task", filters={
-        "employee": employee_name, "task_date": date,
-    }, fields=["name", "description", "status", "task_type",
-               "estimated_time", "actual_time", "rolled_over_from", "origin_date"],
-    order_by="sequence asc")
-
-    for task in tasks:
-        task["is_carried"] = bool(task.get("rolled_over_from"))
-    _attach_task_files(tasks)
+    morning_log = None
+    eod_log = None
+    tasks = []
+    if work_log:
+        if work_log.morning_submitted:
+            morning_log = frappe._dict({
+                "name": work_log.name, "login_time": work_log.login_time, "is_late": work_log.is_late,
+            })
+        if work_log.eod_submitted:
+            eod_log = frappe._dict({
+                "name": work_log.name, "logout_time": work_log.logout_time,
+                "lunch_from": work_log.lunch_from, "lunch_to": work_log.lunch_to,
+                "net_hours": work_log.net_hours,
+            })
+        tasks = [_task_entry_dict(row, date) for row in work_log.tasks]
+        _attach_task_files(tasks)
 
     return {
         "employee":    emp,
@@ -2117,37 +2147,28 @@ def get_my_history(page=0):
     limit  = 15
     offset = page * limit
 
-    logs = frappe.db.sql("""
-        SELECT
-            l.date,
-            MAX(CASE WHEN l.log_type = 'Morning Check-In' THEN l.login_time  END) as login_time,
-            MAX(CASE WHEN l.log_type = 'End of Day'       THEN l.logout_time END) as logout_time,
-            MAX(CASE WHEN l.log_type = 'End of Day'       THEN l.net_hours   END) as net_hours,
-            MAX(CASE WHEN l.log_type = 'End of Day'       THEN l.lunch_from  END) as lunch_from,
-            MAX(CASE WHEN l.log_type = 'End of Day'       THEN l.lunch_to    END) as lunch_to,
-            MAX(CASE WHEN l.log_type = 'Morning Check-In' THEN l.is_late     END) as is_late,
-            SUM(CASE WHEN l.log_type = 'End of Day'       THEN 1 ELSE 0      END) as eod_done
-        FROM `tabDaily Task Log` l
-        WHERE l.employee = %(employee)s
-          AND l.docstatus = 1
-          AND l.date <= %(today)s
-        GROUP BY l.date
-        ORDER BY l.date DESC
-        LIMIT %(limit)s OFFSET %(offset)s
-    """, {"employee": employee.name, "today": today(),
-          "limit": limit, "offset": offset}, as_dict=True)
+    logs = frappe.get_all("Daily Work Log", filters={
+        "employee": employee.name,
+        "morning_submitted": 1,
+        "date": ["<=", today()],
+    }, fields=["date", "login_time", "logout_time", "net_hours",
+               "lunch_from", "lunch_to", "is_late", "eod_submitted"],
+        order_by="date desc", start=offset, page_length=limit)
+
+    for log in logs:
+        log["eod_done"] = 1 if log.get("eod_submitted") else 0
 
     dates = [log.date for log in logs]
     counts_by_date = {}
     if dates:
         rows = frappe.db.sql("""
-            SELECT
-                task_date,
+            SELECT dwl.date as task_date,
                 COUNT(*) as total,
-                SUM(CASE WHEN status = 'Done' THEN 1 ELSE 0 END) as done
-            FROM `tabDaily Task`
-            WHERE employee = %(emp)s AND task_date IN %(dates)s
-            GROUP BY task_date
+                SUM(CASE WHEN te.status = 'Done' THEN 1 ELSE 0 END) as done
+            FROM `tabTask Entry` te
+            INNER JOIN `tabDaily Work Log` dwl ON dwl.name = te.parent
+            WHERE dwl.employee = %(emp)s AND dwl.date IN %(dates)s
+            GROUP BY dwl.date
         """, {"emp": employee.name, "dates": dates}, as_dict=True)
         counts_by_date = {row.task_date: row for row in rows}
 
@@ -2168,25 +2189,20 @@ def get_history_day_detail(date):
     """Full task list for a specific past date."""
     employee = _get_employee()
 
-    tasks = frappe.get_all("Daily Task", filters={
-        "employee": employee.name, "task_date": date,
-    }, fields=["name", "description", "status", "task_type",
-               "estimated_time", "actual_time", "rolled_over_from",
-               "origin_date", "remarks", "project_name"],
-    order_by="sequence asc")
+    work_log = _get_work_log(employee.name, date)
 
-    for task in tasks:
-        task["is_carried"] = bool(task.get("rolled_over_from"))
-
-    morning_log = frappe.db.get_value("Daily Task Log", {
-        "employee": employee.name, "date": date,
-        "log_type": "Morning Check-In", "docstatus": 1,
-    }, ["login_time", "is_late"], as_dict=True)
-
-    eod_log = frappe.db.get_value("Daily Task Log", {
-        "employee": employee.name, "date": date,
-        "log_type": "End of Day", "docstatus": 1,
-    }, ["logout_time", "lunch_from", "lunch_to", "net_hours"], as_dict=True)
+    tasks = []
+    morning_log = None
+    eod_log = None
+    if work_log:
+        tasks = [_task_entry_dict(row, date) for row in work_log.tasks]
+        if work_log.morning_submitted:
+            morning_log = frappe._dict({"login_time": work_log.login_time, "is_late": work_log.is_late})
+        if work_log.eod_submitted:
+            eod_log = frappe._dict({
+                "logout_time": work_log.logout_time, "lunch_from": work_log.lunch_from,
+                "lunch_to": work_log.lunch_to, "net_hours": work_log.net_hours,
+            })
 
     return {
         "date":        date,
@@ -2200,39 +2216,82 @@ def get_history_day_detail(date):
 def delete_carried_task(name):
     """Delete a carried task. Employee can only delete their own tasks."""
     employee = _get_employee()
-    task_employee, task_date = frappe.db.get_value("Daily Task", name, ["employee", "task_date"])
-    if task_employee != employee.name:
+    parent = frappe.db.get_value("Task Entry", name, "parent")
+    if not parent:
         frappe.throw("Not authorised to delete this task.", frappe.PermissionError)
 
-    if frappe.db.exists("Daily Task Log", {
-        "employee": employee.name,
-        "date": task_date,
-        "log_type": "End of Day",
-        "docstatus": 1
-    }):
+    work_log = frappe.get_doc("Daily Work Log", parent)
+    if work_log.employee != employee.name:
+        frappe.throw("Not authorised to delete this task.", frappe.PermissionError)
+    if work_log.eod_submitted:
         frappe.throw("Cannot delete tasks after checkout is submitted.", frappe.ValidationError)
 
-    # Clean up ancestors to prevent safety/EOD rollover from resurrecting the task
-    root = _get_root_task(name)
-    if root:
-        frappe.db.sql("""
-            UPDATE `tabDaily Task`
-            SET status = 'Rolled Over'
-            WHERE employee = %s
-              AND (name = %s OR rolled_over_from = %s)
-              AND status IN ('Pending', 'In Progress')
-        """, (employee.name, root, root))
+    row = next((r for r in work_log.tasks if r.name == name), None)
+    if not row:
+        frappe.throw("Not authorised to delete this task.", frappe.PermissionError)
 
-    frappe.delete_doc("Daily Task", name, ignore_permissions=True, force=True)
+    # Clean up the lineage to prevent safety/EOD rollover from resurrecting it
+    frappe.db.sql("""
+        UPDATE `tabTask Entry`
+        SET status = 'Rolled Over'
+        WHERE series_id = %s AND status IN ('Pending', 'In Progress')
+    """, (row.series_id,))
+
+    work_log.tasks.remove(row)
+    _save_work_log(work_log)
     frappe.db.commit()
     return {"success": True}
+
+
+@frappe.whitelist(methods=["POST"])
+def upload_task_attachment(task_name):
+    """Attach an uploaded file to an existing task. Employee can only attach
+    to their own tasks.
+
+    Bypasses Frappe's generic upload_file endpoint on purpose (confirmed via
+    a live 403 during checkout, not assumed): that endpoint's
+    check_write_permission() loads Task Entry standalone via
+    frappe.get_doc(doctype, name), then calls doc.check_permission(), which
+    delegates a child doctype's permission check to its parent via
+    has_child_permission(). That delegation reads
+    `getattr(child_doc, "parent_doc", child_doc.parent)` to find the parent
+    — but every Document/BaseDocument has a `parent_doc` *property*
+    (base_document.py) that exists (and returns None) on a standalone-loaded
+    child, so getattr never falls through to the intended `.parent` name
+    string. The parent doc permission check then runs with no document
+    context at all, so an if_owner-gated permission (ours) can never
+    resolve to "yes, this employee owns it" — write is always denied. This
+    is a core Frappe limitation for if_owner-restricted child doctypes
+    accessed this way, not something fixable via DocType permission config.
+    `frappe.client.set_value` (used for inline description/remarks edits)
+    is unaffected — it resolves the parent doc explicitly before calling
+    save(), never hitting this code path.
+    """
+    employee = _get_employee()
+    _assert_task_owner(task_name, employee.name)
+
+    file_obj = frappe.request.files.get("file")
+    if not file_obj:
+        frappe.throw("No file uploaded.")
+
+    doc = frappe.get_doc({
+        "doctype": "File",
+        "attached_to_doctype": "Task Entry",
+        "attached_to_name": task_name,
+        "folder": "Home",
+        "file_name": file_obj.filename,
+        "is_private": cint(frappe.form_dict.get("is_private", 1)),
+        "content": file_obj.stream.read(),
+    })
+    doc.insert(ignore_permissions=True)
+    return doc
 
 
 @frappe.whitelist()
 def get_task_attachments(task_name):
     """List files attached to a task. Visible to the owner, their Team Leader, or HR Manager."""
     _assert_task_visible(task_name)
-    return get_attachments("Daily Task", task_name)
+    return get_attachments("Task Entry", task_name)
 
 
 @frappe.whitelist()
@@ -2240,12 +2299,13 @@ def view_task_attachment(file_name, task_name):
     """Stream a task's attached file. Visible to the owner, their Team Leader, or HR Manager.
 
     Bypasses Frappe's private-file route on purpose: that route resolves
-    access via the Daily Task doctype's role permission table, which has no
-    row for Team Lead (and can't be given one without granting every Team
-    Lead blanket read access to every employee's tasks — has_permission
-    hooks can only deny, never grant, beyond that table). This endpoint does
-    the same precise "is this employee my report" check _assert_task_visible
-    already does elsewhere, then serves the file directly.
+    access via the Task Entry doctype's permission table (empty — child
+    doctypes delegate to their parent), which has no row for Team Lead
+    (and can't be given one without granting every Team Lead blanket read
+    access to every employee's tasks — has_permission hooks can only deny,
+    never grant, beyond that table). This endpoint does the same precise
+    "is this employee my report" check _assert_task_visible already does
+    elsewhere, then serves the file directly.
     """
     _assert_task_visible(task_name)
     if frappe.db.get_value("File", file_name, "attached_to_name") != task_name:
@@ -2272,76 +2332,49 @@ def delete_carried_project(project_name, task_date):
     """Delete all tasks belonging to a project for a specific date."""
     employee = _get_employee()
 
-    if frappe.db.exists("Daily Task Log", {
-        "employee": employee.name,
-        "date": task_date,
-        "log_type": "End of Day",
-        "docstatus": 1
-    }):
+    work_log = _get_work_log(employee.name, task_date)
+    if not work_log:
+        return {"success": True}
+    if work_log.eod_submitted:
         frappe.throw("Cannot delete project tasks after checkout is submitted.", frappe.ValidationError)
 
-    # Find all tasks for this employee, date, and project name
-    tasks = frappe.get_all("Daily Task", filters={
-        "employee": employee.name,
-        "task_date": task_date,
-        "project_name": project_name
-    }, fields=["name"])
+    matching = [r for r in work_log.tasks if (r.project_name or "") == project_name]
+    if not matching:
+        return {"success": True}
 
-    for t in tasks:
-        # Clean up ancestors to prevent safety/EOD rollover from resurrecting the task
-        root = _get_root_task(t.name)
-        if root:
-            frappe.db.sql("""
-                UPDATE `tabDaily Task`
-                SET status = 'Rolled Over'
-                WHERE employee = %s
-                  AND (name = %s OR rolled_over_from = %s)
-                  AND status IN ('Pending', 'In Progress')
-            """, (employee.name, root, root))
-        frappe.delete_doc("Daily Task", t.name, ignore_permissions=True, force=True)
+    for row in matching:
+        # Clean up the lineage to prevent safety/EOD rollover from resurrecting it
+        frappe.db.sql("""
+            UPDATE `tabTask Entry`
+            SET status = 'Rolled Over'
+            WHERE series_id = %s AND status IN ('Pending', 'In Progress')
+        """, (row.series_id,))
+        work_log.tasks.remove(row)
 
+    _save_work_log(work_log)
     frappe.db.commit()
     return {"success": True}
 
 
-
 @frappe.whitelist()
 def reset_morning_checkin():
-    """Reset morning check-in by deleting check-in logs and newly created tasks for today."""
+    """Reset morning check-in: revert today's Daily Work Log to its
+    pre-checkin state and preserve its Task Entry rows as Pending for
+    re-check-in (replaces cancelling a separate Morning Check-In doc under
+    the old submit/cancel model — there's only one doc per day now)."""
     employee = _get_employee()
-    
+
     date = _resolve_active_checkin_date(employee.name)
     if not isinstance(date, str):
         date = frappe.utils.getdate(date).strftime("%Y-%m-%d")
 
-    # 1. Check if EOD is already submitted
-    eod_exists = frappe.db.exists("Daily Task Log", {
-        "employee": employee.name,
-        "date": date,
-        "log_type": "End of Day",
-        "docstatus": 1,
-    })
-    if eod_exists:
+    work_log = _get_work_log(employee.name, date)
+    if not work_log or not work_log.morning_submitted:
+        frappe.throw(f"You have not checked in on {date}.")
+    if work_log.eod_submitted:
         frappe.throw(f"Cannot reset check-in because checkout has already been submitted for {date}.")
 
-
-    # 2. Get Morning Check-In log name
-    morning_log = frappe.db.get_value("Daily Task Log", {
-        "employee": employee.name,
-        "date": date,
-        "log_type": "Morning Check-In",
-        "docstatus": 1,
-    })
-    if not morning_log:
-        frappe.throw(f"You have not checked in on {date}.")
-
-    # 3. Cancel Morning Check-In log (sets docstatus = 2)
-    morning_doc = frappe.get_doc("Daily Task Log", morning_log)
-    morning_doc.flags.ignore_permissions = True
-    if morning_doc.docstatus == 1:
-        morning_doc.cancel()
-
-    # 4. Delete Employee Checkin created by ST Daily Checkin today
+    # Delete Employee Checkin created by ST Daily Checkin today
     frappe.db.delete("Employee Checkin", {
         "employee": employee.name,
         "log_type": "IN",
@@ -2349,17 +2382,21 @@ def reset_morning_checkin():
         "time": ["between", [date + " 00:00:00", date + " 23:59:59"]],
     })
 
-    # 5. Revert tasks back to Pending so they are preserved for re-check-in.
-    #    Previously this deleted planned tasks, causing user work loss.
-    #    'Rolled Over' tasks are excluded: they already have a forward copy on
-    #    a later date (rolled_over_from), so reviving them here would leave two
-    #    live copies of the same task.
-    frappe.db.sql("""
-        UPDATE `tabDaily Task`
-        SET status = 'Pending'
-        WHERE employee = %s AND task_date = %s AND status NOT IN ('Pending', 'Rolled Over')
-    """, (employee.name, date))
+    # Revert tasks back to Pending so they are preserved for re-check-in.
+    # 'Rolled Over' tasks are excluded: they already have a forward copy on
+    # a later date, so reviving them here would leave two live copies.
+    for row in work_log.tasks:
+        if row.status not in ("Pending", "Rolled Over"):
+            row.status = "Pending"
 
+    work_log.morning_submitted = 0
+    work_log.login_time = None
+    work_log.work_location = None
+    work_log.half_day_session = None
+    work_log.is_late = 0
+    work_log.was_reset_today = 1
+
+    _save_work_log(work_log)
     frappe.db.commit()
     return {"success": True}
 
@@ -2377,24 +2414,18 @@ def update_half_day_session(session):
     employee = _get_employee()
     date = today()
 
-    if frappe.db.exists("Daily Task Log", {
-        "employee": employee.name, "date": date,
-        "log_type": "End of Day", "docstatus": 1,
-    }):
-        frappe.throw("Cannot change half-day session after checkout is submitted.")
-
-    morning_log = frappe.db.get_value("Daily Task Log", {
-        "employee": employee.name, "date": date,
-        "log_type": "Morning Check-In", "docstatus": 1,
-    }, "name")
-    if not morning_log:
+    work_log = _get_work_log(employee.name, date)
+    if not work_log or not work_log.morning_submitted:
         frappe.throw("You have not checked in today.")
+    if work_log.eod_submitted:
+        frappe.throw("Cannot change half-day session after checkout is submitted.")
 
     resolved = _resolve_half_day_session(employee.name, date, session)
     if not resolved:
         frappe.throw("You do not have an approved half-day leave for today.")
 
-    frappe.db.set_value("Daily Task Log", morning_log, "half_day_session", resolved)
+    work_log.half_day_session = resolved
+    _save_work_log(work_log)
     frappe.db.commit()
     return {"success": True, "half_day_session": resolved}
 
@@ -2408,21 +2439,12 @@ def _build_team_data(employees, date):
 
     emp_names = [e.name for e in employees]
 
-    morning_logs = frappe.get_all("Daily Task Log", filters={
-        "employee": ["in", emp_names],
-        "date": date,
-        "log_type": "Morning Check-In",
-        "docstatus": 1,
-    }, fields=["employee", "login_time", "is_late"])
-    checked_in_map = {l.employee: l for l in morning_logs}
-
-    eod_logs = frappe.get_all("Daily Task Log", filters={
-        "employee": ["in", emp_names],
-        "date": date,
-        "log_type": "End of Day",
-        "docstatus": 1,
-    }, fields=["employee", "logout_time", "net_hours"])
-    eod_map = {l.employee: l for l in eod_logs}
+    work_logs = frappe.get_all("Daily Work Log", filters={
+        "employee": ["in", emp_names], "date": date,
+    }, fields=["name", "employee", "login_time", "is_late", "logout_time",
+               "net_hours", "morning_submitted", "eod_submitted"])
+    work_log_by_emp = {w.employee: w for w in work_logs}
+    parent_to_emp = {w.name: w.employee for w in work_logs}
 
     on_leave = set(frappe.get_all("Leave Application", filters={
         "employee": ["in", emp_names],
@@ -2432,23 +2454,29 @@ def _build_team_data(employees, date):
         "docstatus": 1,
     }, pluck="employee"))
 
-    all_tasks = frappe.get_all("Daily Task", filters={
-        "employee": ["in", emp_names],
-        "task_date": date,
-    }, fields=["employee", "name", "description", "status", "project_name",
-               "task_type", "estimated_time", "actual_time", "rolled_over_from"])
+    all_tasks = []
+    if parent_to_emp:
+        raw_tasks = frappe.get_all("Task Entry", filters={
+            "parent": ["in", list(parent_to_emp.keys())],
+        }, fields=["name", "parent", "description", "status", "project_name",
+                   "task_type", "estimated_time", "actual_time", "origin_date"])
+        for t in raw_tasks:
+            entry = _task_entry_dict(t, date)
+            entry["employee"] = parent_to_emp.get(t.parent)
+            all_tasks.append(entry)
     _attach_task_files(all_tasks)
 
     tasks_by_emp = {}
     for t in all_tasks:
-        tasks_by_emp.setdefault(t.employee, []).append(t)
+        tasks_by_emp.setdefault(t["employee"], []).append(t)
 
     result_employees = []
     for emp in employees:
-        morning = checked_in_map.get(emp.name)
-        eod     = eod_map.get(emp.name)
+        work_log = work_log_by_emp.get(emp.name)
+        morning = work_log if work_log and work_log.morning_submitted else None
+        eod     = work_log if work_log and work_log.eod_submitted else None
         tasks   = tasks_by_emp.get(emp.name, [])
-        done    = sum(1 for t in tasks if t.status == "Done")
+        done    = sum(1 for t in tasks if t["status"] == "Done")
 
         # Real attendance data always takes priority over a leave record —
         # an employee on approved half-day leave who checks in for the other
@@ -2492,6 +2520,6 @@ def _build_team_data(employees, date):
             "missing":    sum(1 for e in result_employees if e["status"] == "missing"),
             "on_leave":   sum(1 for e in result_employees if e["status"] == "leave"),
             "late":       sum(1 for e in result_employees if e["status"] == "late"),
-            "eod_done":   len(eod_map),
+            "eod_done":   sum(1 for w in work_logs if w.eod_submitted),
         }
     }

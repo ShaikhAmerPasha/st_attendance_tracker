@@ -93,3 +93,9 @@ class RecurringTaskTemplate(Document):
                 "You are not allowed to edit another employee's recurring task.",
                 frappe.PermissionError,
             )
+
+
+def on_doctype_update():
+    # _ensure_recurring_tasks queries (employee, is_active) on every check-in
+    # page load. Without this index the query falls back to a table scan.
+    frappe.db.add_index("Recurring Task Template", ["employee", "is_active"])

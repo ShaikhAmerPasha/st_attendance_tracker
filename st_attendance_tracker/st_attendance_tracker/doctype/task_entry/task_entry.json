@@ -1,0 +1,125 @@
+{
+ "actions": [],
+ "creation": "2026-08-29 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "series_id",
+  "origin_date",
+  "recurring_template",
+  "col_break_1",
+  "task_type",
+  "status",
+  "section_break_task",
+  "project_name",
+  "description",
+  "remarks",
+  "section_break_time",
+  "estimated_time",
+  "actual_time",
+  "sequence"
+ ],
+ "fields": [
+  {
+   "fieldname": "series_id",
+   "fieldtype": "Data",
+   "label": "Series ID",
+   "read_only": 1,
+   "description": "Stable UUID shared by every rolled-over copy of this task. Assigned once when the series is first created."
+  },
+  {
+   "fieldname": "origin_date",
+   "fieldtype": "Date",
+   "label": "Originally Created On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "recurring_template",
+   "fieldtype": "Link",
+   "label": "Recurring Task Template",
+   "options": "Recurring Task Template",
+   "read_only": 1,
+   "description": "Set only for task_type=Recurring rows — lets editing/deactivating/deleting the template sync today's not-yet-started instance instead of leaving a stale copy behind."
+  },
+  {
+   "fieldname": "col_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Planned",
+   "fieldname": "task_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Task Type",
+   "options": "Planned\nAd-hoc\nRecurring"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pending\nIn Progress\nDone\nRolled Over\nDropped"
+  },
+  {
+   "fieldname": "section_break_task",
+   "fieldtype": "Section Break",
+   "label": "Task Details"
+  },
+  {
+   "fieldname": "project_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Project Name",
+   "description": "Optional — group tasks under a project"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "section_break_time",
+   "fieldtype": "Section Break",
+   "label": "Time Tracking"
+  },
+  {
+   "fieldname": "estimated_time",
+   "fieldtype": "Float",
+   "label": "Estimated Time",
+   "description": "e.g. 2 hrs, 30 mins"
+  },
+  {
+   "fieldname": "actual_time",
+   "fieldtype": "Float",
+   "label": "Time Taken for Task Completion",
+   "description": "e.g. 2 hrs, 30 mins"
+  },
+  {
+   "default": "0",
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Sequence",
+   "read_only": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-29 00:00:00",
+ "modified_by": "Administrator",
+ "module": "ST Attendance Tracker",
+ "name": "Task Entry",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

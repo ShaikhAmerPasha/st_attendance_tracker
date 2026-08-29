@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "skills": {
+    "codebase-design": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/codebase-design/SKILL.md",
+      "computedHash": "5a17552cc1482f1a40124bf4e6c9dbd90ac0dbb47e71c07d47369f9e5f2ae3b5"
+    },
+    "diagnosing-bugs": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/diagnosing-bugs/SKILL.md",
+      "computedHash": "37b5e9c624513551da790b52864dc8c84bff996a6d03a380cc6facdcc0a88354"
+    },
+    "domain-modeling": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/domain-modeling/SKILL.md",
+      "computedHash": "a11713c0ff7870efa3c331b2e273f09116158485246edc89ae5088eefd1b0b48"
+    },
+    "frappe-agent-architect": {
+      "source": "impertio-studio/frappe_claude_skill_package",
+      "sourceType": "github",
+      "skillPath": "skills/source/agents/frappe-agent-architect/SKILL.md",
+      "computedHash": "b9642139340c7f627c8bea8bcc2e65a2c54c76c30a11aa675ca85f2c6ca6977d"
+    },
+    "frappe-agent-validator": {
+      "source": "impertio-studio/frappe_claude_skill_package",
+      "sourceType": "github",
+      "skillPath": "skills/source/agents/frappe-agent-validator/SKILL.md",
+      "computedHash": "0b8fd43423cdd27db88325672188710a16f99e0950112089d786d611e1bfe191"
+    },
+    "frappe-app-dev": {
+      "source": "frappe/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frappe-app-dev/SKILL.md",
+      "computedHash": "53fc33422fc32f67527bc98af3f5d2e09c51e5b969f7114deefbb3c0bd6eb49f"
+    },
+    "frappe-core-api": {
+      "source": "impertio-studio/frappe_claude_skill_package",
+      "sourceType": "github",
+      "skillPath": "skills/source/core/frappe-core-api/SKILL.md",
+      "computedHash": "67552d748967fb5f484cd1b0788a4e939befa5a5191748951a88ea01a90f36a0"
+    },
+    "frappe-core-database": {
+      "source": "impertio-studio/frappe_claude_skill_package",
+      "sourceType": "github",
+      "skillPath": "skills/source/core/frappe-core-database/SKILL.md",
+      "computedHash": "6d3255abd8352b8d9f0cbdee819188e9dcb13e88d26d96573d01ebfa23aa218f"
+    },
+    "frappe-core-permissions": {
+      "source": "impertio-studio/frappe_claude_skill_package",
+      "sourceType": "github",
+      "skillPath": "skills/source/core/frappe-core-permissions/SKILL.md",
+      "computedHash": "37e3efda09aa31f4c080b05142b6c3aaad039eaf52fd8e94fbbe1deedccdf220"
+    },
+    "frappe-impl-ui-components": {
+      "source": "impertio-studio/frappe_claude_skill_package",
+      "sourceType": "github",
+      "skillPath": "skills/source/impl/frappe-impl-ui-components/SKILL.md",
+      "computedHash": "edb07b4c8061e2a64b1acf4200450260bd526571e93713617313d788d54001c3"
+    },
+    "frappe-syntax-doctypes": {
+      "source": "impertio-studio/frappe_claude_skill_package",
+      "sourceType": "github",
+      "skillPath": "skills/source/syntax/frappe-syntax-doctypes/SKILL.md",
+      "computedHash": "6fd762dacff7f26bc50a58f60a6aa6f38efb96ed954447d57d29049366fa80be"
+    },
+    "frappe-testing-unit": {
+      "source": "impertio-studio/frappe_claude_skill_package",
+      "sourceType": "github",
+      "skillPath": "skills/source/testing/frappe-testing-unit/SKILL.md",
+      "computedHash": "61b48cab491e52d4d691c095464309a1c078506497d3f152b2690c62f216d6e8"
+    },
+    "improve-codebase-architecture": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
+      "computedHash": "2449db6ab1ded9581f69fcc56c1f64818112d05e271fd4c5da23c6523f9d3d9d"
+    },
+    "ui-design": {
+      "source": "frappe/skills",
+      "sourceType": "github",
+      "skillPath": "skills/ui-design/SKILL.md",
+      "computedHash": "c3dec2ce532f6f99bcf827030430dc4bb1528f3d654f2736a3612f85e4afcf28"
+    },
+    "verification-before-completion": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/verification-before-completion/SKILL.md",
+      "computedHash": "b529822bdac4b197b180fe12225cff86b930b65910435103c10622df7f041651"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "f3bc47f890f42a44db1007ab390709ec368e4b8c089baee6b0007182236ac474"
+    }
+  }
+}

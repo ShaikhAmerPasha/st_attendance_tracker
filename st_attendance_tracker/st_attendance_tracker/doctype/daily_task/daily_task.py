@@ -103,3 +103,10 @@ def on_doctype_update():
     # Every list/lookup in this app filters by employee + task_date together —
     # a composite index matches that pattern far better than per-column indexes.
     frappe.db.add_index("Daily Task", ["employee", "task_date"])
+    # Rollover/dashboard queries filter by status + date range without employee
+    # (e.g. _safety_rollover, _rollover_pending_tasks). Without this index,
+    # MariaDB falls back to a table scan once the table is past ~50K rows.
+    frappe.db.add_index("Daily Task", ["status", "task_date"])
+    # submit_eod_log looks up future tasks by rolled_over_from + task_date
+    # to delete stale rollover chains when a task is marked Done.
+    frappe.db.add_index("Daily Task", ["rolled_over_from", "task_date"])

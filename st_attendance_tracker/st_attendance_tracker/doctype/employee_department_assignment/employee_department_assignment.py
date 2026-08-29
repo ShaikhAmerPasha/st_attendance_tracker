@@ -1,3 +1,4 @@
+import frappe
 from frappe.model.document import Document
 
 
@@ -10,3 +11,10 @@ class EmployeeDepartmentAssignment(Document):
     (see st_attendance_tracker.setup.validate_department_assignments).
     """
     pass
+
+
+def on_doctype_update():
+    # _get_team_members filters by team_leader on every team-dashboard and
+    # task-visibility check. Without this index only the implicit
+    # parent/parenttype index exists, which doesn't help a team_leader filter.
+    frappe.db.add_index("Employee Department Assignment", ["team_leader"])

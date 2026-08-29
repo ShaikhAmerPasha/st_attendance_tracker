@@ -19,7 +19,10 @@ doc_events = {
         "validate": "st_attendance_tracker.setup.validate_department_assignments",
         "on_update": "st_attendance_tracker.setup.sync_team_lead_role",
         "on_trash": "st_attendance_tracker.setup.sync_team_lead_role",
-    }
+    },
+    "ST Attendance Settings": {
+        "on_update": "st_attendance_tracker.api.clear_attendance_settings_cache",
+    },
 }
 
 # ── Scheduled Jobs ─────────────────────────────────────────────────────────────
@@ -44,4 +47,5 @@ website_route_rules = [
     {"from_route": "/management-dashboard", "to_route": "management_dashboard"},
     {"from_route": "/my-history",           "to_route": "my_history"},
     {"from_route": "/recurring-tasks",      "to_route": "recurring_tasks"},
+    {"from_route": "/additional-work",      "to_route": "additional_work"},
 ]

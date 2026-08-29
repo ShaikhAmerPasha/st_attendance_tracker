@@ -2086,86 +2086,6 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
   border-radius: 999px;
 }
 
-.tm-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid hsl(214, 32%, 95%);
-}
-
-.tm-row:last-child {
-  border-bottom: none;
-}
-
-.tm-av {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-  box-shadow: var(--shadow-sm);
-}
-
-.av-g { background: var(--success-bg); color: var(--success-text); }
-.av-b { background: var(--info-bg); color: var(--info-text); }
-.av-a { background: var(--warning-bg); color: var(--warning-text); }
-.av-r { background: var(--danger-bg); color: var(--danger-text); }
-
-.tm-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-.tm-p {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.tmp-t {
-  flex: 1;
-  height: 5px;
-  background: hsl(210, 40%, 94%);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.tmp-f {
-  height: 100%;
-  background: var(--success);
-  border-radius: 999px;
-}
-
-.tmp-l {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-light);
-  white-space: nowrap;
-}
-
-.tm-b {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  flex-shrink: 0;
-}
-
-.tmb-in { background: var(--success-bg); color: var(--success-text); }
-.tmb-la { background: var(--warning-bg); color: var(--warning-text); }
-.tmb-ou { background: var(--danger-bg); color: var(--danger-text); }
-.tmb-lv { background: hsl(210, 40%, 94%); color: var(--text-muted); }
-.tmb-eo { background: var(--info-bg); color: var(--info-text); }
-
 /* ── MODALS AND OVERLAYS ── */
 .wfh-ov {
   position: fixed;
@@ -2720,7 +2640,6 @@ body > .container { padding-top: 0 !important; }
       <span class="tnav-date">{{ date }}</span>
       <a href="/docs/st-attendance-tracker-user-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
       <a href="/my-history" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
-      {% if is_team_leader %}<a href="/team-dashboard" class="tnav-btn"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
       <div class="profile-dropdown" id="profile-dropdown">
         <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
@@ -2749,6 +2668,7 @@ body > .container { padding-top: 0 !important; }
     <a href="/daily-checkin" class="sb-link on"><i class="ti ti-check" aria-hidden="true"></i>Today<span class="sb-cnt">{{ total_count }}</span></a>
     <a href="/my-history" class="sb-link"><i class="ti ti-history" aria-hidden="true"></i>My history</a>
     <a href="/recurring-tasks" class="sb-link"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring{% if recurring_count %}<span class="sb-cnt">{{ recurring_count }}</span>{% endif %}</a>
+    <a href="/additional-work" class="sb-link"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional work</a>
     {% if is_team_leader %}<a href="/team-dashboard" class="sb-link"><i class="ti ti-users" aria-hidden="true"></i>My team</a>{% endif %}
   </div>
 </aside>
@@ -3208,13 +3128,7 @@ body > .container { padding-top: 0 !important; }
     {% endfor %}
   </div>
   {% endif %}
-  {% if is_team_leader %}
-  <div class="rp-sec">
-    <div class="rp-t"><i class="ti ti-users" aria-hidden="true"></i>My team today</div>
-    <div id="team-list"><div style="font-size:12px;color:#94a3b8">Loading...</div></div>
-    <a href="/team-dashboard" style="display:block;text-align:center;font-size:12px;color:var(--primary);margin-top:10px;text-decoration:none;padding:8px;border:1px solid var(--border);border-radius:var(--radius-md);background:#ffffff;font-weight:600;box-shadow:var(--shadow-sm);transition:all 0.2s" onmouseover="this.style.background='#f8fafc';this.style.borderColor='var(--border-focus)'" onmouseout="this.style.background='#ffffff';this.style.borderColor='var(--border)'">View full team dashboard</a>
-  </div>
-  {% endif %}
+
 </aside>
 </div>
 </div>
@@ -3222,6 +3136,7 @@ body > .container { padding-top: 0 !important; }
   <a href="/daily-checkin" class="mn-it on"><i class="ti ti-check" aria-hidden="true"></i>Today</a>
   <a href="/my-history" class="mn-it"><i class="ti ti-history" aria-hidden="true"></i>History</a>
   <a href="/recurring-tasks" class="mn-it"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
+  <a href="/additional-work" class="mn-it"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional Work</a>
   {% if is_team_leader %}<a href="/team-dashboard" class="mn-it"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
 </nav>
 <div class="wfh-ov" id="wfh-ov" style="display:none">
@@ -4069,39 +3984,20 @@ async function submitEOD(){
     var r=await frappe.call({method:'st_attendance_tracker.api.submit_eod_log',args:{lunch_from:lfv,lunch_to:ltv,logout_time:logout,task_updates:JSON.stringify(tu),adhoc_tasks:JSON.stringify(at)}});
     if(r.message&&r.message.success){
       localStorage.removeItem('st_eod_draft');
+      localStorage.removeItem('st_eod_edits');
       var p=r.message.pending_count, msg='Checked out at '+r.message.logout_time;
       if(p>0) msg+=' · '+p+' task'+(p>1?'s':'')+' carried to tomorrow';
       toast(msg,'ok',2000); setTimeout(function(){ window.location.href=window.location.href.split('?')[0]; },1800);
     }
   }catch(e){ btn.disabled=false; btn.innerHTML='<i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit'; toast(e.message||'Something went wrong.','err'); }
 }
-{% if is_team_leader %}
-frappe.call({method:'st_attendance_tracker.api.get_team_dashboard',callback:function(r){
-  var list=document.getElementById('team-list');
-  if(!list||!r.message) return;
-  var emps=r.message.employees||[];
-  if(!emps.length){ list.innerHTML='<div style="font-size:12px;color:#9ca3af">No team members.</div>'; return; }
-  var avCls=['av-g','av-b','av-a','av-r'];
-  function av(n){ var s=0; for(var i=0;i<n.length;i++) s+=n.charCodeAt(i); return avCls[s%avCls.length]; }
-  function ini(n){ var p=(n||'').split(' ').filter(Boolean); return p.length>=2?(p[0][0]+p[1][0]).toUpperCase():n.slice(0,2).toUpperCase(); }
-  var bm={checked_in:'tmb-in',late:'tmb-la',missing:'tmb-ou',leave:'tmb-lv',eod_done:'tmb-eo'};
-  var lm={checked_in:'In',late:'Late',missing:'Missing',leave:'Leave',eod_done:'Checkout done'};
-  list.innerHTML=emps.slice(0,5).map(function(e){
-    var done=e.done_tasks||0,tot=e.total_tasks||0,pct=tot>0?Math.round(done/tot*100):0;
-    return '<div class="tm-row"><div class="tm-av '+av(e.employee_name)+'">'+ini(e.employee_name)+'</div>'+
-      '<div style="flex:1;min-width:0"><div class="tm-name">'+esc(e.employee_name)+'</div>'+
-      (tot>0?'<div class="tm-p"><div class="tmp-t"><div class="tmp-f" style="width:'+pct+'%"></div></div><span class="tmp-l">'+done+'/'+tot+'</span></div>':'<div style="font-size:11px;color:#9ca3af">No tasks</div>')+
-      '</div><span class="tm-b '+(bm[e.status]||'tmb-lv')+'">'+(lm[e.status]||'—')+'</span></div>';
-  }).join('');
-}});
-{% endif %}
 function saveDescEdit(el) {
   var id = el.dataset.id; if (!id) return;
-  frappe.call({ method:'frappe.client.set_value', args:{doctype:'Daily Task',name:id,fieldname:'description',value:el.value} });
+  frappe.call({ method:'frappe.client.set_value', args:{doctype:'Task Entry',name:id,fieldname:'description',value:el.value} });
 }
 function saveRemarkEdit(el) {
   var id = el.dataset.id; if (!id) return;
-  frappe.call({ method:'frappe.client.set_value', args:{doctype:'Daily Task',name:id,fieldname:'remarks',value:el.value} });
+  frappe.call({ method:'frappe.client.set_value', args:{doctype:'Task Entry',name:id,fieldname:'remarks',value:el.value} });
 }
 function uploadTaskFiles(files, taskName, containerEl) {
   if (!files || !files.length || !containerEl) return;
@@ -4109,8 +4005,18 @@ function uploadTaskFiles(files, taskName, containerEl) {
     var fd = new FormData();
     fd.append('file', file);
     fd.append('is_private', '1');
-    if (taskName) { fd.append('doctype', 'Daily Task'); fd.append('docname', taskName); }
-    fetch('/api/method/upload_file', {
+    // An existing (already-saved) task routes through our own endpoint —
+    // Frappe's generic upload_file can't correctly permission-check a
+    // child-table doctype loaded standalone (see upload_task_attachment's
+    // docstring in api.py). A brand-new, not-yet-saved task has no real
+    // name yet, so it still goes through upload_file as an orphan upload
+    // (no doctype/docname) and gets reparented after the task is created.
+    var url = '/api/method/upload_file';
+    if (taskName) {
+      url = '/api/method/st_attendance_tracker.api.upload_task_attachment';
+      fd.append('task_name', taskName);
+    }
+    fetch(url, {
       method: 'POST',
       headers: { 'X-Frappe-CSRF-Token': frappe.csrf_token },
       body: fd
@@ -4606,6 +4512,24 @@ function saveEodDraft() {
   });
 
   localStorage.setItem('st_eod_draft', JSON.stringify(draft));
+
+  // Status/actual-time/remark edits on tasks that already exist in the DB
+  // (carried from morning check-in) aren't part of `draft` above — that
+  // array only covers brand-new adhoc rows, which don't exist server-side
+  // yet. Without this, editing an existing task's status or actual time
+  // and refreshing silently reverted to the last-saved DB values.
+  var existingEdits = {};
+  document.querySelectorAll('.trow[data-id], .stask[data-id]').forEach(function(row) {
+    var id = row.dataset.id;
+    var sel = row.querySelector('.tsel'), act = row.querySelector('.act-in');
+    var rmkChk = row.querySelector('.remark-chk'), rmkIn = row.querySelector('.remark-in');
+    var stat = sel ? sel.value : '', actVal = act ? act.value : '';
+    var rmkOn = rmkChk ? rmkChk.checked : false, rmk = rmkIn ? rmkIn.value : '';
+    if (stat || actVal || rmkOn) {
+      existingEdits[id] = { stat: stat, act: actVal, rmkOn: rmkOn, rmk: rmk };
+    }
+  });
+  localStorage.setItem('st_eod_edits', JSON.stringify(existingEdits));
 }
 
 function loadMorningDraft() {
@@ -4675,9 +4599,7 @@ function loadEodDraft() {
   if(!document.getElementById('btn-eod')) return;
   try {
     var str = localStorage.getItem('st_eod_draft');
-    if(!str) return;
-    var draft = JSON.parse(str);
-    if(draft.length === 0) return;
+    var draft = str ? JSON.parse(str) : [];
     draft.forEach(function(d) {
        if (d.type === 'standalone') {
           addAdhoc();
@@ -4741,6 +4663,25 @@ function loadEodDraft() {
           }
        }
     });
+
+    var editsStr = localStorage.getItem('st_eod_edits');
+    if (editsStr) {
+      var edits = JSON.parse(editsStr);
+      Object.keys(edits).forEach(function(id) {
+        var row = document.querySelector('.trow[data-id="' + id + '"], .stask[data-id="' + id + '"]');
+        if (!row) return;
+        var sel = row.querySelector('.tsel'), act = row.querySelector('.act-in');
+        if (edits[id].stat && sel) { sel.value = edits[id].stat; onSel(sel); }
+        if (edits[id].act && act) act.value = edits[id].act;
+        if (edits[id].rmkOn) {
+          var chk = row.querySelector('.remark-chk');
+          if (chk) { chk.checked = true; toggleRemark(chk); }
+          var rmkIn = row.querySelector('.remark-in');
+          if (rmkIn) rmkIn.value = edits[id].rmk || '';
+        }
+      });
+    }
+
     recalc(); // restored rows arrive with their own time values already filled in
   } catch(e){}
 }
