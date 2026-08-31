@@ -2523,3 +2523,47 @@ def _build_team_data(employees, date):
             "eod_done":   sum(1 for w in work_logs if w.eod_submitted),
         }
     }
+
+
+@frappe.whitelist()
+def assign_task_via_agent(assignee_employee, description, assigned_by_employee, project_name=None, estimated_time=None):
+    """
+    Intended for the Hermes Agent service user only.
+    Allows an AI agent to assign a task to an employee's Daily Work Log on behalf of a team leader (via WhatsApp).
+    Always re-verifies that `assignee_employee` is actually a team member of `assigned_by_employee` before assigning,
+    as the caller agent is acting as a proxy.
+    """
+    if "ST Task Assignment Agent" not in frappe.get_roles(frappe.session.user):
+        frappe.throw("Not authorised to use the agent task assignment API.", frappe.PermissionError)
+
+    # Re-verify team membership independently of the caller's role, as the agent
+    # acts on behalf of the `assigned_by_employee` WhatsApp sender.
+    team_members = _get_team_members(assigned_by_employee)
+    if assignee_employee not in team_members:
+        frappe.throw(f"{assignee_employee} is not a direct report of {assigned_by_employee}.", frappe.PermissionError)
+
+    description = (description or "").strip()
+    if not description:
+        frappe.throw("Task description cannot be empty.", frappe.ValidationError)
+
+    date = today()
+    log = _get_or_new_work_log(assignee_employee, date)
+    
+    log.append("tasks", {
+        "task_type": "Ad-hoc",
+        "status": "Pending",
+        "description": description,
+        "project_name": project_name,
+        "estimated_time": parse_duration_to_hours(estimated_time) if estimated_time else None,
+        "series_id": frappe.generate_hash(length=32),
+        "origin_date": date,
+        "sequence": _next_sequence(log) + 1
+    })
+    
+    _save_work_log(log)
+    
+    return {
+        "work_log": log.name,
+        "employee": assignee_employee,
+        "date": date
+    }

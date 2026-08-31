@@ -64,7 +64,7 @@ class DailyWorkLog(Document):
         """Block logging attendance for another employee (BOLA guard)."""
         if frappe.session.user in ("Administrator", "Guest"):
             return
-        allowed_roles = {"HR Manager", "System Manager"}
+        allowed_roles = {"HR Manager", "System Manager", "ST Task Assignment Agent"}
         if allowed_roles & set(frappe.get_roles(frappe.session.user)):
             return
         current_employee = frappe.db.get_value(
@@ -82,7 +82,7 @@ class DailyWorkLog(Document):
             return
         if frappe.session.user in ("Administrator", "Guest"):
             return
-        allowed_roles = {"HR Manager", "System Manager"}
+        allowed_roles = {"HR Manager", "System Manager", "ST Task Assignment Agent"}
         if allowed_roles & set(frappe.get_roles(frappe.session.user)):
             return
         was_locked = frappe.db.get_value("Daily Work Log", self.name, "eod_submitted")
