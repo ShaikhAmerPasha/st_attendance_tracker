@@ -107,6 +107,26 @@ class TestAdditionalWork(FrappeTestCase):
         self.assertEqual(doc.employee_name, frappe.db.get_value("Employee", self.emp_name, "employee_name"))
         self.assertAlmostEqual(doc.hours_spent, 1.5)
 
+    def test_hours_spent_survives_a_later_unrelated_save(self):
+        """Regression: validate() unconditionally re-parsed hours_spent on
+        every save, including one that only touches another field. A doc
+        loaded from the DB already holds a parsed float (e.g. 1.5), and
+        parse_duration_to_hours treats a bare number as *minutes*, so a
+        later Desk-style edit (e.g. just updating remarks) would silently
+        divide an already-correct hours_spent by 60."""
+        doc = frappe.get_doc({
+            "doctype": "Additional Work",
+            "employee": self.emp_name,
+            "work_date": today(),
+            "description": "Original",
+            "hours_spent": "1h 30m",
+        }).insert(ignore_permissions=True)
+        doc.remarks = "Just editing remarks, not hours_spent"
+        doc.save(ignore_permissions=True)
+        doc.reload()
+        self.assertAlmostEqual(doc.hours_spent, 1.5,
+            msg="hours_spent must survive a later save that doesn't touch it")
+
     def test_future_dated_blocked(self):
         doc = frappe.get_doc({
             "doctype": "Additional Work",
@@ -180,6 +200,19 @@ class TestAdditionalWork(FrappeTestCase):
         self.assertTrue(r.get("success"))
         owner = frappe.db.get_value("Additional Work", r["name"], "employee")
         self.assertEqual(owner, self.emp_name)
+
+    def test_save_additional_work_hours_spent_parsed_via_api(self):
+        """Regression: save_additional_work used to pre-parse hours_spent
+        ('1h 30m' -> 1.5) before assigning it, and AdditionalWork.validate()
+        parsed it again on save — parse_duration_to_hours treats an
+        already-numeric value as bare minutes (its documented convention for
+        unit-less input) and divides by 60, silently shrinking 1.5h to
+        0.025h. test_happy_path_insert alone can't catch this: it inserts
+        the doctype directly, bypassing this API layer entirely."""
+        frappe.set_user(self.emp_user)
+        r = save_additional_work(work_date=today(), description="Duration check", hours_spent="1h 30m")
+        hours = frappe.db.get_value("Additional Work", r["name"], "hours_spent")
+        self.assertAlmostEqual(hours, 1.5)
 
     def test_save_updates_existing_entry(self):
         frappe.set_user(self.emp_user)

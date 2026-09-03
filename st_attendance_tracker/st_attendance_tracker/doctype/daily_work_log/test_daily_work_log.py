@@ -9,6 +9,7 @@ from frappe.utils import today, add_days, now_datetime
 from frappe.utils.data import getdate
 from frappe.tests.utils import FrappeTestCase
 from datetime import timedelta
+from unittest.mock import patch
 
 from st_attendance_tracker.api import (
     _to_hhmm, _to_ampm,
@@ -24,6 +25,7 @@ from st_attendance_tracker.api import (
     _get_attendance_settings, clear_attendance_settings_cache,
     _get_team_members,
 )
+from st_attendance_tracker import tasks as tasks_module
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -244,6 +246,127 @@ class TestQACheckinFull(FrappeTestCase):
         frappe.set_user(self.emp_user)
         with self.assertRaises(frappe.ValidationError):
             submit_morning_log(new_tasks="[]", work_location="Office")
+
+    def test_1_7_new_planned_task_estimated_time_parsed(self):
+        """Regression: a brand-new planned task's free-text estimated_time
+        ('2h 15m') must reach Daily Work Log's validate()/_prepare_tasks()
+        as raw text and be parsed there exactly once. Pre-parsing it in the
+        API layer first would hand _prepare_tasks() an already-numeric hour
+        value, which parse_duration_to_hours treats as bare minutes and
+        divides by 60."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Planned with estimate", "estimated_time": "2h 15m"}]),
+            login_time="09:00",
+            work_location="Office",
+        )
+        work_log = _get_work_log(self.emp_name, today())
+        row = next((t for t in work_log.tasks if t.description == "Planned with estimate"), None)
+        self.assertIsNotNone(row)
+        self.assertAlmostEqual(row.estimated_time, 2.25)
+
+    def test_1_7b_estimated_time_survives_a_later_unrelated_save(self):
+        """Regression: found via manual browser verification, not caught by
+        any existing automated test. _prepare_tasks() ran on EVERY save of
+        the parent Daily Work Log and unconditionally re-parsed every row's
+        estimated_time/actual_time — including rows the current save wasn't
+        touching. A row loaded from the DB already holds a parsed float
+        (e.g. 2.0), and parse_duration_to_hours treats a bare number as
+        *minutes*, so a second save (e.g. the EOD submission, which saves
+        the same parent doc again) silently divided an untouched task's
+        already-correct estimated_time by 60 on every subsequent save."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Untouched at EOD", "estimated_time": "2h"}]),
+            login_time="09:00",
+            work_location="Office",
+        )
+        task_name = _task_name(self.emp_name, today(), "Untouched at EOD")
+        # Leave it In Progress (not Done) with unrelated actual_time, so the
+        # parent Daily Work Log gets saved again without this task's
+        # estimated_time being part of the update payload at all.
+        submit_eod_log(
+            lunch_from="", lunch_to="", logout_time="18:00",
+            task_updates=json.dumps([{"name": task_name, "status": "In Progress", "actual_time": "30m"}]),
+            adhoc_tasks="[]",
+        )
+        work_log = _get_work_log(self.emp_name, today())
+        row = next((t for t in work_log.tasks if t.description == "Untouched at EOD"), None)
+        self.assertIsNotNone(row)
+        self.assertAlmostEqual(row.estimated_time, 2.0,
+            msg="estimated_time must survive a later save that doesn't touch it")
+
+    def test_1_8_stale_task_reference_gives_friendly_error_and_logs(self):
+        """Regression: if a task row the client is trying to update no
+        longer exists on today's Daily Work Log (deleted/changed elsewhere
+        between page load and submit — another tab/device, or a Team
+        Leader/HR edit via Desk), the API must not claim a permission
+        violation. It should ask the employee to refresh, and log
+        diagnostics so a real occurrence is traceable instead of an
+        untraceable one-off support report."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Task that vanishes"}]),
+            login_time="09:00",
+            work_location="Office",
+        )
+        task_name = _task_name(self.emp_name, today(), "Task that vanishes")
+        # Simulate the row being removed/changed elsewhere between page load and submit.
+        frappe.db.delete("Task Entry", {"name": task_name})
+        frappe.db.commit()
+
+        errors_before = frappe.db.count("Error Log")
+        with self.assertRaises(frappe.ValidationError):
+            submit_eod_log(
+                lunch_from="", lunch_to="", logout_time="18:00",
+                task_updates=json.dumps([{"name": task_name, "status": "Done", "actual_time": "1h"}]),
+                adhoc_tasks="[]",
+            )
+        self.assertGreater(frappe.db.count("Error Log"), errors_before,
+            "A stale task reference must be logged for diagnosis")
+
+    def test_1_9_has_permission_uses_employee_field_not_owner(self):
+        """Regression: has_permission_daily_work_log gates on the `employee`
+        link field, not Frappe's if_owner (creation-time `owner`) — a
+        record created on an employee's behalf by someone/something else
+        (e.g. the task-assignment agent) must not lock the real employee
+        out of reading/writing their own record."""
+        frappe.set_user("Administrator")
+        log = frappe.new_doc("Daily Work Log")
+        log.employee = self.emp_name
+        log.date = add_days(today(), -10)
+        log.insert()  # owner = 'Administrator', employee = self.emp_name — deliberately mismatched
+        try:
+            frappe.set_user(self.emp_user)
+            fetched = frappe.get_doc("Daily Work Log", log.name)
+            self.assertTrue(fetched.has_permission("read"))
+            fetched.work_location = "Office"
+            fetched.save()  # must not raise — doc.employee matches this session's employee
+        finally:
+            frappe.set_user("Administrator")
+            frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE name=%s", (log.name,))
+            frappe.db.commit()
+
+    def test_1_10_has_permission_still_blocks_cross_employee_access(self):
+        """Regression: removing if_owner from the DocPerm row must not open
+        up cross-employee access — has_permission_daily_work_log must still
+        deny a plain Employee trying to load/save someone else's record."""
+        frappe.set_user("Administrator")
+        other_log = frappe.new_doc("Daily Work Log")
+        other_log.employee = self.hr_name
+        other_log.date = add_days(today(), -11)
+        other_log.insert()
+        try:
+            frappe.set_user(self.emp_user)
+            fetched = frappe.get_doc("Daily Work Log", other_log.name)
+            self.assertFalse(fetched.has_permission("read"))
+            with self.assertRaises(frappe.PermissionError):
+                fetched.work_location = "Office"
+                fetched.save()
+        finally:
+            frappe.set_user("Administrator")
+            frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE name=%s", (other_log.name,))
+            frappe.db.commit()
 
     # ── SECTION 2 — Edge Cases & Invalid Inputs (Daily Work Log controller) ────
 
@@ -588,6 +711,41 @@ class TestQACheckinFull(FrappeTestCase):
         adhoc = next((t for t in work_log.tasks if t.description == "Ad-hoc task done"), None)
         self.assertIsNotNone(adhoc)
         self.assertEqual(adhoc.task_type, "Ad-hoc")
+        self.assertAlmostEqual(adhoc.actual_time, 1.0,
+            msg="Ad-hoc actual_time must be parsed from '1h' into hours, not stored raw/zeroed")
+
+    def test_5_2b_adhoc_duration_format_and_in_progress_status_parsed(self):
+        """Regression: ad-hoc estimated_time/actual_time must be parsed from
+        free-text duration ('1h 30m') into hours exactly once. The API layer
+        used to pre-parse these into a float and then hand that float to
+        Daily Work Log's own validate()/_prepare_tasks(), which parses every
+        row's estimated_time/actual_time again on save — and
+        parse_duration_to_hours treats an already-numeric value as bare
+        minutes (its documented convention for unit-less input), dividing a
+        correct hour value by 60. An In Progress task left unfinished at EOD
+        is legitimately rolled over to tomorrow (status becomes 'Rolled
+        Over') — this test only checks the parsed hours survive that."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Planned task"}]),
+            login_time="09:00",
+            work_location="Office"
+        )
+        submit_eod_log(
+            lunch_from="", lunch_to="", logout_time="18:00",
+            task_updates="[]",
+            adhoc_tasks=json.dumps([{
+                "description": "Ad-hoc task in progress",
+                "status": "In Progress",
+                "estimated_time": "2 hrs",
+                "actual_time": "1h 30m",
+            }])
+        )
+        work_log = _get_work_log(self.emp_name, today())
+        adhoc = next((t for t in work_log.tasks if t.description == "Ad-hoc task in progress"), None)
+        self.assertIsNotNone(adhoc)
+        self.assertAlmostEqual(adhoc.actual_time, 1.5)
+        self.assertAlmostEqual(adhoc.estimated_time, 2.0)
 
     def test_5_3_empty_adhoc_description_ignored(self):
         """TC-5.3: Ad-hoc task with empty description is not inserted."""
@@ -960,6 +1118,78 @@ class TestQACheckinFull(FrappeTestCase):
                 frappe.delete_doc("File", fname, ignore_permissions=True)
             frappe.db.commit()
 
+    def test_8_11_reparent_attachments_blocks_hijacking_anothers_file(self):
+        """Regression: _reparent_attachments used to reparent ANY existing
+        File onto a new task purely because the docname existed — no check
+        that it was actually an unattached upload owned by the caller. An
+        employee could pass another employee's File docname and silently
+        steal that attachment onto their own task."""
+        frappe.set_user(self.emp_user)
+        orphan = frappe.get_doc({
+            "doctype": "File",
+            "file_name": "victim_secret.txt",
+            "is_private": 1,
+            "content": b"belongs to emp_user",
+        }).insert()
+        try:
+            frappe.set_user(self.hr_user)
+            submit_morning_log(
+                new_tasks=json.dumps([{"description": "HR planned task"}]),
+                login_time="09:00",
+                work_location="Office",
+            )
+            submit_eod_log(
+                lunch_from="", lunch_to="", logout_time="18:00",
+                task_updates="[]",
+                adhoc_tasks=json.dumps([{
+                    "description": "HR ad-hoc task",
+                    "status": "Done",
+                    "actual_time": "1h",
+                    "attachment_names": [orphan.name],
+                }]),
+            )
+            orphan.reload()
+            self.assertFalse(orphan.attached_to_doctype,
+                "Another employee's orphan File must not be hijacked onto my task")
+        finally:
+            frappe.set_user("Administrator")
+            frappe.delete_doc("File", orphan.name, ignore_permissions=True, force=True)
+            frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
+                           "(SELECT name FROM `tabDaily Work Log` WHERE employee=%s)", (self.hr_name,))
+            frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee=%s", (self.hr_name,))
+            frappe.db.commit()
+
+    def test_8_12_reparent_attachments_own_orphan_file_succeeds(self):
+        """The legitimate case must keep working: an employee's own
+        just-uploaded orphan File gets attached to their own new task."""
+        frappe.set_user(self.emp_user)
+        orphan = frappe.get_doc({
+            "doctype": "File",
+            "file_name": "my_note.txt",
+            "is_private": 1,
+            "content": b"my own file",
+        }).insert()
+        try:
+            submit_morning_log(
+                new_tasks=json.dumps([{"description": "Planned task"}]),
+                login_time="09:00",
+                work_location="Office",
+            )
+            submit_eod_log(
+                lunch_from="", lunch_to="", logout_time="18:00",
+                task_updates="[]",
+                adhoc_tasks=json.dumps([{
+                    "description": "My ad-hoc task",
+                    "status": "Done",
+                    "actual_time": "1h",
+                    "attachment_names": [orphan.name],
+                }]),
+            )
+            orphan.reload()
+            self.assertEqual(orphan.attached_to_doctype, "Task Entry")
+        finally:
+            frappe.delete_doc("File", orphan.name, ignore_permissions=True, force=True)
+
     def test_8_5_delete_carried_project_removes_all_its_tasks(self):
         """TC-8.5: Deleting a project removes every task under it, and is
         blocked once checkout has been submitted."""
@@ -1190,3 +1420,88 @@ class TestQACheckinFull(FrappeTestCase):
         finally:
             frappe.get_all = original_get_all
             frappe.cache().delete_value(cache_key)
+
+
+# ── SECTION 11 — Scheduler reminders read Daily Work Log, not the retired
+#    Daily Task Log doctype ─────────────────────────────────────────────────
+
+class TestCheckoutReminderReadsDailyWorkLog(FrappeTestCase):
+    """Regression: send_employee_checkin_reminder/send_employee_checkout_reminder
+    must key off Daily Work Log (morning_submitted/eod_submitted) — the doctype
+    that actually gets written on check-in/checkout. They used to read the
+    retired Daily Task Log doctype, which stopped receiving writes once the
+    app moved to Daily Work Log, so an employee who genuinely checked out
+    could still be flagged 'pending' (or, once no Daily Task Log rows exist at
+    all, the job would go silent for everyone instead)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        frappe.set_user("Administrator")
+        company = frappe.db.get_single_value("Global Defaults", "default_company") or "_Test Company"
+        cls.dept = (
+            frappe.db.get_value("Department", {"department_name": "_QA Dept", "company": company}, "name")
+            or f"_QA Dept - {company}"
+        )
+        cls.done_user = "qa_sched_done@test.example.com"
+        cls.pending_user = "qa_sched_pending@test.example.com"
+        cls.done_name = _make_employee("QASchedDone", cls.dept, cls.done_user, ["Employee"])
+        cls.pending_name = _make_employee("QASchedPending", cls.dept, cls.pending_user, ["Employee"])
+        frappe.db.commit()
+
+        frappe.set_user(cls.done_user)
+        submit_morning_log(new_tasks=json.dumps([{"description": "T"}]), login_time="09:00", work_location="Office")
+        submit_eod_log(lunch_from="", lunch_to="", logout_time="18:00", task_updates="[]", adhoc_tasks="[]")
+
+        frappe.set_user(cls.pending_user)
+        submit_morning_log(new_tasks=json.dumps([{"description": "T"}]), login_time="09:00", work_location="Office")
+
+        frappe.set_user("Administrator")
+        frappe.db.commit()
+
+    @classmethod
+    def tearDownClass(cls):
+        frappe.set_user("Administrator")
+        for emp in (cls.done_name, cls.pending_name):
+            frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
+                           "(SELECT name FROM `tabDaily Work Log` WHERE employee=%s)", (emp,))
+            frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee=%s", (emp,))
+            frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee=%s", (emp,))
+        frappe.db.sql("DELETE FROM `tabEmployee` WHERE name IN (%s,%s)", (cls.done_name, cls.pending_name))
+        frappe.db.sql("DELETE FROM `tabUser` WHERE email IN (%s,%s)", (cls.done_user, cls.pending_user))
+        frappe.db.commit()
+
+    def setUp(self):
+        frappe.set_user("Administrator")
+
+    def test_checkout_reminder_skips_checked_out_flags_pending(self):
+        sent_to = []
+
+        def fake_sendmail(recipients=None, **kwargs):
+            sent_to.extend(recipients or [])
+
+        with patch.object(tasks_module, "_skip_if_not_due", return_value=False), \
+             patch.object(tasks_module, "_already_sent_today", return_value=False), \
+             patch("frappe.sendmail", side_effect=fake_sendmail):
+            tasks_module.send_employee_checkout_reminder()
+
+        self.assertNotIn(self.done_user, sent_to,
+            "Employee who already completed EOD must not get a checkout reminder")
+        self.assertIn(self.pending_user, sent_to,
+            "Employee who checked in but not out must get a checkout reminder")
+
+    def test_checkin_reminder_skips_already_checked_in(self):
+        sent_to = []
+
+        def fake_sendmail(recipients=None, **kwargs):
+            sent_to.extend(recipients or [])
+
+        with patch.object(tasks_module, "_skip_if_not_due", return_value=False), \
+             patch.object(tasks_module, "_already_sent_today", return_value=False), \
+             patch("frappe.sendmail", side_effect=fake_sendmail):
+            tasks_module.send_employee_checkin_reminder()
+
+        self.assertNotIn(self.done_user, sent_to,
+            "Employee who already checked in must not get a check-in reminder")
+        self.assertNotIn(self.pending_user, sent_to,
+            "Employee who already checked in must not get a check-in reminder")

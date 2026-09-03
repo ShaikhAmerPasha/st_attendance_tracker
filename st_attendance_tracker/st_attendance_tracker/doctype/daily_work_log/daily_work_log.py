@@ -109,8 +109,17 @@ class DailyWorkLog(Document):
                 row.series_id = frappe.generate_hash(length=32)
             if not row.origin_date:
                 row.origin_date = self.date
-            row.estimated_time = parse_duration_to_hours(row.estimated_time)
-            row.actual_time = parse_duration_to_hours(row.actual_time)
+            # Only parse when it's still raw text — a row loaded from the DB
+            # already holds a parsed float. parse_duration_to_hours treats a
+            # bare number with no unit as *minutes* (its convention for
+            # unit-less input), so re-parsing an already-correct hours value
+            # like 2.0 on every subsequent save of this Daily Work Log (EOD,
+            # rollover, any edit that doesn't touch this row) would silently
+            # divide it by 60 each time.
+            if isinstance(row.estimated_time, str):
+                row.estimated_time = parse_duration_to_hours(row.estimated_time)
+            if isinstance(row.actual_time, str):
+                row.actual_time = parse_duration_to_hours(row.actual_time)
             if not (row.description or "").strip():
                 frappe.throw("Task description cannot be empty.")
             if row.status == "Done" and not row.actual_time:

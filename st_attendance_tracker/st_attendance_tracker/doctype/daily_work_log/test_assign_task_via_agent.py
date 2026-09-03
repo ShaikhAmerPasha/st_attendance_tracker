@@ -102,6 +102,24 @@ class TestAssignTaskViaAgent(FrappeTestCase):
         self.assertEqual(str(tasks[0].origin_date), today())
         self.assertIsNotNone(tasks[0].series_id)
 
+    def test_estimated_time_duration_parsed_once(self):
+        """Regression: assign_task_via_agent used to pre-parse estimated_time
+        ('1h 30m' -> 1.5) before appending the row, and Daily Work Log's own
+        validate()/_prepare_tasks() parsed it again on save —
+        parse_duration_to_hours treats an already-numeric value as bare
+        minutes (its documented convention for unit-less input) and divides
+        by 60, silently shrinking 1.5h to 0.025h."""
+        frappe.set_user(self.agent_user)
+        assign_task_via_agent(
+            assignee_employee=self.report_name,
+            description="Task with duration",
+            assigned_by_employee=self.leader_name,
+            estimated_time="1h 30m",
+        )
+        work_log = _get_work_log(self.report_name, today())
+        task = next(t for t in work_log.tasks if t.description == "Task with duration")
+        self.assertAlmostEqual(task.estimated_time, 1.5)
+
     def test_rejection_not_direct_report(self):
         """Rejection: assignee does not report to assigned_by_employee"""
         frappe.set_user(self.agent_user)

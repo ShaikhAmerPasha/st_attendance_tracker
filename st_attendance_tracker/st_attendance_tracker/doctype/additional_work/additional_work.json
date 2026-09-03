@@ -9,9 +9,12 @@
   "employee_name",
   "department",
   "work_date",
+  "login_time",
+  "logout_time",
   "col_break_1",
   "project_name",
   "hours_spent",
+  "status",
   "section_break_details",
   "description",
   "remarks"
@@ -49,6 +52,16 @@
    "reqd": 1
   },
   {
+   "fieldname": "login_time",
+   "fieldtype": "Time",
+   "label": "Login Time"
+  },
+  {
+   "fieldname": "logout_time",
+   "fieldtype": "Time",
+   "label": "Logout Time"
+  },
+  {
    "fieldname": "col_break_1",
    "fieldtype": "Column Break"
   },
@@ -65,6 +78,13 @@
    "label": "Hours Spent",
    "reqd": 1,
    "description": "e.g. 1h 30m, 45m"
+  },
+  {
+   "default": "Done",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nIn Progress\nDone"
   },
   {
    "fieldname": "section_break_details",

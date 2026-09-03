@@ -35,10 +35,9 @@ def send_employee_checkin_reminder():
         return
 
     emp_names = [e.name for e in expected]
-    checked_in = {r.employee for r in frappe.get_all("Daily Task Log", filters={
+    checked_in = {r.employee for r in frappe.get_all("Daily Work Log", filters={
         "date": date,
-        "log_type": "Morning Check-In",
-        "docstatus": 1,
+        "morning_submitted": 1,
         "employee": ["in", emp_names],
     }, fields=["employee"])}
 
@@ -123,10 +122,9 @@ def send_morning_combined_report():
 
     emp_names = [e.name for e in expected]
 
-    morning_logs = frappe.get_all("Daily Task Log", filters={
+    morning_logs = frappe.get_all("Daily Work Log", filters={
         "date": date,
-        "log_type": "Morning Check-In",
-        "docstatus": 1,
+        "morning_submitted": 1,
         "employee": ["in", emp_names],
     }, fields=["employee", "login_time", "is_late"])
 
@@ -240,11 +238,12 @@ def send_eod_missing_report():
     expected = _get_expected_employees(date)
     if not expected:
         return
+    emp_names = [e.name for e in expected]
 
-    submitted = {r.employee for r in frappe.get_all("Daily Task Log", filters={
+    submitted = {r.employee for r in frappe.get_all("Daily Work Log", filters={
         "date": date,
-        "log_type": "End of Day",
-        "docstatus": 1,
+        "eod_submitted": 1,
+        "employee": ["in", emp_names],
     }, fields=["employee"])}
 
     missing = [e for e in expected if e.name not in submitted]
@@ -321,19 +320,13 @@ def send_employee_checkout_reminder():
         return
     emp_names = [e.name for e in expected]
 
-    checked_in = {r.employee for r in frappe.get_all("Daily Task Log", filters={
+    work_logs = frappe.get_all("Daily Work Log", filters={
         "date": date,
-        "log_type": "Morning Check-In",
-        "docstatus": 1,
         "employee": ["in", emp_names],
-    }, fields=["employee"])}
+    }, fields=["employee", "morning_submitted", "eod_submitted"])
 
-    checked_out = {r.employee for r in frappe.get_all("Daily Task Log", filters={
-        "date": date,
-        "log_type": "End of Day",
-        "docstatus": 1,
-        "employee": ["in", emp_names],
-    }, fields=["employee"])}
+    checked_in = {r.employee for r in work_logs if r.morning_submitted}
+    checked_out = {r.employee for r in work_logs if r.eod_submitted}
 
     pending = [e for e in expected if e.name in checked_in and e.name not in checked_out]
     if not pending:

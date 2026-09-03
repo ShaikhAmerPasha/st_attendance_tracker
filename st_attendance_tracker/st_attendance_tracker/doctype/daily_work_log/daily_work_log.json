@@ -186,7 +186,7 @@
   }
  ],
  "links": [],
- "modified": "2026-08-29 00:00:00",
+ "modified": "2026-09-04 00:00:00",
  "modified_by": "Administrator",
  "module": "ST Attendance Tracker",
  "name": "Daily Work Log",
@@ -197,10 +197,16 @@
    "create": 1,
    "delete": 0,
    "export": 1,
-   "if_owner": 1,
    "read": 1,
    "report": 1,
    "role": "Employee",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "read": 1,
+   "role": "ST Task Assignment Agent",
    "write": 1
   },
   {

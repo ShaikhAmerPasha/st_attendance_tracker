@@ -28,6 +28,18 @@ doc_events = {
     },
 }
 
+# ── Per-document permission checks ──────────────────────────────────────────────
+# Daily Work Log's DocPerm row grants Employee/agent access at the role level;
+# this narrows it to "your own record" per document, keyed on the `employee`
+# link field rather than the framework's `if_owner` (creation-time `owner`) —
+# a record created on an employee's behalf (e.g. by the task-assignment agent)
+# would otherwise lock the real employee out of their own record. Read paths
+# used by dashboards go through frappe.get_all, which bypasses this hook by
+# design, so this only ever gates direct document load/save/delete.
+has_permission = {
+    "Daily Work Log": "st_attendance_tracker.api.has_permission_daily_work_log",
+}
+
 # ── Scheduled Jobs ─────────────────────────────────────────────────────────────
 scheduler_events = {
     "cron": {

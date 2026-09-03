@@ -15,7 +15,15 @@ class AdditionalWork(Document):
 
     def validate(self):
         self._check_ownership()
-        self.hours_spent = parse_duration_to_hours(self.hours_spent)
+        # Only parse when it's still raw text — a doc loaded from the DB
+        # already holds a parsed float. parse_duration_to_hours treats a
+        # bare number with no unit as *minutes* (its convention for
+        # unit-less input), so re-parsing an already-correct hours value on
+        # every subsequent save (e.g. a Desk edit that touches another
+        # field, leaving hours_spent untouched) would silently divide it by
+        # 60 each time.
+        if isinstance(self.hours_spent, str):
+            self.hours_spent = parse_duration_to_hours(self.hours_spent)
         self._check_not_future_dated()
 
     def _check_not_future_dated(self):

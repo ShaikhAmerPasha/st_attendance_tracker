@@ -51,6 +51,30 @@ def _get_employee():
     return emp
 
 
+def has_permission_daily_work_log(doc, ptype=None, user=None):
+    """Registered in hooks.py as Daily Work Log's has_permission hook.
+
+    Gates direct document access (Desk, REST, and this module's own
+    doc.insert()/save()/delete() calls) to the doc's own `employee`, not
+    Frappe's built-in `if_owner` (creation-time `owner`) — the DocType's own
+    permission row deliberately has if_owner unset so this hook is the sole
+    per-document gate. `owner` diverges from `employee` whenever a record is
+    created on someone's behalf (e.g. assign_task_via_agent, run by a service
+    account), which under if_owner would lock the real employee out of their
+    own record. HR Manager/System Manager/the task-assignment agent are
+    granted here at the role level; dashboards read via frappe.get_all, which
+    bypasses this hook entirely, so Team Leader visibility is unaffected.
+    """
+    user = user or frappe.session.user
+    if user == "Administrator":
+        return True
+    roles = frappe.get_roles(user)
+    if {"System Manager", "HR Manager", "ST Task Assignment Agent"} & set(roles):
+        return True
+    employee = frappe.db.get_value("Employee", {"user_id": user}, "name")
+    return bool(employee) and doc.employee == employee
+
+
 def _task_owner_employee(task_name):
     """Resolve a Task Entry child row's owning employee via its parent
     Daily Work Log — child rows don't carry `employee` directly."""
@@ -98,13 +122,29 @@ def _attach_task_files(tasks):
 
 
 def _reparent_attachments(file_names, task_name):
-    """Point orphan-uploaded Files (no doctype/docname yet) at the now-saved task."""
-    for file_name in file_names or []:
-        if frappe.db.exists("File", file_name):
-            frappe.db.set_value("File", file_name, {
-                "attached_to_doctype": "Task Entry",
-                "attached_to_name": task_name,
-            })
+    """Point orphan-uploaded Files (no doctype/docname yet) at the now-saved task.
+
+    `file_names` is client-supplied. Only reparent a File that is (a) still
+    genuinely unattached and (b) owned by the calling user — otherwise any
+    employee could pass another employee's (or another doctype's) File
+    docname here and silently steal that attachment onto their own task,
+    since `frappe.db.set_value` bypasses the framework's own permission
+    checks. A name that fails either check is just skipped, not thrown on —
+    a stale/tampered id in one row shouldn't fail the whole submission.
+    """
+    if not file_names:
+        return
+    files = frappe.get_all("File",
+        filters={"name": ["in", file_names]},
+        fields=["name", "attached_to_doctype", "owner"],
+    )
+    for f in files:
+        if f.attached_to_doctype or f.owner != frappe.session.user:
+            continue
+        frappe.db.set_value("File", f.name, {
+            "attached_to_doctype": "Task Entry",
+            "attached_to_name": task_name,
+        })
 
 
 # ── Daily Work Log helpers ──────────────────────────────────────────────────────
@@ -132,11 +172,15 @@ def _get_or_new_work_log(employee, date):
 
 
 def _save_work_log(log):
-    log.flags.ignore_permissions = True
+    # Permission-checked, not bypassed — has_permission_daily_work_log (hooks.py)
+    # gates this to the doc's own employee (or HR/System Manager/the
+    # task-assignment agent), so a caller acting on another employee's log
+    # without one of those roles is stopped here rather than relying solely
+    # on each controller method's own ownership checks.
     if log.is_new():
-        log.insert(ignore_permissions=True)
+        log.insert()
     else:
-        log.save(ignore_permissions=True)
+        log.save()
 
 
 def _next_sequence(work_log):
@@ -169,6 +213,34 @@ def _task_entry_dict(row, parent_date):
         "project_name": get("project_name"),
         "series_id": get("series_id"),
     })
+
+
+def _resolve_task_row(rows_by_name, task_name, work_log, employee_name, context):
+    """Look up a Task Entry row the client is trying to edit, or fail with a
+    refresh-and-retry error instead of a misleading "not authorised" one.
+
+    The client only ever submits row names it rendered from an earlier
+    server response, so a miss here isn't a permission violation — the row
+    was deleted, rolled over into a new copy, or otherwise changed server-side
+    between page load and submit (e.g. a stale tab held open across a
+    same-day edit made from another tab/device, or a Team Leader/HR editing
+    the same Daily Work Log via Desk). Logged so a real occurrence is
+    diagnosable instead of a one-off support report with no trail.
+    """
+    row = rows_by_name.get(task_name)
+    if not row:
+        frappe.log_error(
+            f"{context}: task '{task_name}' not found on {employee_name}'s "
+            f"{work_log.date} Daily Work Log ({work_log.name}). "
+            f"Rows currently on it: {[r.name for r in work_log.tasks]}",
+            "ST Attendance Tracker — stale task reference"
+        )
+        frappe.throw(
+            "This task could not be found — it may have been updated from "
+            "another tab or device. Please refresh the page and try again.",
+            frappe.ValidationError
+        )
+    return row
 
 
 def _is_series_done(series_id):
@@ -1417,7 +1489,7 @@ def get_additional_work(page=0):
     page = int(page or 0)
     rows = frappe.get_all("Additional Work",
         filters={"employee": employee.name},
-        fields=["name", "work_date", "project_name", "hours_spent", "description", "remarks"],
+        fields=["name", "work_date", "project_name", "hours_spent", "description", "remarks", "login_time", "logout_time", "status"],
         order_by="work_date desc, creation desc",
         start=page * ADDITIONAL_WORK_PAGE_SIZE,
         page_length=ADDITIONAL_WORK_PAGE_SIZE + 1)
@@ -1429,7 +1501,7 @@ def get_additional_work(page=0):
 
 
 @frappe.whitelist()
-def save_additional_work(name=None, work_date=None, project_name="", hours_spent="", description="", remarks=""):
+def save_additional_work(name=None, work_date=None, project_name="", hours_spent="", description="", remarks="", login_time="", logout_time="", status=""):
     """Create or update (upsert by `name`) a self-service Additional Work entry."""
     employee = _get_employee()
     if not (description or "").strip():
@@ -1447,9 +1519,17 @@ def save_additional_work(name=None, work_date=None, project_name="", hours_spent
 
     doc.work_date = work_date
     doc.project_name = (project_name or "").strip()
+    # Raw text ("1h 30m") passed through as-is — Additional Work's own
+    # validate() parses hours_spent exactly once on save; pre-parsing here
+    # too would feed it an already-numeric value, which parse_duration_to_hours
+    # treats as bare minutes (its documented convention for unit-less input)
+    # and divides by 60.
     doc.hours_spent = hours_spent or ""
     doc.description = description.strip()
     doc.remarks = (remarks or "").strip()
+    doc.login_time = login_time or ""
+    doc.logout_time = logout_time or ""
+    doc.status = status or "Done"
     doc.save()
     return {"success": True, "name": doc.name}
 
@@ -1776,13 +1856,17 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         task_name = c.get("name")
         if not task_name:
             continue
-        row = rows_by_name.get(task_name)
-        if not row:
-            frappe.throw("Not authorised to edit this task.", frappe.PermissionError)
+        row = _resolve_task_row(rows_by_name, task_name, work_log, employee.name, "submit_morning_log")
         if (c.get("description") or "").strip():
             row.description = c["description"].strip()
         if c.get("estimated_time") is not None:
-            row.estimated_time = _parse_time_to_hours(c.get("estimated_time", ""))
+            # Raw text ("2h 15m") is passed through as-is — Daily Work Log's
+            # own validate()/_prepare_tasks() parses every row's
+            # estimated_time/actual_time exactly once on save. Parsing here
+            # too would feed that second pass an already-numeric value,
+            # which parse_duration_to_hours treats as bare minutes (its
+            # documented convention for unit-less input) and divides by 60.
+            row.estimated_time = c.get("estimated_time", "")
         if c.get("project_name") is not None:
             row.project_name = c.get("project_name", "").strip()
 
@@ -1866,9 +1950,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         name = t.get("name")
         if not name:
             continue
-        row = rows_by_name.get(name)
-        if not row:
-            frappe.throw("Not authorised to edit this task.", frappe.PermissionError)
+        row = _resolve_task_row(rows_by_name, name, work_log, employee.name, "submit_eod_log")
         status = t.get("status", "Pending")
         actual_time = t.get("actual_time", "")
         if status == "Done" and not _parse_time_to_hours(actual_time):
@@ -1883,7 +1965,11 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
             status = "Dropped"
 
         row.status = status
-        row.actual_time = _parse_time_to_hours(actual_time)
+        # Raw text passed through as-is — see the matching comment above on
+        # the carried-task estimated_time assignment: Daily Work Log's own
+        # validate() parses every row's actual_time exactly once on save,
+        # and pre-parsing here too would double it down to bare minutes.
+        row.actual_time = actual_time
         row.remarks = t.get("remarks", "")
         # Allow description edit during EOD
         if (t.get("description") or "").strip():
@@ -2554,7 +2640,12 @@ def assign_task_via_agent(assignee_employee, description, assigned_by_employee, 
         "status": "Pending",
         "description": description,
         "project_name": project_name,
-        "estimated_time": parse_duration_to_hours(estimated_time) if estimated_time else None,
+        # Raw text passed through as-is — Daily Work Log's own validate()/
+        # _prepare_tasks() parses every row's estimated_time exactly once on
+        # save; pre-parsing here too would double it down to bare minutes
+        # (see the matching comments on the other task_updates/carried
+        # assignments above).
+        "estimated_time": estimated_time or "",
         "series_id": frappe.generate_hash(length=32),
         "origin_date": date,
         "sequence": _next_sequence(log) + 1
