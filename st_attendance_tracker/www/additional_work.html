@@ -5,7 +5,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"><style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
 :root {
   --primary-h: 243;
   --primary-s: 75%;
@@ -212,10 +213,12 @@ body {
 
 /* ── SIDEBAR ── */
 .sidebar {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.08);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -227,13 +230,14 @@ body {
 }
 
 .sb-card {
-  background: hsl(210, 40%, 97%);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.9) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: var(--radius-lg);
   padding: 16px;
   display: flex;
   align-items: center;
   gap: 12px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
 }
 
 .sb-av {
@@ -1033,14 +1037,14 @@ body {
   font-size: 16px;
 }
 
-.btn.red {
+.btn.primary {
   background: var(--primary);
   color: #ffffff;
   border-color: var(--primary);
   box-shadow: 0 4px 10px rgba(79, 70, 229, 0.2);
 }
 
-.btn.red:hover {
+.btn.primary:hover {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
   color: #ffffff;
@@ -2086,86 +2090,6 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
   border-radius: 999px;
 }
 
-.tm-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid hsl(214, 32%, 95%);
-}
-
-.tm-row:last-child {
-  border-bottom: none;
-}
-
-.tm-av {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-  box-shadow: var(--shadow-sm);
-}
-
-.av-g { background: var(--success-bg); color: var(--success-text); }
-.av-b { background: var(--info-bg); color: var(--info-text); }
-.av-a { background: var(--warning-bg); color: var(--warning-text); }
-.av-r { background: var(--danger-bg); color: var(--danger-text); }
-
-.tm-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-.tm-p {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.tmp-t {
-  flex: 1;
-  height: 5px;
-  background: hsl(210, 40%, 94%);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.tmp-f {
-  height: 100%;
-  background: var(--success);
-  border-radius: 999px;
-}
-
-.tmp-l {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-light);
-  white-space: nowrap;
-}
-
-.tm-b {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  flex-shrink: 0;
-}
-
-.tmb-in { background: var(--success-bg); color: var(--success-text); }
-.tmb-la { background: var(--warning-bg); color: var(--warning-text); }
-.tmb-ou { background: var(--danger-bg); color: var(--danger-text); }
-.tmb-lv { background: hsl(210, 40%, 94%); color: var(--text-muted); }
-.tmb-eo { background: var(--info-bg); color: var(--info-text); }
-
 /* ── MODALS AND OVERLAYS ── */
 .wfh-ov {
   position: fixed;
@@ -2692,10 +2616,6 @@ body {
   background: #f8fafc;
 }
 
-/* ── Hide Frappe default header/footer ── */
-.web-header, .web-footer, .navbar, footer.web-footer { display: none !important; }
-body > .container { padding-top: 0 !important; }
-
 </style>
 {% endblock %}
 {% block page_content %}
@@ -2753,19 +2673,29 @@ body > .container { padding-top: 0 !important; }
     <span class="tbar-t"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional work</span>
     <div class="tbar-r">
       <button class="btn" onclick="addAWPG()"><i class="ti ti-folder-plus" aria-hidden="true"></i>Add project</button>
-      <button class="btn red" onclick="addAWTask()"><i class="ti ti-plus" aria-hidden="true"></i>Add task</button>
+      <button class="btn primary" onclick="addAWTask()"><i class="ti ti-plus" aria-hidden="true"></i>Add task</button>
     </div>
   </div>
   <div id="aw-new-area"></div>
   <div style="height:20px"></div>
 </div>
 <footer class="app-footer">
-  <button class="fbtn red" id="btn-aw-submit" onclick="submitAdditionalWork()"><i class="ti ti-device-floppy" aria-hidden="true"></i>Submit additional work</button>
+  <button class="fbtn primary" id="btn-aw-submit" onclick="submitAdditionalWork()"><i class="ti ti-device-floppy" aria-hidden="true"></i>Submit additional work</button>
   <button class="fbtn gh" onclick="addAWPG()" title="Add a project (Shift+P)"><i class="ti ti-folder-plus" aria-hidden="true"></i>Project</button>
   <button class="fbtn gh" onclick="addAWTask()" title="Add a task (Shift+T)"><i class="ti ti-plus" aria-hidden="true"></i>Task</button>
   <span class="fhint" id="aw-fhint">0 tasks</span>
 </footer>
 </main>
+<aside class="sidebar-r" style="background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.5); border-radius: var(--radius-xl); box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.08); padding: 24px; display: flex; flex-direction: column; gap: 24px;">
+  <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;"><i class="ti ti-chart-bar" aria-hidden="true" style="font-size: 15px;"></i>Summary</div>
+  <div style="background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.9) 100%); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: var(--radius-md); padding: 16px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);">
+    <div style="font-size: 24px; font-weight: 800; color: var(--primary); font-family: 'Plus Jakarta Sans', sans-serif;">0h</div>
+    <div style="font-size: 13px; font-weight: 600; color: var(--text-main); margin-top: 4px;">Additional work this week</div>
+  </div>
+  <div style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">
+    Keep track of any tasks completed outside of your normal daily check-in loop.
+  </div>
+</aside>
 </div>
 </div>
 
@@ -2807,7 +2737,7 @@ function addAWTaskToPG(gid){
   var c = document.querySelector('[data-tc="' + gid + '"]'); if (!c) return;
   var r = document.createElement('div'); r.className = 'npg-row'; r.dataset.tid = tid;
   r.innerHTML =
-    '<textarea class="npg-ti npg-desc" data-tid="' + tid + '" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit"></textarea>' +
+    '<textarea class="npg-ti npg-desc" data-tid="' + tid + '" placeholder="Task description..." rows="1" style="resize:none;min-height:34px;line-height:1.45;font-family:inherit"></textarea>' +
     '<input class="npg-ei" data-tid="' + tid + '" placeholder="Actual time * e.g. 1h 30m">' +
     '<span class="npg-trm" onclick="this.closest(\'.npg-row\').remove();updAWCount()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';
   var addBtn = c.querySelector('.npg-add');
@@ -2824,7 +2754,7 @@ function addAWTask(){
   d.innerHTML =
     '<div style="flex:1;display:flex;flex-direction:column;gap:8px;">' +
       '<input class="ns-head" data-tid="' + tid + '" placeholder="Task Name / Project..." style="border:none;border-bottom:1px solid #e2e8f0;border-radius:0;padding:4px 0;font-size:14px;font-weight:600;font-family:inherit;width:100%;background:transparent;outline:none">' +
-      '<textarea class="ns-ti ns-desc" data-tid="' + tid + '" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit;width:100%"></textarea>' +
+      '<textarea class="ns-ti ns-desc" data-tid="' + tid + '" placeholder="Task description..." rows="1" style="resize:none;min-height:34px;line-height:1.45;font-family:inherit;width:100%"></textarea>' +
     '</div>' +
     '<input class="ns-ei" data-tid="' + tid + '" placeholder="Actual time * e.g. 1h 30m">' +
     '<span class="ns-rm" onclick="this.closest(\'.ns\').remove();updAWCount()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';

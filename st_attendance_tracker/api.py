@@ -2561,9 +2561,17 @@ def assign_task_via_agent(assignee_employee, description, assigned_by_employee, 
     })
     
     _save_work_log(log)
-    
+
+    emp_data = frappe.db.get_value(
+        "Employee", assignee_employee,
+        ["employee_name", "cell_number"],
+        as_dict=True,
+    ) or {}
+
     return {
         "work_log": log.name,
         "employee": assignee_employee,
-        "date": date
+        "employee_name": emp_data.get("employee_name") or "",
+        "cell_number": emp_data.get("cell_number") or None,
+        "date": date,
     }

@@ -212,10 +212,12 @@ body {
 
 /* ── SIDEBAR ── */
 .sidebar {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.08);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -227,13 +229,14 @@ body {
 }
 
 .sb-card {
-  background: hsl(210, 40%, 97%);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.9) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: var(--radius-lg);
   padding: 16px;
   display: flex;
   align-items: center;
   gap: 12px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
 }
 
 .sb-av {
@@ -278,10 +281,10 @@ body {
   display: inline-block;
 }
 
-.sbb-in {
-  background: var(--success-bg);
-  color: var(--success-text);
-  border: 1px solid var(--success-border);
+.sbb-checked-in {
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid rgba(91, 92, 226, 0.2);
 }
 
 .sbb-out {
@@ -571,17 +574,19 @@ body {
 }
 
 .hcell {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-lg);
   padding: 16px 20px;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px -3px rgba(15, 23, 42, 0.04);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .hcell:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 12px 25px -5px rgba(79, 70, 229, 0.1);
+  border-color: rgba(79, 70, 229, 0.2);
 }
 
 .hl {
@@ -670,6 +675,19 @@ body {
   flex-direction: column;
   gap: 24px;
   padding: 0 0 100px 0;
+}
+
+.app-top {
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 251, 253, 0.9) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  margin-bottom: 32px;
+  box-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
 }
 
 /* ── WORK LOCATION CARD ── */
@@ -2615,6 +2633,383 @@ body {
 /* ── Hide Frappe default header/footer ── */
 .web-header, .web-footer, .navbar, footer.web-footer { display: none !important; }
 body > .container { padding-top: 0 !important; }
+
+/* ── STATUS-COLORED SELECT DROPDOWN ── */
+.tsel.status-done    { background: #E6F7ED; color: #059669; border-color: #A7F3D0; font-weight: 700; }
+.tsel.status-progress { background: #FFF4E5; color: #D97706; border-color: #FDE68A; font-weight: 700; }
+.tsel.status-pending  { background: #FEECEC; color: #DC2626; border-color: #FECACA; font-weight: 700; }
+
+/* ── CONCISE VIEW MODE ── */
+.body[data-view="concise"] .trow,
+.body[data-view="concise"] .stask,
+.body[data-view="concise"] .pg,
+.body[data-view="concise"] .standalone-container,
+.body[data-view="concise"] .col-hdr,
+.body[data-view="concise"] .stlbl {
+  display: none !important;
+}
+.body[data-view="concise"] .concise-task-table {
+  display: block !important;
+}
+.body[data-view="detailed"] .concise-task-table {
+  display: none !important;
+}
+
+/* Concise table inherits from shared CSS; page-specific overrides */
+.concise-task-table {
+  display: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.concise-task-table .concise-header {
+  display: grid;
+  grid-template-columns: 36px 1fr 80px 80px 120px 48px;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #F8FAFC;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  align-items: center;
+}
+
+.c-pg {
+  border-bottom: 1px solid var(--border);
+}
+.c-pg:last-child {
+  border-bottom: none;
+}
+.c-pg-head {
+  padding: 10px 16px;
+  background: #FAFBFC;
+  border-bottom: 1px solid #F1F5F9;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.c-pg-head i {
+  color: var(--text-light);
+  font-size: 15px;
+}
+
+.concise-task-table .concise-row {
+  display: grid;
+  grid-template-columns: 36px 1fr 80px 80px 120px 48px;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #F1F5F9;
+  align-items: center;
+  font-size: 13px;
+  transition: background 0.15s ease;
+  min-height: 44px;
+}
+.concise-task-table .concise-row:last-child { border-bottom: none; }
+.concise-task-table .concise-row:hover { background: #FAFBFC; }
+
+.c-num {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-light);
+  text-align: center;
+}
+.c-task {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.c-task-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.c-task-name.dn {
+  text-decoration: line-through;
+  color: var(--text-light);
+  opacity: 0.7;
+}
+.c-time {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.c-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+.c-status::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.c-status.s-done { background: #E6F7ED; color: #059669; }
+.c-status.s-done::before { background: #059669; }
+.c-status.s-progress { background: #FFF4E5; color: #D97706; }
+.c-status.s-progress::before { background: #D97706; }
+.c-status.s-pending { background: #FEECEC; color: #DC2626; }
+.c-status.s-pending::before { background: #DC2626; }
+
+.c-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-light);
+  transition: all 0.15s ease;
+  font-size: 14px;
+}
+.c-action:hover { background: #F1F5F9; color: var(--text-main); }
+
+/* ── Break/Total row for concise view ── */
+.concise-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #F8FAFC;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.concise-footer-total {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  color: var(--primary);
+  font-size: 15px;
+}
+
+/* ── Stat bar (replaces top-banner-grid in checked-in view) ── */
+.st-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+.st-stats-row .ss-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.st-stats-row .ss-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.ss-icon.ic-clock { background: #EEF2FF; color: #5B5CE2; }
+.ss-icon.ic-tasks { background: #F0FDF4; color: #059669; }
+.ss-icon.ic-login { background: #FFF7ED; color: #D97706; }
+.ss-icon.ic-mode  { background: #F1F5F9; color: #475569; }
+.st-stats-row .ss-data {}
+.st-stats-row .ss-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+.st-stats-row .ss-value {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+/* ── Task section header with toggle + filters ── */
+.task-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+.tsh-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.tsh-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tsh-title .tsh-count {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.tsh-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* View toggle */
+.view-toggle {
+  display: inline-flex;
+  background: #F1F5F9;
+  border-radius: 6px;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--border);
+}
+.view-toggle .vt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.view-toggle .vt-btn:hover { color: var(--text-main); background: rgba(255,255,255,0.5); }
+.view-toggle .vt-btn.active {
+  background: var(--bg-card);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+  font-weight: 700;
+}
+.view-toggle .vt-btn i { font-size: 14px; }
+
+/* Filter pills */
+.filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.fp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-family: inherit;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.fp:hover { border-color: var(--border-focus); color: var(--text-main); }
+.fp.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.fp .fp-n {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(0,0,0,0.08);
+  padding: 1px 6px;
+  border-radius: 999px;
+  min-width: 16px;
+  text-align: center;
+}
+.fp.active .fp-n { background: rgba(255,255,255,0.25); }
+
+/* ── Responsive for concise view ── */
+@media (max-width: 900px) {
+  .concise-task-table .concise-header,
+  .concise-task-table .concise-row {
+    grid-template-columns: 28px 1fr 60px 60px 90px;
+  }
+  .concise-task-table .concise-header > :nth-child(6),
+  .concise-task-table .concise-row > :nth-child(6) {
+    display: none;
+  }
+  .task-section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .tsh-right {
+    justify-content: space-between;
+  }
+  .view-toggle {
+    width: 100%;
+  }
+  .view-toggle .vt-btn {
+    flex: 1;
+    justify-content: center;
+  }
+  .st-stats-row {
+    gap: 12px;
+    padding: 10px 14px;
+  }
+  .st-stats-row .ss-value {
+    font-size: 13px;
+  }
+}
+@media (max-width: 480px) {
+  .concise-task-table .concise-header,
+  .concise-task-table .concise-row {
+    grid-template-columns: 24px 1fr 50px 80px;
+  }
+  .concise-task-table .concise-header > :nth-child(3),
+  .concise-task-table .concise-header > :nth-child(6),
+  .concise-task-table .concise-row > :nth-child(3),
+  .concise-task-table .concise-row > :nth-child(6) {
+    display: none;
+  }
+}
 </style>
 {% endblock %}
 {% block page_content %}
@@ -2624,7 +3019,7 @@ body > .container { padding-top: 0 !important; }
     <span class="tnav-logo">ST Tracker</span>
     <span class="tnav-sep"></span>
     <span class="tnav-bc">{% if eod_done %}Day Complete{% elif is_checked_in %}Working{% else %}Check-In{% endif %}</span>
-    <div class="tnav-pb" id="tnav-pb" style="display:none; align-items:center; gap:12px; margin-left:16px; border-left:1px solid var(--border); padding-left:16px; opacity:0; transition:opacity 0.2s;">
+    <div class="tnav-pb" id="tnav-pb" style="display:flex; align-items:center; gap:12px; margin-left:16px; border-left:1px solid var(--border); padding-left:16px; transition:opacity 0.2s;">
       <div style="width:80px; height:6px; background:hsl(210, 40%, 94%); border-radius:999px; overflow:hidden;">
         <div id="tnav-pb-fill" style="height:100%; background:linear-gradient(90deg, var(--success), hsl(150, 84%, 45%)); width:0%; transition:width 0.4s;"></div>
       </div>
@@ -2658,7 +3053,7 @@ body > .container { padding-top: 0 !important; }
         <div class="sb-name" style="word-break: break-word; font-size: 13px; font-weight: 700; color: var(--text-main); line-height: 1.35;">{{ employee.employee_name }}</div>
         <div class="sb-dept" style="word-break: break-word; font-size: 11px; color: var(--text-muted); margin-top: 2px; margin-bottom: 8px;">{{ employee.department or 'No department' }}</div>
         {% if eod_done %}<span class="sb-badge sbb-eod" style="margin-left: 0; display: inline-block;">Checkout done</span>
-        {% elif is_checked_in %}<span class="sb-badge sbb-in" style="margin-left: 0; display: inline-block;">Checked in</span>
+        {% elif is_checked_in %}<span class="sb-badge sbb-checked-in" style="margin-left: 0; display: inline-block;">Checked in</span>
         {% else %}<span class="sb-badge sbb-out" style="margin-left: 0; display: inline-block;">Not checked in</span>{% endif %}
       </div>
     </div>
@@ -2673,88 +3068,42 @@ body > .container { padding-top: 0 !important; }
   </div>
 </aside>
 <main class="main">
-<div class="top-banner-grid">
-  <!-- Active Shift Card -->
-  <div class="tb-card">
-    <div class="tb-icon blue"><i class="ti ti-calendar-event" aria-hidden="true"></i></div>
-    <div class="tb-content">
-      <div class="tb-label">Active Shift</div>
-      <div class="tb-value">
-        {% if shift_info %}
-          <span id="shift-name-val">{{ shift_info.name }}</span>
-          <div class="tb-subtext" id="shift-time-val">{{ shift_info.start_time_ampm }} - {{ shift_info.end_time_ampm }}</div>
-        {% else %}
-          No shift assigned
-        {% endif %}
-      </div>
+<div class="st-stats-row">
+  <div class="ss-item">
+    <div class="ss-icon ic-clock"><i class="ti ti-clock" aria-hidden="true"></i></div>
+    <div class="ss-data">
+      <div class="ss-label">Working Hours</div>
+      <div class="ss-value" id="top-nh">{{ net_hours or '—' }}</div>
     </div>
   </div>
-  
-  <!-- Attendance Status Card -->
-  <div class="tb-card">
-    <div class="tb-icon green"><i class="ti ti-fingerprint" aria-hidden="true"></i></div>
-    <div class="tb-content">
-      <div class="tb-label">Attendance Status</div>
-      <div class="tb-value">
-        {% if eod_done %}
-          Completed
-          <div class="tb-subtext">Logged out {{ logout_time }}</div>
-        {% elif is_checked_in %}
-          Checked In
-          <div class="tb-subtext">Logged in {{ login_time }}</div>
-        {% else %}
-          Not Checked In
-        {% endif %}
-      </div>
+  <div class="ss-item">
+    <div class="ss-icon ic-tasks"><i class="ti ti-checklist" aria-hidden="true"></i></div>
+    <div class="ss-data">
+      <div class="ss-label">Tasks Overview</div>
+      <div class="ss-value"><span id="top-done-n">{{ done_count }}</span>/{{ total_count }} Completed</div>
     </div>
   </div>
-  
-  <!-- Net Working Hours Card -->
-  <div class="tb-card">
-    <div class="tb-icon purple"><i class="ti ti-clock" aria-hidden="true"></i></div>
-    <div class="tb-content">
-      <div class="tb-label">Net Working Hours</div>
-      <div class="tb-value text-green" id="top-nh">
-        {{ net_hours or '—' }}
-      </div>
+  <div class="ss-item">
+    <div class="ss-icon ic-login"><i class="ti ti-login" aria-hidden="true"></i></div>
+    <div class="ss-data">
+      <div class="ss-label">Check-in Time</div>
+      <div class="ss-value">{{ login_time or current_time_ampm }}</div>
     </div>
   </div>
-  
-  <!-- Total Task Hours Card -->
-  <div class="tb-card">
-    <div class="tb-icon purple"><i class="ti ti-checklist" aria-hidden="true"></i></div>
-    <div class="tb-content">
-      <div class="tb-label">Total Task Hours</div>
-      <div class="tb-value" style="color:var(--primary)" id="top-th">
-        {{ working_hours or '—' }}
-      </div>
+  <div class="ss-item">
+    <div class="ss-icon ic-mode"><i class="ti ti-briefcase" aria-hidden="true"></i></div>
+    <div class="ss-data">
+      <div class="ss-label">Work Mode</div>
+      <div class="ss-value">{% if leave_today %}{{ leave_today }}{% elif work_location %}{{ work_location }}{% else %}Office{% endif %}</div>
     </div>
   </div>
-
-  <!-- Leave / Work Mode Card -->
-  {% if leave_today %}
-  <div class="tb-card highlight-leave">
-    <div class="tb-icon red"><i class="ti ti-alert-triangle" aria-hidden="true"></i></div>
-    <div class="tb-content">
-      <div class="tb-label">Approved Leave</div>
-      <div class="tb-value text-red">{{ leave_today }}</div>
+  <div class="ss-item">
+    <div class="ss-icon" style="background:#EEF2FF;color:#5B5CE2"><i class="ti ti-hourglass" aria-hidden="true"></i></div>
+    <div class="ss-data">
+      <div class="ss-label">Total Task Hours</div>
+      <div class="ss-value" id="top-th" style="color:var(--primary)">{{ working_hours or '—' }}</div>
     </div>
   </div>
-  {% else %}
-  <div class="tb-card">
-    <div class="tb-icon gray"><i class="ti ti-briefcase" aria-hidden="true"></i></div>
-    <div class="tb-content">
-      <div class="tb-label">Work Mode</div>
-      <div class="tb-value">
-        {% if work_location %}
-          {{ work_location }}
-        {% else %}
-          Active Day
-        {% endif %}
-      </div>
-    </div>
-  </div>
-  {% endif %}
 </div>
 
 {% if eod_done %}
@@ -2833,21 +3182,42 @@ body > .container { padding-top: 0 !important; }
     </div>
     {% endif %}
   </div>
-  <div class="pb-row">
-    <span class="pb-lbl">Task completion</span>
-    <div class="pb-trk"><div class="pb-fill" id="pb-fill" style="width:{% if total_count > 0 %}{{ (done_count/total_count*100)|int }}{% else %}0{% endif %}%"></div></div>
-    <span class="pb-n" id="pb-n">{{ done_count }} / {{ total_count }}</span>
-    <div class="pb-mini"><span class="pb-mini-l">Net</span><span class="pb-mini-v" id="pb-nh">{{ net_hours or '—' }}</span></div>
-    <div class="pb-mini"><span class="pb-mini-l">Tasks</span><span class="pb-mini-v" id="pb-th">—</span></div>
-  </div>
-  <div class="tbar">
-    <span class="tbar-t"><i class="ti ti-list" aria-hidden="true"></i>Update tasks</span>
-    <div class="tbar-r" style="display:flex;gap:8px">
+  <div class="task-section-header">
+    <div class="tsh-left">
+      <span class="tsh-title">Today's Tasks <span class="tsh-count">({{ total_count }})</span></span>
+      <div class="filter-pills" id="filter-pills">
+        <button class="fp active" data-filter="all" onclick="filterTasks('all',this)">All <span class="fp-n" id="fp-all">{{ total_count }}</span></button>
+        <button class="fp" data-filter="Pending" onclick="filterTasks('Pending',this)">Pending <span class="fp-n" id="fp-pending">0</span></button>
+        <button class="fp" data-filter="In Progress" onclick="filterTasks('In Progress',this)">In Progress <span class="fp-n" id="fp-progress">0</span></button>
+        <button class="fp" data-filter="Done" onclick="filterTasks('Done',this)">Completed <span class="fp-n" id="fp-done">0</span></button>
+      </div>
+    </div>
+    <div class="tsh-right">
+      <div class="view-toggle" id="view-toggle">
+        <button class="vt-btn active" data-view="detailed" onclick="setView('detailed',this)" title="Detailed View"><i class="ti ti-layout-list" aria-hidden="true"></i>Detailed View</button>
+        <button class="vt-btn" data-view="concise" onclick="setView('concise',this)" title="Concise View"><i class="ti ti-list" aria-hidden="true"></i>Concise View</button>
+      </div>
       <button class="btn" onclick="addEodProject()"><i class="ti ti-folder-plus" aria-hidden="true"></i>Add project</button>
-      <button class="btn" onclick="addAdhoc()"><i class="ti ti-plus" aria-hidden="true"></i>Additional task</button>
+      <button class="btn" onclick="addAdhoc()"><i class="ti ti-plus" aria-hidden="true"></i>Add task</button>
     </div>
   </div>
   {% if total_count > 0 %}
+  <!-- Concise view table (hidden by default) -->
+  <div class="concise-task-table" id="concise-table">
+    <div class="concise-header">
+      <div>#</div>
+      <div>Task</div>
+      <div>Est.</div>
+      <div>Actual</div>
+      <div>Status</div>
+      <div>Action</div>
+    </div>
+    <div id="concise-rows"></div>
+    <div class="concise-footer">
+      <span id="concise-break"></span>
+      <span>Total Worked Today: <span class="concise-footer-total" id="concise-total">—</span></span>
+    </div>
+  </div>
   <div class="col-hdr"><div class="ch"></div><div class="ch">Task</div><div class="ch">Status</div><div class="ch">Estimated</div><div class="ch">Actual time</div><div class="ch"></div></div>
   {% endif %}
   {% set pico = ['pi0','pi1','pi2','pi3','pi4','pi5'] %}
@@ -2860,7 +3230,7 @@ body > .container { padding-top: 0 !important; }
         <div class="stask-main">
           <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
           <div class="tdesc-wrap">
-            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description|e }}</textarea>
+            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description|e }}</textarea>
           </div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
@@ -2897,7 +3267,7 @@ body > .container { padding-top: 0 !important; }
         <div class="trow-main">
           <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
           <div class="tdesc-wrap">
-            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description|e }}</textarea>
+            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description|e }}</textarea>
             {% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}
           </div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
@@ -2933,7 +3303,7 @@ body > .container { padding-top: 0 !important; }
         <div class="stask-main">
           <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
           <div class="tdesc-wrap">
-            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description|e }}</textarea>
+            <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description|e }}</textarea>
             {% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}
           </div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
@@ -3731,7 +4101,7 @@ function addTaskToPG(gid) {
   tkC++; var tid='nt'+tkC;
   var c=document.querySelector('[data-tc="'+gid+'"]'); if(!c) return;
   var r=document.createElement('div'); r.className='npg-row'; r.dataset.tid=tid;
-  r.innerHTML='<textarea class="npg-ti npg-desc" data-tid="'+tid+'" data-pg="'+gid+'" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit"></textarea>'+
+  r.innerHTML='<textarea class="npg-ti npg-desc" data-tid="'+tid+'" data-pg="'+gid+'" placeholder="Task description..." rows="1" style="resize:none;min-height:34px;line-height:1.45;font-family:inherit"></textarea>'+
     '<input class="npg-ei" data-tid="'+tid+'" placeholder="e.g. 1h 30m, 45m">'+
     '<span class="npg-trm" onclick="this.closest(\'.npg-row\').remove();updCounts()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';
   var addBtn = c.querySelector('.pg-add, .npg-add');
@@ -3746,7 +4116,7 @@ function addT() {
   var d=document.createElement('div'); d.className='ns'; d.dataset.stid=tid;
   d.innerHTML='<div style="flex:1;display:flex;flex-direction:column;gap:8px;">'+
     '<input class="ns-head" data-tid="'+tid+'" placeholder="Task Name / Project..." style="border:none;border-bottom:1px solid #e2e8f0;border-radius:0;padding:4px 0;font-size:14px;font-weight:600;font-family:inherit;width:100%;background:transparent;outline:none">'+
-    '<textarea class="ns-ti ns-desc" data-tid="'+tid+'" placeholder="Task description..." rows="1" style="resize:vertical;min-height:34px;line-height:1.45;font-family:inherit;width:100%"></textarea></div>'+
+    '<textarea class="ns-ti ns-desc" data-tid="'+tid+'" placeholder="Task description..." rows="1" style="resize:none;min-height:34px;line-height:1.45;font-family:inherit;width:100%"></textarea></div>'+
     '<input class="ns-ei" data-tid="'+tid+'" placeholder="e.g. 1h 30m, 45m">'+
     '<span class="ns-rm" onclick="this.closest(\'.ns\').remove();updCounts()" title="Remove task"><i class="ti ti-x" aria-hidden="true"></i></span>';
   document.getElementById('new-area').appendChild(d);
@@ -3820,7 +4190,7 @@ function addAdhoc(){
     '<div class="tck" onclick="toggleCheck(this,\''+id+'\')"></div>'+
     '<div class="tdesc-wrap">'+
     '<input class="adhoc-head" placeholder="Task Name / Project..." style="border:none;border-bottom:1px solid #e2e8f0;border-radius:0;padding:4px 0;margin-bottom:8px;font-size:14px;font-weight:600;font-family:inherit;width:100%;background:transparent;outline:none">'+
-    '<textarea class="tdesc tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="Task description..." style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea><div class="ttags"><span class="ttag ttag-a">Additional</span></div></div>'+
+    '<textarea class="tdesc tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="Task description..." style="resize:none;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea><div class="ttags"><span class="ttag ttag-a">Additional</span></div></div>'+
     '<div class="trm adhoc-rm" onclick="this.closest(\'.stask\').remove(); updProg();" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
     '</div>'+
     '<div class="stask-meta">'+
@@ -3856,7 +4226,7 @@ function addAdhocToProj(pgId, projName) {
   row.innerHTML =
     '<div class="trow-main">'+
     '<div class="tck" onclick="toggleCheck(this,\''+id+'\')"></div>'+
-    '<div class="tdesc-wrap"><textarea class="tdesc tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="'+placeholder+'" style="resize:vertical;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea>'+
+    '<div class="tdesc-wrap"><textarea class="tdesc tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="'+placeholder+'" style="resize:none;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea>'+
     '<div class="ttags"><span class="ttag ttag-a">Additional</span>' + tagHtml + '</div></div>'+
     '<div class="trm adhoc-rm" onclick="this.closest(\'[data-adhocid]\').remove(); updProg();" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
     '</div>'+
@@ -4210,22 +4580,6 @@ setTimeout(initTextareaResizer, 100);
 setTimeout(initTextareaResizer, 500);
 setTimeout(initTextareaResizer, 1500);
 
-window.addEventListener('scroll', function() {
-  var pbRow = document.querySelector('.pb-row');
-  var tnavPb = document.getElementById('tnav-pb');
-  if (pbRow && tnavPb) {
-    var rect = pbRow.getBoundingClientRect();
-    if (rect.bottom < 70) {
-      tnavPb.style.display = 'flex';
-      // tiny timeout to allow display:flex to apply before setting opacity for transition
-      setTimeout(function() { tnavPb.style.opacity = '1'; }, 10);
-    } else {
-      tnavPb.style.opacity = '0';
-      // hide completely after transition
-      setTimeout(function() { if (tnavPb.style.opacity === '0') tnavPb.style.display = 'none'; }, 200);
-    }
-  }
-});
 
 /* --- PASTE MULTIPLE TASKS ---
    Pasting 2+ lines into a task description field splits them into one
@@ -4707,5 +5061,213 @@ document.addEventListener('change', function(e) {
 });
 loadMorningDraft();
 loadEodDraft();
+
+/* ── VIEW TOGGLE (Detailed ↔ Concise) ── */
+var currentView = localStorage.getItem('st_view_mode') || 'detailed';
+// On mobile, default to concise
+if (window.innerWidth <= 900 && !localStorage.getItem('st_view_mode')) {
+  currentView = 'concise';
+}
+
+function setView(mode, btn) {
+  currentView = mode;
+  localStorage.setItem('st_view_mode', mode);
+  // Update toggle buttons
+  document.querySelectorAll('.vt-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.view === mode);
+  });
+  // Update body data attribute
+  var body = document.querySelector('.body');
+  if (body) body.dataset.view = mode;
+  // Rebuild concise table when switching to concise
+  if (mode === 'concise') buildConciseTable();
+}
+
+function initView() {
+  var body = document.querySelector('.body');
+  if (!body) return;
+  body.dataset.view = currentView;
+  // Set correct toggle button active
+  document.querySelectorAll('.vt-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.view === currentView);
+  });
+  if (currentView === 'concise') buildConciseTable();
+}
+
+function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function _statusClass(val) {
+  if (val === 'Done') return 's-done';
+  if (val === 'In Progress') return 's-progress';
+  return 's-pending';
+}
+function _statusLabel(val) {
+  if (val === 'Done') return 'Completed';
+  if (val === 'In Progress') return 'In Progress';
+  return 'Pending';
+}
+
+function buildConciseTable() {
+  var container = document.getElementById('concise-rows');
+  if (!container) return;
+  var html = '';
+  var idx = 0;
+
+  // Helper to build a concise row from a task DOM element
+  function buildRowHtml(row) {
+    idx++;
+    var id = row.dataset.id || row.dataset.adhocid || '';
+    var descEl = row.querySelector('.desc-edit, .adhoc-d');
+    var desc = descEl ? descEl.value : '';
+    var selEl = row.querySelector('.tsel');
+    var status = selEl ? selEl.value : 'Pending';
+    var estField = row.querySelector('.est-in') || row.querySelector('.carried-est');
+    var est = estField ? estField.value || '' : '';
+    var actEl = row.querySelector('.act-in, .adhoc-act');
+    var act = actEl ? actEl.value : '';
+    var isDone = status === 'Done';
+
+    return '<div class="concise-row" data-concise-id="' + esc(id) + '" data-concise-status="' + esc(status) + '">' +
+      '<div class="c-num">' + idx + '</div>' +
+      '<div class="c-task"><div class="c-task-name' + (isDone ? ' dn' : '') + '">' + esc(desc || 'No description') + '</div></div>' +
+      '<div class="c-time">' + (est ? esc(est) : '—') + '</div>' +
+      '<div class="c-time">' + (act ? esc(act) : '—') + '</div>' +
+      '<div><span class="c-status ' + _statusClass(status) + '">' + _statusLabel(status) + '</span></div>' +
+      '<div><button class="c-action" title="View details" onclick="setView(\'detailed\')"><i class="ti ti-chevron-right" aria-hidden="true"></i></button></div>' +
+    '</div>';
+  }
+
+  // 1. Recurring/Standalone tasks (outside projects)
+  var standaloneRows = document.querySelectorAll('.body > .standalone-container > .stask, .body > div > .stask:not([data-adhocid]), #adhoc-area > .stask');
+  if (standaloneRows.length > 0) {
+    var sHtml = '';
+    standaloneRows.forEach(function(r) { sHtml += buildRowHtml(r); });
+    if (sHtml) {
+      html += '<div class="c-pg"><div class="c-pg-head"><i class="ti ti-minus" aria-hidden="true"></i><span class="c-pg-name">Standalone Tasks</span></div><div class="c-pg-tasks">' + sHtml + '</div></div>';
+    }
+  }
+
+  // 2. Project groups
+  document.querySelectorAll('.pg').forEach(function(pg) {
+    var pgNameEl = pg.querySelector('.pg-name') || pg.querySelector('.npg-ni');
+    var pgName = pgNameEl ? (pgNameEl.textContent || pgNameEl.value || 'Unnamed Project') : 'Unnamed Project';
+    
+    var tHtml = '';
+    pg.querySelectorAll('.trow[data-id], .trow[data-adhocid], .npg-row').forEach(function(r) {
+      // npg-row doesn't have standard fields, it's pre-checkin draft. But just in case:
+      if (r.classList.contains('npg-row')) return; 
+      tHtml += buildRowHtml(r);
+    });
+
+    if (tHtml) {
+      html += '<div class="c-pg"><div class="c-pg-head"><i class="ti ti-folder" aria-hidden="true"></i><span class="c-pg-name">' + esc(pgName) + '</span></div><div class="c-pg-tasks">' + tHtml + '</div></div>';
+    }
+  });
+
+  container.innerHTML = html;
+
+  // Update footer total
+  var totalEl = document.getElementById('concise-total');
+  var pbNh = document.getElementById('pb-nh');
+  if (totalEl && pbNh) totalEl.textContent = pbNh.textContent;
+
+  applyConciseFilter();
+}
+
+/* ── FILTER PILLS ── */
+var currentFilter = 'all';
+
+function filterTasks(filter, btn) {
+  currentFilter = filter;
+  // Update pill active state
+  document.querySelectorAll('.fp').forEach(function(p) {
+    p.classList.toggle('active', p.dataset.filter === filter);
+  });
+  // Apply filter to detailed view rows
+  applyDetailedFilter();
+  // Apply filter to concise view rows
+  applyConciseFilter();
+}
+
+function applyDetailedFilter() {
+  document.querySelectorAll('.trow[data-id], .stask[data-id], .trow[data-adhocid], .stask[data-adhocid]').forEach(function(row) {
+    if (currentFilter === 'all') {
+      row.style.display = '';
+      return;
+    }
+    var sel = row.querySelector('.tsel');
+    var status = sel ? sel.value : 'Pending';
+    row.style.display = (status === currentFilter) ? '' : 'none';
+  });
+}
+
+function applyConciseFilter() {
+  document.querySelectorAll('.concise-row[data-concise-status]').forEach(function(row) {
+    if (currentFilter === 'all') {
+      row.style.display = '';
+      return;
+    }
+    row.style.display = (row.dataset.conciseStatus === currentFilter) ? '' : 'none';
+  });
+}
+
+/* ── STATUS-COLORED SELECTS ── */
+function colorizeStatusSelect(sel) {
+  sel.classList.remove('status-done', 'status-progress', 'status-pending');
+  if (sel.value === 'Done') sel.classList.add('status-done');
+  else if (sel.value === 'In Progress') sel.classList.add('status-progress');
+  else sel.classList.add('status-pending');
+}
+
+function colorizeAllSelects() {
+  document.querySelectorAll('.tsel').forEach(colorizeStatusSelect);
+}
+
+/* ── UPDATE FILTER PILL COUNTS ── */
+function updateFilterCounts() {
+  var sels = document.querySelectorAll('.tsel');
+  var done = 0, prog = 0, pend = 0;
+  sels.forEach(function(s) {
+    if (s.value === 'Done') done++;
+    else if (s.value === 'In Progress') prog++;
+    else pend++;
+  });
+  var fpAll = document.getElementById('fp-all');
+  var fpPending = document.getElementById('fp-pending');
+  var fpProgress = document.getElementById('fp-progress');
+  var fpDone = document.getElementById('fp-done');
+  if (fpAll) fpAll.textContent = sels.length;
+  if (fpPending) fpPending.textContent = pend;
+  if (fpProgress) fpProgress.textContent = prog;
+  if (fpDone) fpDone.textContent = done;
+  var topDoneN = document.getElementById('top-done-n');
+  if (topDoneN) topDoneN.textContent = done;
+}
+
+/* ── Patch existing updProg to also update filters, colors, and concise ── */
+var _origUpdProg = updProg;
+updProg = function() {
+  _origUpdProg();
+  updateFilterCounts();
+  colorizeAllSelects();
+  if (currentView === 'concise') buildConciseTable();
+};
+
+/* ── Patch existing onSel to also colorize ── */
+var _origOnSel = onSel;
+onSel = function(s) {
+  _origOnSel(s);
+  colorizeStatusSelect(s);
+  updateFilterCounts();
+  if (currentView === 'concise') buildConciseTable();
+};
+
+/* Initialize everything on page load */
+try {
+  initView();
+  colorizeAllSelects();
+  updateFilterCounts();
+} catch(e) {}
+
 </script>
 {% endblock %}

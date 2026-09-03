@@ -30,6 +30,7 @@ class TestAssignTaskViaAgent(FrappeTestCase):
 
         # Set up reporting structure
         frappe.db.set_value("Employee", cls.report_name, "reports_to", cls.leader_name)
+        frappe.db.set_value("Employee", cls.report_name, "cell_number", "+919876543210")
 
         # Create Agent User
         if not frappe.db.exists("User", cls.agent_user):
@@ -86,6 +87,10 @@ class TestAssignTaskViaAgent(FrappeTestCase):
         
         self.assertEqual(res["employee"], self.report_name)
         self.assertEqual(res["date"], today())
+        self.assertIn("employee_name", res)
+        self.assertTrue(res["employee_name"])  # non-empty
+        self.assertIn("cell_number", res)
+        self.assertEqual(res["cell_number"], "+919876543210")
         
         work_log = _get_work_log(self.report_name, today())
         self.assertIsNotNone(work_log)
