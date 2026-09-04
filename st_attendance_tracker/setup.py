@@ -16,6 +16,7 @@ def create_custom_fields():
     _create_attendance_request_button()
     _create_employee_department_assignments()
     _create_department_task_summary_format()
+    _create_employee_telegram_id()
     frappe.db.commit()
 
 
@@ -100,6 +101,28 @@ def _create_department_task_summary_format():
         "Custom field 'task_summary_email_format' added to Department doctype.",
         alert=True
     )
+
+
+def _create_employee_telegram_id():
+    """Add telegram_id Data field to Employee doctype."""
+    if frappe.db.exists("Custom Field", "Employee-telegram_id"):
+        return
+
+    custom_field = frappe.new_doc("Custom Field")
+    custom_field.dt = "Employee"
+    custom_field.label = "Telegram ID"
+    custom_field.fieldname = "telegram_id"
+    custom_field.fieldtype = "Data"
+    custom_field.unique = 1
+    custom_field.insert_after = "cell_phone"
+    custom_field.in_list_view = 0
+    custom_field.description = (
+        "Telegram numeric user ID. Set by an admin to enable the "
+        "Hermes Telegram bot to look up this employee's ERPNext "
+        "API credentials without requiring a password."
+    )
+    custom_field.insert(ignore_permissions=True)
+    frappe.msgprint("Custom field 'telegram_id' added to Employee doctype.", alert=True)
 
 
 def _create_attendance_request_button():
