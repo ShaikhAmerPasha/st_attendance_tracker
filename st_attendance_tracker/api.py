@@ -2666,3 +2666,53 @@ def assign_task_via_agent(assignee_employee, description, assigned_by_employee, 
         "cell_number": emp_data.get("cell_number") or None,
         "date": date,
     }
+
+
+# ── Telegram account linking ──────────────────────────────────────────────────
+
+@frappe.whitelist(allow_guest=False)
+def link_telegram_account(telegram_id, user_email, password):
+    """Whitelisted for the Hermes lookup service account only. Verifies the
+    given ERPNext credentials are valid, then generates (or reuses) an API
+    key/secret for that real user and saves a Telegram User Mapping record.
+    The password is used only for verification in this call and is never
+    stored anywhere - only the resulting api_key/api_secret are persisted."""
+
+    if "Telegram Credential Lookup" not in frappe.get_roles(frappe.session.user):
+        frappe.throw("Not authorised.", frappe.PermissionError)
+
+    # Verify the credentials are real
+    from frappe.utils.password import check_password
+    try:
+        check_password(user_email, password)
+    except frappe.AuthenticationError:
+        frappe.throw("Invalid ERPNext email or password.", frappe.AuthenticationError)
+
+    # Credentials verified - generate API keys for this user (Frappe's
+    # built-in mechanism, does not require knowing/reusing their password)
+    user_doc = frappe.get_doc("User", user_email)
+    if not user_doc.api_key:
+        user_doc.api_key = frappe.generate_hash(length=15)
+    api_secret = frappe.generate_hash(length=15)
+    user_doc.api_secret = api_secret
+    user_doc.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    employee = frappe.db.get_value("Employee", {"user_id": user_email}, "name")
+
+    # Upsert the Telegram User Mapping
+    existing = frappe.db.exists("Telegram User Mapping", {"telegram_id": telegram_id})
+    if existing:
+        mapping = frappe.get_doc("Telegram User Mapping", existing)
+    else:
+        mapping = frappe.new_doc("Telegram User Mapping")
+        mapping.telegram_id = telegram_id
+    mapping.user = user_email
+    mapping.api_key = user_doc.api_key
+    mapping.api_secret = api_secret
+    mapping.enabled = 1
+    mapping.flags.ignore_permissions = True
+    mapping.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {"linked": True, "user": user_email, "employee": employee}
