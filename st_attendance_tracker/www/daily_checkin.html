@@ -1429,6 +1429,16 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
   border-color: var(--danger) !important;
 }
 
+.fbtn.grn {
+  background: var(--success);
+  color: #ffffff;
+}
+
+.fbtn.grn:hover {
+  background: var(--success-text);
+  transform: translateY(-1px);
+}
+
 .pg-add {
   display: flex;
   align-items: center;
@@ -3033,7 +3043,7 @@ body > .container { padding-top: 0 !important; }
     </div>
     <div class="tnav-r">
       <span class="tnav-date">{{ date }}</span>
-      <a href="/docs/st-attendance-tracker-user-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
+      <a href="/docs" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
       <a href="/my-history" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
       <div class="profile-dropdown" id="profile-dropdown">
@@ -3065,6 +3075,7 @@ body > .container { padding-top: 0 !important; }
     <a href="/recurring-tasks" class="sb-link"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring{% if recurring_count %}<span class="sb-cnt">{{ recurring_count }}</span>{% endif %}</a>
     <a href="/additional-work" class="sb-link"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional work</a>
     {% if is_team_leader %}<a href="/team-dashboard" class="sb-link"><i class="ti ti-users" aria-hidden="true"></i>My team</a>{% endif %}
+    {% if is_hr_manager %}<a href="/management-dashboard" class="sb-link"><i class="ti ti-building" aria-hidden="true"></i>Management Dashboard</a>{% endif %}
   </div>
 </aside>
 <main class="main">
@@ -3122,6 +3133,7 @@ body > .container { padding-top: 0 !important; }
     <div class="done-links">
       <a href="/my-history" class="dl-btn"><i class="ti ti-history" aria-hidden="true"></i>View history</a>
       {% if is_team_leader %}<a href="/team-dashboard" class="dl-btn"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
+      {% if is_hr_manager %}<a href="/management-dashboard" class="dl-btn"><i class="ti ti-building" aria-hidden="true"></i>Management Dashboard</a>{% endif %}
     </div>
   </div>
 </div>
@@ -3259,6 +3271,7 @@ body > .container { padding-top: 0 !important; }
       <div class="pg-ico {{ pico[loop.index0 % 6] }}"><i class="ti ti-folder" aria-hidden="true"></i></div>
       <span class="pg-name">{{ pname|e }}</span>
       <span class="pg-meta">{{ ptasks|length }} task{% if ptasks|length != 1 %}s{% endif %} &nbsp;·&nbsp; {{ ptasks|selectattr("status","equalto","Done")|list|length }} completed</span>
+      <span class="npg-rm" data-pgid="epg{{ loop.index }}" data-pname="{{ pname|e }}" onclick="event.stopPropagation();delCarriedProject(this.dataset.pname,this.dataset.pgid,this)" title="Delete project and tasks"><i class="ti ti-x" aria-hidden="true"></i></span>
       <i class="ti ti-chevron-down pg-chev" aria-hidden="true"></i>
     </div>
     <div class="pg-body">
@@ -3334,6 +3347,7 @@ body > .container { padding-top: 0 !important; }
   <button class="fbtn dk" id="btn-eod" onclick="confirmCheckout()"><i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit</button>
   <button class="fbtn gh" onclick="addEodProject()" title="Add a new project (Shift+P)"><i class="ti ti-folder-plus" aria-hidden="true"></i>Project</button>
   <button class="fbtn gh" onclick="addAdhoc()" title="Add a task (Shift+T)"><i class="ti ti-plus" aria-hidden="true"></i>Task</button>
+  <button class="fbtn grn" id="btn-save-adhoc" onclick="saveAllAdhocTasks()" title="Save newly added tasks now so your Team Leader sees them right away" style="display:none"><i class="ti ti-device-floppy" aria-hidden="true"></i>Save</button>
   <button class="fbtn gh" id="btn-reset-ci" onclick="resetCheckin()" style="background:#fff5f5;color:#dc2626;border:1px solid #fecaca"><i class="ti ti-rotate-clockwise" aria-hidden="true"></i>Reset check-in</button>
 
 </footer>
@@ -3508,6 +3522,7 @@ body > .container { padding-top: 0 !important; }
   <a href="/recurring-tasks" class="mn-it"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
   <a href="/additional-work" class="mn-it"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional Work</a>
   {% if is_team_leader %}<a href="/team-dashboard" class="mn-it"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
+  {% if is_hr_manager %}<a href="/management-dashboard" class="mn-it"><i class="ti ti-building" aria-hidden="true"></i>Management</a>{% endif %}
 </nav>
 <div class="wfh-ov" id="wfh-ov" style="display:none">
   <div class="wfh-mo">
@@ -4057,14 +4072,30 @@ async function delCarriedProject(pname, id, btn) {
   var origHtml = btn.innerHTML;
   btn.innerHTML = '<i class="ti ti-loader" style="animation:spin .7s linear infinite" aria-hidden="true"></i>';
   try {
-    await frappe.call({
-      method: 'st_attendance_tracker.api.delete_carried_project',
-      args: { project_name: pname, task_date: LOG_DATE }
-    });
+    // A brand-new, still-unnamed project has nothing saved under it yet
+    // (an empty project_name would otherwise wrongly match standalone
+    // tasks, which also have project_name == "") — nothing to delete
+    // server-side in that case.
+    if (pname && pname.trim()) {
+      await frappe.call({
+        method: 'st_attendance_tracker.api.delete_carried_project',
+        args: { project_name: pname, task_date: LOG_DATE }
+      });
+    }
     var pgEl = document.getElementById(id);
     if (pgEl) {
-      var taskRows = pgEl.querySelectorAll('.trow');
+      var taskRows = pgEl.querySelectorAll('.trow, .stask');
       CARRIED = Math.max(0, CARRIED - taskRows.length);
+      // Reconcile the footer Save button — any not-yet-saved ad-hoc rows
+      // inside this project are about to disappear too.
+      var stillUnsaved = pgEl.querySelectorAll('[data-adhocid]:not([data-saved-name])').length;
+      if (stillUnsaved) {
+        unsavedAdhocCount = Math.max(0, unsavedAdhocCount - stillUnsaved);
+        if (unsavedAdhocCount === 0) {
+          var saveBtn = document.getElementById('btn-save-adhoc');
+          if (saveBtn) saveBtn.style.display = 'none';
+        }
+      }
       pgEl.remove();
       updCounts();
       updProg();
@@ -4191,7 +4222,7 @@ function addAdhoc(){
     '<div class="tdesc-wrap">'+
     '<input class="adhoc-head" placeholder="Task Name / Project..." style="border:none;border-bottom:1px solid #e2e8f0;border-radius:0;padding:4px 0;margin-bottom:8px;font-size:14px;font-weight:600;font-family:inherit;width:100%;background:transparent;outline:none">'+
     '<textarea class="tdesc tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="Task description..." style="resize:none;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea><div class="ttags"><span class="ttag ttag-a">Additional</span></div></div>'+
-    '<div class="trm adhoc-rm" onclick="this.closest(\'.stask\').remove(); updProg();" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
+    '<div class="trm adhoc-rm" onclick="removeAdhocRow(this, \'.stask\')" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
     '</div>'+
     '<div class="stask-meta">'+
     '<select class="tsel" data-aid="'+id+'" onchange="onSel(this); saveEodDraft()"><option value="Done">Completed</option><option value="In Progress">In Progress</option><option value="Pending" selected>Pending</option></select>'+
@@ -4207,6 +4238,7 @@ function addAdhoc(){
   ta.focus();
   autoResizeTextarea(ta);
   updProg();
+  markAdhocUnsaved();
 }
 var projAdC = 0;
 function addAdhocToProj(pgId, projName) {
@@ -4228,7 +4260,7 @@ function addAdhocToProj(pgId, projName) {
     '<div class="tck" onclick="toggleCheck(this,\''+id+'\')"></div>'+
     '<div class="tdesc-wrap"><textarea class="tdesc tinp adhoc-d desc-edit" data-aid="'+id+'" rows="1" placeholder="'+placeholder+'" style="resize:none;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0"></textarea>'+
     '<div class="ttags"><span class="ttag ttag-a">Additional</span>' + tagHtml + '</div></div>'+
-    '<div class="trm adhoc-rm" onclick="this.closest(\'[data-adhocid]\').remove(); updProg();" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
+    '<div class="trm adhoc-rm" onclick="removeAdhocRow(this, \'[data-adhocid]\')" title="Remove"><i class="ti ti-x" aria-hidden="true"></i></div>'+
     '</div>'+
     '<div class="trow-meta">'+
     '<select class="tsel" data-aid="'+id+'" onchange="onSel(this); saveEodDraft()"><option value="Done">Completed</option><option value="In Progress">In Progress</option><option value="Pending" selected>Pending</option></select>'+
@@ -4245,6 +4277,7 @@ function addAdhocToProj(pgId, projName) {
   ta.focus();
   autoResizeTextarea(ta);
   updProg();
+  markAdhocUnsaved();
 }
 var eodPgC = 0;
 function addEodProject() {
@@ -4257,7 +4290,7 @@ function addEodProject() {
     '<div class="pg-head" style="cursor:default">' +
       '<div class="pg-ico pi1"><i class="ti ti-folder" aria-hidden="true"></i></div>' +
       '<input class="npg-ni" placeholder="Project name..." data-pname="' + gid + '" style="font-size:14px; font-weight:600; border:none; outline:none; background:transparent; width: 60%; color:var(--text-main)">' +
-      '<div class="trm" onclick="this.closest(\'.pg\').remove()" style="margin-left:auto; width:28px; height:28px; display:flex; align-items:center; justify-content:center; cursor:pointer" title="Remove project"><i class="ti ti-x" aria-hidden="true"></i></div>' +
+      '<div class="trm" onclick="delCarriedProject(this.closest(\'.pg\').querySelector(\'.npg-ni\').value, \''+gid+'\', this)" style="margin-left:auto; width:28px; height:28px; display:flex; align-items:center; justify-content:center; cursor:pointer" title="Remove project"><i class="ti ti-x" aria-hidden="true"></i></div>' +
     '</div>' +
     '<div class="pg-body" style="display:block">' +
       '<div class="pg-add" onclick="addAdhocToProj(\'' + gid + '\', \'\')" style="color:#7c3aed;background:#faf5ff;border-top:1px dashed #e9d5ff">' +
@@ -4345,7 +4378,7 @@ async function submitEOD(){
     }
     if(!desc.trim() && proj.trim()) desc = "No description added";
     var remarkChk=row.querySelector('.remark-chk'), remark=row.querySelector('.remark-in[data-aid="'+id+'"]');
-    if(desc.trim()) at.push({description:desc.trim(),status:stat,estimated_time:est,actual_time:act,remarks:(remarkChk&&remarkChk.checked&&remark)?remark.value:'',project_name:proj,attachment_names:getRowAttachments(row).map(function(f){return f.name;})});
+    if(desc.trim()) at.push({description:desc.trim(),status:stat,estimated_time:est,actual_time:act,remarks:(remarkChk&&remarkChk.checked&&remark)?remark.value:'',project_name:proj,attachment_names:getRowAttachments(row).map(function(f){return f.name;}),series_id:row.dataset.savedSeries||undefined});
   });
   if(hasErrors){ toast('Please provide time taken for task completion for all completed tasks.', 'err'); return; }
   var btn=document.getElementById('btn-eod');
@@ -4360,6 +4393,85 @@ async function submitEOD(){
       toast(msg,'ok',2000); setTimeout(function(){ window.location.href=window.location.href.split('?')[0]; },1800);
     }
   }catch(e){ btn.disabled=false; btn.innerHTML='<i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit'; toast(e.message||'Something went wrong.','err'); }
+}
+// ── Mid-day ad-hoc task save ─────────────────────────────────────────────
+// One "Save" button in the footer, not one per task/project row — with
+// 20-25 tasks a per-row button would mean clicking Save that many times.
+// It appears as soon as any new (unsaved) task/project row is added, saves
+// every unsaved row in a single call, then hides again until another new
+// row is added.
+var unsavedAdhocCount = 0;
+function markAdhocUnsaved(){
+  unsavedAdhocCount++;
+  var btn = document.getElementById('btn-save-adhoc');
+  if (btn) btn.style.display = '';
+}
+async function removeAdhocRow(el, selector){
+  var row = el.closest(selector);
+  if (!row) return;
+
+  // Already persisted via the footer Save button — must be deleted on the
+  // server too, not just removed from the page, or it silently survives
+  // in the database (still shows up for the Team Leader / at checkout).
+  if (row.dataset.savedName) {
+    if (!confirm('This task was already saved. Delete it permanently?')) return;
+    try {
+      await frappe.call({ method:'st_attendance_tracker.api.delete_carried_task', args:{name: row.dataset.savedName} });
+    } catch(e) {
+      toast(e.message || 'Could not delete task.', 'err');
+      return;
+    }
+    toast('Task deleted.', 'ok', 1500);
+  } else {
+    unsavedAdhocCount = Math.max(0, unsavedAdhocCount - 1);
+    if (unsavedAdhocCount === 0) {
+      var btn = document.getElementById('btn-save-adhoc');
+      if (btn) btn.style.display = 'none';
+    }
+  }
+  row.remove();
+  updProg();
+}
+async function saveAllAdhocTasks(){
+  var payload = [];
+  document.querySelectorAll('[data-adhocid]').forEach(function(row){
+    if (row.dataset.savedName) return; // already saved — leave it alone
+    var id = row.dataset.adhocid;
+    var desc = (row.querySelector('.adhoc-d[data-aid="'+id+'"]')||{}).value||'';
+    if (!desc.trim()) return;
+    var headInp = row.querySelector('.adhoc-head');
+    var est = headInp?headInp.value||'':'';
+    var proj = row.dataset.projName||'';
+    if (!proj) {
+      if (headInp) proj = headInp.value||'';
+      if (!proj) {
+        var pgCard = row.closest('.pg');
+        if (pgCard) { var input = pgCard.querySelector('.npg-ni'); if (input) proj = input.value||''; }
+      }
+    }
+    var remarkChk = row.querySelector('.remark-chk'), remark = row.querySelector('.remark-in[data-aid="'+id+'"]');
+    var remarks = (remarkChk&&remarkChk.checked&&remark)?remark.value:'';
+    var attNames = getRowAttachments(row).map(function(f){return f.name;});
+    payload.push({client_id:id, description:desc.trim(), project_name:proj, estimated_time:est, remarks:remarks, attachment_names:attNames});
+  });
+
+  var btn = document.getElementById('btn-save-adhoc');
+  if (!payload.length) { unsavedAdhocCount = 0; if (btn) btn.style.display = 'none'; return; }
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Saving...'; }
+  try {
+    var r = await frappe.call({method:'st_attendance_tracker.api.add_adhoc_tasks', args:{tasks: JSON.stringify(payload)}});
+    if (r.message && r.message.success) {
+      (r.message.created||[]).forEach(function(c){
+        var row = document.querySelector('[data-adhocid="'+c.client_id+'"]');
+        if (row) { row.dataset.savedSeries = c.series_id; row.dataset.savedName = c.task_name; row.classList.add('saved'); }
+      });
+      unsavedAdhocCount = 0;
+      if (btn) btn.style.display = 'none';
+      toast('Tasks saved.','ok',1500);
+    }
+  } catch(e) { toast(e.message||'Could not save tasks.','err'); }
+  finally { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy" aria-hidden="true"></i>Save'; } }
 }
 function saveDescEdit(el) {
   var id = el.dataset.id; if (!id) return;

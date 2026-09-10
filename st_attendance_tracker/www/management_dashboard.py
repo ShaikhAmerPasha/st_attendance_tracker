@@ -8,7 +8,7 @@ def get_context(context):
         raise frappe.Redirect
 
     user_roles = frappe.get_roles(frappe.session.user)
-    if "HR Manager" not in user_roles:
+    if not ({"HR Manager", "Management"} & set(user_roles)):
         frappe.local.flags.redirect_location = "/daily-checkin"
         raise frappe.Redirect
 
@@ -17,7 +17,7 @@ def get_context(context):
         ["name", "employee_name", "department"], as_dict=True,
     )
     if not employee:
-        full_name = frappe.db.get_value("User", frappe.session.user, "full_name") or "HR Manager"
+        full_name = frappe.db.get_value("User", frappe.session.user, "full_name") or "Management"
         employee = frappe._dict({
             "name": "",
             "employee_name": full_name,

@@ -985,6 +985,7 @@ body {
     <span class="tnav-bc">Team Dashboard</span>
     <div class="tnav-r">
       <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-check" aria-hidden="true"></i>My check-in</a>
+      <a href="/team-leader-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
       <a href="/my-history" class="tnav-btn"><i class="ti ti-history" aria-hidden="true"></i>History</a>
       <a href="/recurring-tasks" class="tnav-btn"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
@@ -1379,7 +1380,33 @@ document.querySelectorAll('.fc').forEach(function(chip){
   });
 });
 
-frappe.ready(function(){ loadTeam('{{ date }}'); });
+frappe.ready(function(){
+  loadTeam('{{ date }}');
+
+  // Live update: a team member just saved a mid-day ad-hoc task
+  // (st_attendance_tracker.api.add_adhoc_task). Re-fetch the currently
+  // selected date rather than patch the DOM — the server stays the single
+  // source of truth for team/task state.
+  //
+  // frappe.realtime is only assigned once the core framework bundle
+  // finishes loading, which on portal (www) pages happens at the very
+  // end of <body> — AFTER this inline script block. Calling it directly
+  // at the top level here (outside frappe.ready) throws
+  // "Cannot read properties of undefined (reading 'on')" because it
+  // runs before that bundle has executed. frappe.ready's callback fires
+  // once the whole page (including that bundle) has finished loading,
+  // so frappe.realtime is guaranteed to exist by then.
+  if (frappe.realtime) {
+    frappe.realtime.on('st_task_added', function(data){
+      loadTeam();
+      if (data && data.employee_name) {
+        var count = data.count || 1;
+        var label = count > 1 ? (count + ' new tasks') : 'a new task';
+        frappe.show_alert({ message: data.employee_name + ' added ' + label, indicator: 'green' }, 3);
+      }
+    });
+  }
+});
 
 function toggleProfileDropdown(e) {
   if (e) e.stopPropagation();

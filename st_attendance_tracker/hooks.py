@@ -49,8 +49,8 @@ scheduler_events = {
         "30 11 * * 1-6": ["st_attendance_tracker.tasks.send_morning_combined_report"],
         # 10:00 PM IST Mon-Sat (22:00)
         "0 22 * * 1-6":  ["st_attendance_tracker.tasks.send_eod_missing_report"],
-        # 10:30 PM IST Mon-Sat
-        "30 22 * * 1-6": ["st_attendance_tracker.tasks.send_employee_checkout_reminder"],
+        # 9:00 PM IST Mon-Sat
+        "0 21 * * 1-6":  ["st_attendance_tracker.tasks.send_employee_checkout_reminder"],
     }
 }
 

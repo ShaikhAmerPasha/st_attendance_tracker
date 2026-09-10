@@ -13,11 +13,19 @@ def get_context(context):
     # single page load of the app's busiest page. context.no_cache = 1 (below)
     # is the correct way to prevent stale page-level caching.
 
-    # Management → redirect immediately to management dashboard
+    if frappe.session.user == "Guest":
+        frappe.local.flags.redirect_location = "/login?redirect-to=/daily-checkin"
+        raise frappe.Redirect
+
+    # Management role has no Employee record and never checks in/out —
+    # redirect straight to the management dashboard. HR Manager DOES check
+    # in/out like any other employee; they just get a nav link (below) to
+    # reach the management dashboard instead of being redirected there.
     user_roles = frappe.get_roles(frappe.session.user)
-    if "HR Manager" in user_roles:
+    if "Management" in user_roles:
         frappe.local.flags.redirect_location = "/management-dashboard"
         raise frappe.Redirect
+    is_hr_manager = "HR Manager" in user_roles
 
     employee = frappe.db.get_value(
         "Employee",
@@ -198,6 +206,7 @@ def get_context(context):
     context.lunch_to   = lunch_to_val
     context.work_location = work_location_val
     context.is_team_leader = is_team_leader
+    context.is_hr_manager = is_hr_manager
     context.done_count = done_count
     context.total_count = len(tasks)
     context.work_location_config = work_location_config

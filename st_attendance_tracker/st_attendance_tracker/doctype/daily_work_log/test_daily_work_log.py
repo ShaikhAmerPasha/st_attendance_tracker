@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from st_attendance_tracker.api import (
     _to_hhmm, _to_ampm,
-    submit_morning_log, submit_eod_log,
+    submit_morning_log, submit_eod_log, add_adhoc_tasks,
     get_page_state, get_management_dashboard, _get_team_leader_emails,
     delete_carried_task, reset_morning_checkin,
     _ensure_recurring_tasks, _rollover_pending_tasks, _get_work_log, _get_next_working_date,
@@ -26,6 +26,8 @@ from st_attendance_tracker.api import (
     _get_team_members,
 )
 from st_attendance_tracker import tasks as tasks_module
+from st_attendance_tracker.www import daily_checkin as daily_checkin_page
+from st_attendance_tracker.www import management_dashboard as management_dashboard_page
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -1421,8 +1423,227 @@ class TestQACheckinFull(FrappeTestCase):
             frappe.get_all = original_get_all
             frappe.cache().delete_value(cache_key)
 
+    # ── SECTION 11 — Mid-day ad-hoc task save (add_adhoc_tasks) ────────────────
+    # A single "Save" button in the /daily-checkin footer persists every
+    # not-yet-saved ad-hoc task/project in one batch, instead of waiting for
+    # checkout — so a Team Leader can see them in real time on
+    # /team-dashboard via publish_realtime. One button for the whole page,
+    # not one per row.
 
-# ── SECTION 11 — Scheduler reminders read Daily Work Log, not the retired
+    def test_11_1_add_adhoc_tasks_persists_immediately(self):
+        """Mid-day ad-hoc tasks are written to the DB as soon as they're
+        saved, without waiting for checkout."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Planned task"}]),
+            login_time="09:00",
+            work_location="Office",
+        )
+        r = add_adhoc_tasks(json.dumps([{"client_id": "ad1", "description": "Mid-day ad-hoc task", "estimated_time": "30m"}]))
+        self.assertTrue(r.get("success"))
+        self.assertEqual(len(r.get("created")), 1)
+        self.assertEqual(r["created"][0]["client_id"], "ad1")
+
+        work_log = _get_work_log(self.emp_name, today())
+        row = next((t for t in work_log.tasks if t.description == "Mid-day ad-hoc task"), None)
+        self.assertIsNotNone(row, "Ad-hoc task was not persisted immediately")
+        self.assertEqual(row.task_type, "Ad-hoc")
+        self.assertEqual(row.status, "Pending")
+        self.assertEqual(row.series_id, r["created"][0]["series_id"])
+        self.assertAlmostEqual(row.estimated_time, 0.5)
+
+    def test_11_1b_add_adhoc_tasks_saves_a_whole_batch_in_one_call(self):
+        """Several tasks added since the last Save all persist from one
+        call — the point of a single footer button instead of per-row ones."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Planned task"}]),
+            login_time="09:00",
+            work_location="Office",
+        )
+        batch = [{"client_id": f"ad{i}", "description": f"Batch task {i}"} for i in range(5)]
+        r = add_adhoc_tasks(json.dumps(batch))
+        self.assertEqual(len(r["created"]), 5)
+
+        work_log = _get_work_log(self.emp_name, today())
+        descriptions = {t.description for t in work_log.tasks}
+        for i in range(5):
+            self.assertIn(f"Batch task {i}", descriptions)
+
+    def test_11_2_add_adhoc_tasks_requires_checkin(self):
+        """Cannot add mid-day tasks before checking in."""
+        frappe.set_user(self.emp_user)
+        with self.assertRaises(frappe.ValidationError):
+            add_adhoc_tasks(json.dumps([{"client_id": "ad1", "description": "Too early"}]))
+
+    def test_11_3_add_adhoc_tasks_blocked_after_eod(self):
+        """Cannot add mid-day tasks after checkout."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Planned task"}]),
+            login_time="09:00",
+            work_location="Office",
+        )
+        submit_eod_log(
+            lunch_from="", lunch_to="", logout_time="18:00",
+            task_updates="[]", adhoc_tasks="[]",
+        )
+        with self.assertRaises(frappe.ValidationError):
+            add_adhoc_tasks(json.dumps([{"client_id": "ad1", "description": "Too late"}]))
+
+    def test_11_4_add_adhoc_tasks_skips_blank_descriptions(self):
+        """A blank description in the batch is skipped, not persisted —
+        and doesn't block the rest of the batch from saving."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Planned task"}]),
+            login_time="09:00",
+            work_location="Office",
+        )
+        r = add_adhoc_tasks(json.dumps([
+            {"client_id": "blank", "description": "   "},
+            {"client_id": "real", "description": "Real task"},
+        ]))
+        self.assertEqual(len(r["created"]), 1)
+        self.assertEqual(r["created"][0]["client_id"], "real")
+
+    def test_11_5_eod_updates_pre_saved_adhoc_task_no_duplicate(self):
+        """A task saved mid-day via add_adhoc_tasks must be updated in place
+        by submit_eod_log (matched by series_id), not duplicated."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Planned task"}]),
+            login_time="09:00",
+            work_location="Office",
+        )
+        saved = add_adhoc_tasks(json.dumps([{"client_id": "ad1", "description": "Pre-saved ad-hoc task"}]))
+        series_id = saved["created"][0]["series_id"]
+
+        submit_eod_log(
+            lunch_from="", lunch_to="", logout_time="18:00",
+            task_updates="[]",
+            adhoc_tasks=json.dumps([{
+                "description": "Pre-saved ad-hoc task",
+                "status": "Done",
+                "actual_time": "45m",
+                "series_id": series_id,
+            }]),
+        )
+        work_log = _get_work_log(self.emp_name, today())
+        matching = [t for t in work_log.tasks if t.description == "Pre-saved ad-hoc task"]
+        self.assertEqual(len(matching), 1, "Pre-saved ad-hoc task was duplicated at checkout")
+        self.assertEqual(matching[0].series_id, series_id)
+        self.assertEqual(matching[0].status, "Done")
+        self.assertAlmostEqual(matching[0].actual_time, 0.75)
+
+    def test_11_6_eod_still_appends_adhoc_tasks_without_series_id(self):
+        """An ad-hoc task typed at checkout without ever clicking Save (no
+        series_id) is still appended as a new row, same as before."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Planned task"}]),
+            login_time="09:00",
+            work_location="Office",
+        )
+        submit_eod_log(
+            lunch_from="", lunch_to="", logout_time="18:00",
+            task_updates="[]",
+            adhoc_tasks=json.dumps([{"description": "Never pre-saved", "status": "Done", "actual_time": "1h"}]),
+        )
+        work_log = _get_work_log(self.emp_name, today())
+        matching = [t for t in work_log.tasks if t.description == "Never pre-saved"]
+        self.assertEqual(len(matching), 1)
+
+    def test_11_7_add_adhoc_tasks_notifies_team_leader_via_realtime(self):
+        """The employee's Team Leader is notified in real time when a batch
+        of mid-day ad-hoc tasks is saved, once per Save click (not once per
+        task)."""
+        tl_user = "qa_tl_realtime@test.example.com"
+        tl_name = _make_employee("QATLRealtime", self.dept, tl_user, ["Employee"])
+        try:
+            frappe.db.set_value("Employee", self.emp_name, "reports_to", tl_name)
+
+            # Only capture our own "st_task_added" event — Document.save()
+            # triggers its own internal publish_realtime calls (list/doc
+            # update notifications) that are irrelevant here.
+            published = []
+            original_publish_realtime = frappe.publish_realtime
+            def fake_publish_realtime(event, *args, **kwargs):
+                if event == "st_task_added":
+                    published.append((event, args[0] if args else kwargs.get("message"), kwargs.get("user")))
+                return original_publish_realtime(event, *args, **kwargs)
+
+            frappe.set_user(self.emp_user)
+            submit_morning_log(
+                new_tasks=json.dumps([{"description": "Planned task"}]),
+                login_time="09:00",
+                work_location="Office",
+            )
+            with patch("frappe.publish_realtime", side_effect=fake_publish_realtime):
+                add_adhoc_tasks(json.dumps([
+                    {"client_id": "ad1", "description": "Notify my team leader"},
+                    {"client_id": "ad2", "description": "Second task"},
+                ]))
+
+            self.assertEqual(len(published), 1, "Expected one realtime event per Save click, not one per task")
+            event, message, user = published[0]
+            self.assertEqual(event, "st_task_added")
+            self.assertEqual(user, tl_user)
+            self.assertEqual(message["count"], 2)
+            self.assertIn("Notify my team leader", message["descriptions"])
+        finally:
+            frappe.set_user("Administrator")
+            frappe.db.set_value("Employee", self.emp_name, "reports_to", None)
+            frappe.db.sql("DELETE FROM `tabEmployee` WHERE name=%s", (tl_name,))
+            frappe.db.sql("DELETE FROM `tabUser` WHERE email=%s", (tl_user,))
+            frappe.db.commit()
+
+    def test_11_8_delete_carried_task_removes_a_saved_adhoc_task(self):
+        """Deleting an ad-hoc task that was already persisted via
+        add_adhoc_tasks (the footer Save button) must remove it from the
+        database, not just the page — otherwise it silently survives and
+        still shows up for the Team Leader / at checkout."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Planned task"}]),
+            login_time="09:00",
+            work_location="Office",
+        )
+        r = add_adhoc_tasks(json.dumps([{"client_id": "ad1", "description": "Saved then deleted"}]))
+        task_name = r["created"][0]["task_name"]
+
+        delete_carried_task(task_name)
+
+        work_log = _get_work_log(self.emp_name, today())
+        self.assertIsNone(next((t for t in work_log.tasks if t.name == task_name), None),
+            "Saved ad-hoc task was not actually removed from the Daily Work Log")
+
+    def test_11_9_delete_carried_project_removes_saved_adhoc_project_tasks(self):
+        """Deleting a whole project removes every ad-hoc task saved under
+        that project name, not just what's visible on the page."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Planned task"}]),
+            login_time="09:00",
+            work_location="Office",
+        )
+        add_adhoc_tasks(json.dumps([
+            {"client_id": "ad1", "description": "Project task 1", "project_name": "QA Ad-hoc Project"},
+            {"client_id": "ad2", "description": "Project task 2", "project_name": "QA Ad-hoc Project"},
+            {"client_id": "ad3", "description": "Unrelated standalone task"},
+        ]))
+
+        delete_carried_project("QA Ad-hoc Project", today())
+
+        work_log = _get_work_log(self.emp_name, today())
+        remaining_descriptions = {t.description for t in work_log.tasks}
+        self.assertNotIn("Project task 1", remaining_descriptions)
+        self.assertNotIn("Project task 2", remaining_descriptions)
+        self.assertIn("Unrelated standalone task", remaining_descriptions,
+            "Deleting a project must not touch standalone tasks (both have project_name == '')")
+
+
+# ── SECTION 12 — Scheduler reminders read Daily Work Log, not the retired
 #    Daily Task Log doctype ─────────────────────────────────────────────────
 
 class TestCheckoutReminderReadsDailyWorkLog(FrappeTestCase):
@@ -1505,3 +1726,261 @@ class TestCheckoutReminderReadsDailyWorkLog(FrappeTestCase):
             "Employee who already checked in must not get a check-in reminder")
         self.assertNotIn(self.pending_user, sent_to,
             "Employee who already checked in must not get a check-in reminder")
+
+
+# ── SECTION 13 — "Management" role routing & HR Manager check-in access ────
+# HR Manager must check in/out like any other employee (no forced redirect
+# away from /daily-checkin); only the "Management" role — which has no
+# Employee record — is redirected straight to /management-dashboard.
+
+class TestManagementRoleRouting(FrappeTestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        frappe.set_user("Administrator")
+
+        company = frappe.db.get_single_value("Global Defaults", "default_company") or "_Test Company"
+        cls.dept = (
+            frappe.db.get_value("Department", {"department_name": "_QA Dept", "company": company}, "name")
+            or f"_QA Dept - {company}"
+        )
+        cls.emp_user = "qa_route_emp@test.example.com"
+        cls.hr_user = "qa_route_hr@test.example.com"
+        cls.mgmt_user = "qa_route_mgmt@test.example.com"
+
+        cls.emp_name = _make_employee("QARouteEmp", cls.dept, cls.emp_user, ["Employee"])
+        cls.hr_name = _make_employee("QARouteHR", cls.dept, cls.hr_user, ["HR Manager"])
+
+        if not frappe.db.exists("Role", "Management"):
+            frappe.get_doc({"doctype": "Role", "role_name": "Management", "desk_access": 0}).insert(ignore_permissions=True)
+        if not frappe.db.exists("User", cls.mgmt_user):
+            u = frappe.new_doc("User")
+            u.email = cls.mgmt_user
+            u.first_name = "QA"
+            u.last_name = "RouteMgmt"
+            u.send_welcome_email = 0
+            u.append("roles", {"role": "Management"})
+            u.insert(ignore_permissions=True, ignore_if_duplicate=True)
+        frappe.db.commit()
+
+    @classmethod
+    def tearDownClass(cls):
+        frappe.set_user("Administrator")
+        for emp in (cls.emp_name, cls.hr_name):
+            frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
+                           "(SELECT name FROM `tabDaily Work Log` WHERE employee=%s)", (emp,))
+            frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee=%s", (emp,))
+            frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee=%s", (emp,))
+        frappe.db.sql("DELETE FROM `tabEmployee` WHERE name IN (%s,%s)", (cls.emp_name, cls.hr_name))
+        frappe.db.sql("DELETE FROM `tabUser` WHERE email IN (%s,%s,%s)",
+                      (cls.emp_user, cls.hr_user, cls.mgmt_user))
+        frappe.db.commit()
+
+    def setUp(self):
+        frappe.set_user("Administrator")
+
+    def test_hr_manager_not_redirected_from_daily_checkin(self):
+        """HR Manager must check in/out like any employee — no forced redirect."""
+        frappe.set_user(self.hr_user)
+        context = frappe._dict()
+        try:
+            daily_checkin_page.get_context(context)
+        except frappe.Redirect:
+            self.fail("HR Manager was redirected away from /daily-checkin")
+        self.assertTrue(context.get("is_hr_manager"))
+
+    def test_plain_employee_not_redirected_from_daily_checkin(self):
+        frappe.set_user(self.emp_user)
+        context = frappe._dict()
+        try:
+            daily_checkin_page.get_context(context)
+        except frappe.Redirect:
+            self.fail("Plain employee was redirected away from /daily-checkin")
+        self.assertFalse(context.get("is_hr_manager"))
+
+    def test_management_role_redirected_from_daily_checkin(self):
+        """Management role has no Employee record and never checks in/out."""
+        frappe.set_user(self.mgmt_user)
+        context = frappe._dict()
+        with self.assertRaises(frappe.Redirect):
+            daily_checkin_page.get_context(context)
+        self.assertEqual(frappe.local.flags.redirect_location, "/management-dashboard")
+
+    def test_guest_redirected_to_login_from_daily_checkin(self):
+        """Regression: a logged-out visitor must be sent to /login, not hit
+        the "not linked to an Employee record" ValidationError traceback
+        that used to surface for Guest (who obviously has no Employee
+        record either)."""
+        frappe.set_user("Guest")
+        context = frappe._dict()
+        with self.assertRaises(frappe.Redirect):
+            daily_checkin_page.get_context(context)
+        self.assertEqual(frappe.local.flags.redirect_location, "/login?redirect-to=/daily-checkin")
+
+    def test_hr_manager_can_access_management_dashboard(self):
+        frappe.set_user(self.hr_user)
+        context = frappe._dict()
+        try:
+            management_dashboard_page.get_context(context)
+        except frappe.Redirect:
+            self.fail("HR Manager was denied the management dashboard")
+
+    def test_management_role_can_access_management_dashboard(self):
+        frappe.set_user(self.mgmt_user)
+        context = frappe._dict()
+        try:
+            management_dashboard_page.get_context(context)
+        except frappe.Redirect:
+            self.fail("Management role was denied the management dashboard")
+
+    def test_plain_employee_blocked_from_management_dashboard(self):
+        frappe.set_user(self.emp_user)
+        context = frappe._dict()
+        with self.assertRaises(frappe.Redirect):
+            management_dashboard_page.get_context(context)
+
+    def test_management_role_can_call_get_management_dashboard_api(self):
+        frappe.set_user(self.mgmt_user)
+        result = get_management_dashboard(today())
+        self.assertIn("summary", result)
+
+    def test_plain_employee_blocked_from_get_management_dashboard_api(self):
+        frappe.set_user(self.emp_user)
+        with self.assertRaises(frappe.PermissionError):
+            get_management_dashboard(today())
+
+
+# ── SECTION 14 — Leave exclusion (reminders/reports) & Missed Checkin ──────
+#    Checkout report. Regression coverage for: an employee on leave must
+#    never get a checkin/checkout reminder or appear as "missing" — whether
+#    the leave is recorded as a Leave Application OR directly on Attendance
+#    (status "On Leave"), which _get_expected_employees previously ignored.
+
+class TestLeaveExclusionAndMissedReport(FrappeTestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        frappe.set_user("Administrator")
+        cls.company = frappe.db.get_single_value("Global Defaults", "default_company") or "_Test Company"
+        cls.dept = (
+            frappe.db.get_value("Department", {"department_name": "_QA Dept", "company": cls.company}, "name")
+            or f"_QA Dept - {cls.company}"
+        )
+        cls.emp_user = "qa_leave_emp@test.example.com"
+        cls.emp_name = _make_employee("QALeaveEmp", cls.dept, cls.emp_user, ["Employee"])
+        frappe.db.commit()
+
+    @classmethod
+    def tearDownClass(cls):
+        frappe.set_user("Administrator")
+        frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
+                       "(SELECT name FROM `tabDaily Work Log` WHERE employee=%s)", (cls.emp_name,))
+        frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee=%s", (cls.emp_name,))
+        frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee=%s", (cls.emp_name,))
+        frappe.db.sql("DELETE FROM `tabEmployee` WHERE name=%s", (cls.emp_name,))
+        frappe.db.sql("DELETE FROM `tabUser` WHERE email=%s", (cls.emp_user,))
+        frappe.db.commit()
+
+    def setUp(self):
+        frappe.set_user("Administrator")
+
+    def tearDown(self):
+        frappe.set_user("Administrator")
+        frappe.db.sql("DELETE FROM `tabLeave Application` WHERE employee=%s", (self.emp_name,))
+        frappe.db.sql("DELETE FROM `tabAttendance` WHERE employee=%s", (self.emp_name,))
+        frappe.db.commit()
+
+    def _make_attendance(self, date, status):
+        att = frappe.new_doc("Attendance")
+        att.employee = self.emp_name
+        att.attendance_date = date
+        att.status = status
+        att.company = self.company
+        att.flags.ignore_permissions = True
+        att.flags.ignore_validate = True
+        att.flags.ignore_mandatory = True
+        att.insert(ignore_permissions=True)
+        frappe.db.set_value("Attendance", att.name, "docstatus", 1)
+        return att.name
+
+    def test_expected_employees_excludes_full_day_leave_application(self):
+        date = add_days(today(), 10)
+        leave_type = frappe.db.get_value("Leave Type", {}, "name")
+        leave = frappe.new_doc("Leave Application")
+        leave.employee = self.emp_name
+        leave.leave_type = leave_type
+        leave.from_date = date
+        leave.to_date = date
+        leave.status = "Approved"
+        leave.flags.ignore_permissions = True
+        leave.flags.ignore_validate = True
+        leave.flags.ignore_mandatory = True
+        leave.insert(ignore_permissions=True)
+        frappe.db.set_value("Leave Application", leave.name, "docstatus", 1)
+
+        expected = tasks_module._get_expected_employees(date)
+        self.assertNotIn(self.emp_name, [e.name for e in expected])
+
+    def test_expected_employees_excludes_attendance_marked_on_leave(self):
+        """Regression: leave recorded directly on Attendance (status='On
+        Leave'), not via a Leave Application, must still exclude the
+        employee from reminders/reports."""
+        date = add_days(today(), 11)
+        self._make_attendance(date, "On Leave")
+
+        expected = tasks_module._get_expected_employees(date)
+        self.assertNotIn(self.emp_name, [e.name for e in expected])
+
+    def test_expected_employees_keeps_half_day_attendance(self):
+        """A Half Day attendance record does not fully exclude — the
+        employee is still expected to check in/out for their working half."""
+        date = add_days(today(), 12)
+        self._make_attendance(date, "Half Day")
+
+        expected = tasks_module._get_expected_employees(date)
+        self.assertIn(self.emp_name, [e.name for e in expected])
+
+    def test_missed_report_excludes_attendance_marked_on_leave(self):
+        from st_attendance_tracker.st_attendance_tracker.report.missed_checkin_checkout.missed_checkin_checkout import get_data
+        date = add_days(today(), 13)
+        self._make_attendance(date, "On Leave")
+
+        rows = get_data(date)
+        self.assertNotIn(self.emp_name, [r["employee"] for r in rows])
+
+    def test_missed_report_lists_employee_who_never_checked_in(self):
+        from st_attendance_tracker.st_attendance_tracker.report.missed_checkin_checkout.missed_checkin_checkout import get_data
+        date = add_days(today(), 14)
+        rows = get_data(date)
+        row = next((r for r in rows if r["employee"] == self.emp_name), None)
+        self.assertIsNotNone(row)
+        self.assertEqual(row["missed_checkin"], "Yes")
+        self.assertEqual(row["missed_checkout"], "Yes")
+
+    def test_missed_report_excludes_fully_checked_out_employee(self):
+        from st_attendance_tracker.st_attendance_tracker.report.missed_checkin_checkout.missed_checkin_checkout import get_data
+        date = add_days(today(), 15)
+        log = frappe.new_doc("Daily Work Log")
+        log.employee = self.emp_name
+        log.date = date
+        log.morning_submitted = 1
+        log.eod_submitted = 1
+        log.login_time = "09:00:00"
+        log.logout_time = "18:00:00"
+        log.append("tasks", {"description": "Task", "status": "Done", "task_type": "Planned", "actual_time": 1})
+        log.insert(ignore_permissions=True)
+        try:
+            rows = get_data(date)
+            self.assertNotIn(self.emp_name, [r["employee"] for r in rows])
+        finally:
+            frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent=%s", (log.name,))
+            frappe.db.delete("Daily Work Log", log.name)
+            frappe.db.commit()
+
+    def test_missed_report_department_filter(self):
+        from st_attendance_tracker.st_attendance_tracker.report.missed_checkin_checkout.missed_checkin_checkout import get_data
+        date = add_days(today(), 16)
+        rows = get_data(date, department="Some Nonexistent Department - XX")
+        self.assertEqual(rows, [])

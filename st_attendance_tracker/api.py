@@ -288,6 +288,33 @@ def _is_half_day_leave_today(employee_name, date):
     }))
 
 
+def _get_employees_on_leave(employee_names, date):
+    """Employee names (from `employee_names`) considered on leave for `date`:
+    an approved, submitted Leave Application covering the date, OR an
+    Attendance record already marked "On Leave" for that exact date — some
+    leave is recorded directly on Attendance rather than through a Leave
+    Application, and both should count for reminder/report exclusion.
+    Half-day leave/attendance is deliberately NOT included here — that
+    employee is still expected to check in/out for their working half.
+    """
+    if not employee_names:
+        return set()
+    on_leave = set(frappe.get_all("Leave Application", filters={
+        "employee": ["in", employee_names],
+        "from_date": ["<=", date],
+        "to_date": [">=", date],
+        "status": "Approved",
+        "docstatus": 1,
+    }, pluck="employee"))
+    on_leave.update(frappe.get_all("Attendance", filters={
+        "employee": ["in", employee_names],
+        "attendance_date": date,
+        "status": "On Leave",
+        "docstatus": 1,
+    }, pluck="employee"))
+    return on_leave
+
+
 def _resolve_half_day_session(employee_name, date, raw_value):
     """Validate + persist a half-day session choice. Informational only —
     never blocks check-in either way, just refuses to store nonsense."""
@@ -1978,16 +2005,26 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         if status == "Done":
             newly_done_series.append(row.series_id)
 
-    # Insert ad-hoc tasks, preserving the order the employee entered them in
+    # Insert ad-hoc tasks, preserving the order the employee entered them in.
+    # A task already persisted mid-day via add_adhoc_tasks() (the footer
+    # "Save" button) carries a series_id that already exists on this work
+    # log — update that row in place instead of appending a duplicate.
+    existing_by_series = {row.series_id: row for row in work_log.tasks if row.series_id}
     sequence_base = _next_sequence(work_log)
     new_rows_with_attachments = []
-    for i, t in enumerate(adhocs):
+    appended = 0
+    for t in adhocs:
         desc = (t.get("description") or "").strip()
         if not desc:
             continue
-        row = work_log.append("tasks", {})
-        row.series_id = frappe.generate_hash(length=32)
-        row.origin_date = date
+        row = existing_by_series.get(t.get("series_id"))
+        if not row:
+            row = work_log.append("tasks", {})
+            row.series_id = frappe.generate_hash(length=32)
+            row.origin_date = date
+            appended += 1
+            row.sequence = sequence_base + appended
+            new_rows_with_attachments.append((row, t.get("attachment_names")))
         row.description = desc
         row.task_type = "Ad-hoc"
         row.status = t.get("status", "Done")
@@ -1995,8 +2032,6 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         row.actual_time = t.get("actual_time", "")
         row.remarks = t.get("remarks", "")
         row.project_name = (t.get("project_name") or "").strip()
-        row.sequence = sequence_base + i + 1
-        new_rows_with_attachments.append((row, t.get("attachment_names")))
 
     login_time_raw = work_log.login_time or ""
     half_day_session = work_log.half_day_session or ""
@@ -2041,6 +2076,91 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     }
 
 
+@frappe.whitelist()
+def add_adhoc_tasks(tasks):
+    """Persist every not-yet-saved mid-day ad-hoc task/project in one batch
+    (the single "Save" button in the /daily-checkin footer), instead of
+    waiting for checkout. One button for the whole page rather than one per
+    row — with 20-25 tasks added in a day, a per-row Save would mean
+    clicking Save that many times. Lets the employee's Team Leader see them
+    on /team-dashboard in real time via publish_realtime, rather than only
+    after EOD. submit_eod_log() later updates these same rows (matched by
+    series_id) instead of appending duplicates.
+
+    tasks: JSON list of {client_id, description, project_name,
+           estimated_time, remarks, attachment_names}. `client_id` is
+           whatever the caller used to identify the row (e.g. its DOM id)
+           and is echoed back in the result so it can mark that row saved.
+    """
+    tasks = json.loads(tasks) if isinstance(tasks, str) else (tasks or [])
+    if not tasks:
+        return {"success": True, "created": []}
+
+    employee = _get_employee()
+    # Lock employee record to serialize with check-in/checkout processing
+    frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee.name,))
+
+    date = _resolve_active_checkin_date(employee.name)
+    work_log = _get_or_new_work_log(employee.name, date)
+    if not work_log.morning_submitted:
+        frappe.throw("Please check in before adding tasks.")
+    if work_log.eod_submitted:
+        frappe.throw(f"You have already checked out for {date}.")
+
+    sequence_base = _next_sequence(work_log)
+    created = []
+    for i, t in enumerate(tasks):
+        description = (t.get("description") or "").strip()
+        if not description:
+            continue
+        attachment_names = t.get("attachment_names")
+        if isinstance(attachment_names, str):
+            attachment_names = json.loads(attachment_names) if attachment_names else []
+
+        row = work_log.append("tasks", {})
+        row.series_id = frappe.generate_hash(length=32)
+        row.origin_date = date
+        row.description = description
+        row.task_type = "Ad-hoc"
+        row.status = "Pending"
+        row.estimated_time = t.get("estimated_time") or ""
+        row.remarks = t.get("remarks") or ""
+        row.project_name = (t.get("project_name") or "").strip()
+        row.sequence = sequence_base + i + 1
+        created.append({"client_id": t.get("client_id"), "row": row,
+                         "attachment_names": attachment_names, "description": description})
+
+    if not created:
+        return {"success": True, "created": []}
+
+    _save_work_log(work_log)
+
+    result = []
+    for c in created:
+        _reparent_attachments(c["attachment_names"], c["row"].name)
+        result.append({"client_id": c["client_id"], "series_id": c["row"].series_id,
+                        "task_name": c["row"].name, "description": c["description"]})
+
+    frappe.db.commit()
+
+    try:
+        for tl_user in _get_team_leader_emails(employee.name):
+            frappe.publish_realtime(
+                "st_task_added",
+                {
+                    "employee": employee.name,
+                    "employee_name": employee.employee_name,
+                    "count": len(result),
+                    "descriptions": [c["description"] for c in result],
+                },
+                user=tl_user,
+            )
+    except Exception:
+        frappe.log_error(title="st_task_added realtime publish failed")
+
+    return {"success": True, "created": result}
+
+
 # ── Team dashboard ─────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
@@ -2064,9 +2184,9 @@ def get_team_dashboard(date=None):
 
 @frappe.whitelist()
 def get_management_dashboard(date=None):
-    """HR Manager sees all departments with all employees."""
-    if not ("HR Manager" in frappe.get_roles(frappe.session.user)):
-        frappe.throw("Access denied. HR Manager role required.", frappe.PermissionError)
+    """HR Manager or Management sees all departments with all employees."""
+    if not ({"HR Manager", "Management"} & set(frappe.get_roles(frappe.session.user))):
+        frappe.throw("Access denied. HR Manager or Management role required.", frappe.PermissionError)
 
     date = date or today()
 
@@ -2097,10 +2217,7 @@ def get_management_dashboard(date=None):
     eod_done = frappe.get_all("Daily Work Log", filters={
         "date": date, "eod_submitted": 1,
     }, pluck="employee")
-    on_leave = frappe.get_all("Leave Application", filters={
-        "from_date": ["<=", date], "to_date": [">=", date],
-        "status": "Approved", "docstatus": 1,
-    }, pluck="employee")
+    on_leave = _get_employees_on_leave([e.name for e in all_employees], date)
 
     # Calculate rankings based on completed EOD logs for this date
     def _parse_time_to_minutes(time_str):
@@ -2184,8 +2301,8 @@ def get_management_dashboard(date=None):
 
 @frappe.whitelist()
 def get_employee_task_detail(employee_name, date=None):
-    """Full task detail for one employee. HR Manager or their Team Leader."""
-    if not ("HR Manager" in frappe.get_roles(frappe.session.user)):
+    """Full task detail for one employee. HR Manager, Management, or their Team Leader."""
+    if not ({"HR Manager", "Management"} & set(frappe.get_roles(frappe.session.user))):
         current_emp = _get_employee()
         if employee_name not in _get_team_members(current_emp.name):
             frappe.throw("Access denied.", frappe.PermissionError)
@@ -2532,13 +2649,7 @@ def _build_team_data(employees, date):
     work_log_by_emp = {w.employee: w for w in work_logs}
     parent_to_emp = {w.name: w.employee for w in work_logs}
 
-    on_leave = set(frappe.get_all("Leave Application", filters={
-        "employee": ["in", emp_names],
-        "from_date": ["<=", date],
-        "to_date":   [">=", date],
-        "status":    "Approved",
-        "docstatus": 1,
-    }, pluck="employee"))
+    on_leave = _get_employees_on_leave(emp_names, date)
 
     all_tasks = []
     if parent_to_emp:

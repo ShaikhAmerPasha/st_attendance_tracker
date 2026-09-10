@@ -3,7 +3,7 @@ Scheduled email tasks for ST Attendance Tracker.
   10:30 AM IST Mon-Sat → send_employee_checkin_reminder   (to employees who haven't checked in)
   11:30 AM IST Mon-Sat → send_morning_combined_report     (to HR: missing + late summary)
   10:00 PM IST Mon-Sat → send_eod_missing_report          (to HR: employees without EOD)
-  10:30 PM IST Mon-Sat → send_employee_checkout_reminder  (to employees who haven't checked out)
+  9:00 PM IST Mon-Sat  → send_employee_checkout_reminder  (to employees who haven't checked out)
 
 HR reports go to all users with HR Manager role.
 Employee reminders go directly to each employee's work email.
@@ -13,7 +13,7 @@ from datetime import timedelta
 
 import frappe
 from frappe.utils import today, getdate, now_datetime
-from st_attendance_tracker.api import _to_hhmm
+from st_attendance_tracker.api import _to_hhmm, _get_employees_on_leave
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -307,11 +307,11 @@ def send_eod_missing_report():
 
 def send_employee_checkout_reminder():
     """
-    Sent at 10:30 PM IST Mon-Sat.
+    Sent at 9:00 PM IST Mon-Sat.
     Emails each employee individually who checked in today but hasn't checked out yet.
     """
     date = today()
-    if _skip_if_not_due((22, 30)) or _already_sent_today("last_checkout_reminder_date", date):
+    if _skip_if_not_due((21, 0)) or _already_sent_today("last_checkout_reminder_date", date):
         return
     day_label = getdate(date).strftime("%A, %d %B %Y")
 
@@ -366,8 +366,11 @@ def send_employee_checkout_reminder():
             <p style="font-size:13px;color:#444;line-height:1.6;margin:0 0 16px">
               You checked in today — <strong>{day_label}</strong> — but haven't checked out yet.
             </p>
+            <p style="font-size:13px;color:#444;line-height:1.6;margin:0 0 16px">
+              Please check out before 10:00 PM, or your attendance for today may be marked as absent.
+            </p>
             <p style="font-size:13px;color:#444;line-height:1.6;margin:0 0 20px">
-              Please check out as soon as possible by visiting the attendance portal.
+              If you are continuing to work beyond your regular hours, please check out now and log the remaining work under Additional Work.
             </p>
             <a href="/daily-checkin"
                style="display:inline-block;background:#EE1C29;color:#fff;
@@ -427,17 +430,15 @@ def _already_sent_today(field_name, date):
 
 
 def _get_expected_employees(date):
-    """Active employees excluding those on approved leave or holiday today."""
+    """Active employees excluding those on approved leave (Leave Application
+    or an Attendance record already marked "On Leave") or holiday today.
+    Employees with the "Management" role never have an Employee record, so
+    they're naturally excluded here too — nothing to check for them."""
     all_employees = frappe.get_all("Employee",
         filters={"status": "Active"},
         fields=["name", "employee_name", "department", "holiday_list"],
     )
-    on_leave = {r.employee for r in frappe.get_all("Leave Application", filters={
-        "from_date": ["<=", date],
-        "to_date":   [">=", date],
-        "status":    "Approved",
-        "docstatus": 1,
-    }, fields=["employee"])}
+    on_leave = _get_employees_on_leave([e.name for e in all_employees], date)
 
     result = []
     for emp in all_employees:
