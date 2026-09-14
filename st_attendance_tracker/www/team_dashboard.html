@@ -6,6 +6,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/whats_new.css">
 <style>
 :root {
   --primary: #6366f1;
@@ -553,7 +554,29 @@ body {
   margin-bottom: 12px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+
+.td-assign-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--primary);
+  background: var(--primary-light);
+  border: 1px solid hsl(243, 75%, 90%);
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.td-assign-btn:hover { background: var(--primary); color: #fff; }
+.td-assign-btn i { font-size: 11px; }
 
 .td-task-row {
   display: flex;
@@ -988,6 +1011,7 @@ body {
       <a href="/team-leader-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
       <a href="/my-history" class="tnav-btn"><i class="ti ti-history" aria-hidden="true"></i>History</a>
       <a href="/recurring-tasks" class="tnav-btn"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
+      <div class="wn-bell-wrap" id="wn-mount"></div>
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
       <div class="profile-dropdown" id="profile-dropdown">
         <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
@@ -997,6 +1021,7 @@ body {
     </div>
   </div>
 </nav>
+<div id="wn-banner-mount"></div>
 <div class="wrap">
   <div class="hero">
     <div class="hero-top">
@@ -1046,9 +1071,101 @@ body {
     </div>
   </div>
 </div>
+<div class="assign-ov" id="assign-ov" style="display:none">
+  <div class="assign-modal">
+    <div class="assign-head">
+      <div>
+        <div class="assign-title">Assign a task</div>
+        <div class="assign-sub" id="assign-emp-name">—</div>
+      </div>
+      <button class="assign-close" onclick="closeAssignModal()" aria-label="Close"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+    <div class="assign-body">
+      <div class="assign-toggle" id="assign-toggle">
+        <button type="button" class="assign-toggle-opt on" data-mode="today" onclick="setAssignMode('today')"><i class="ti ti-calendar-check" aria-hidden="true"></i>Assign for today</button>
+        <button type="button" class="assign-toggle-opt" data-mode="backlog" onclick="setAssignMode('backlog')"><i class="ti ti-list-details" aria-hidden="true"></i>Add to backlog</button>
+      </div>
+      <label class="assign-label">Description *</label>
+      <textarea id="assign-desc" class="assign-input" rows="3" placeholder="What should they do?"></textarea>
+      <div class="assign-row">
+        <div>
+          <label class="assign-label">Project (optional)</label>
+          <input id="assign-project" class="assign-input" type="text" placeholder="e.g. Website Revamp">
+        </div>
+        <div>
+          <label class="assign-label">Estimated time (optional)</label>
+          <input id="assign-est" class="assign-input" type="text" placeholder="e.g. 1h 30m">
+        </div>
+      </div>
+    </div>
+    <div class="assign-foot">
+      <button class="assign-btn cancel" onclick="closeAssignModal()">Cancel</button>
+      <button class="assign-btn submit" id="assign-submit-btn" onclick="submitAssignTask()"><i class="ti ti-send" aria-hidden="true"></i>Assign task</button>
+    </div>
+  </div>
+</div>
 <style>@keyframes spin{to{transform:rotate(360deg)}}
 
-
+.assign-ov {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.assign-modal {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+}
+.assign-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.assign-title { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 16px; font-weight: 800; color: var(--text-main); }
+.assign-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.assign-close {
+  border: none; background: none; color: var(--text-light); cursor: pointer;
+  width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+}
+.assign-close:hover { background: var(--bg-canvas); color: var(--text-main); }
+.assign-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+.assign-toggle { display: flex; gap: 6px; background: #f1f5f9; border-radius: var(--radius-sm); padding: 4px; }
+.assign-toggle-opt {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 10px; border: none; border-radius: 6px; background: transparent; color: var(--text-muted);
+  font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; transition: all 0.15s;
+}
+.assign-toggle-opt.on { background: #ffffff; color: var(--text-main); box-shadow: var(--shadow-sm); }
+.assign-label { display: block; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.assign-input {
+  width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 9px 11px; font-size: 13px; font-family: inherit; color: var(--text-main);
+  background: var(--bg-card); resize: vertical;
+}
+.assign-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+.assign-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.assign-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); }
+.assign-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: inherit; border: 1px solid transparent;
+}
+.assign-btn.cancel { background: var(--bg-card); border-color: var(--border); color: var(--text-muted); }
+.assign-btn.cancel:hover { background: var(--bg-canvas); }
+.assign-btn.submit { background: var(--primary); color: #fff; }
+.assign-btn.submit:hover { background: var(--primary-hover); }
+.assign-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* Premium Modern SaaS Overrides (With Light Colors) */
 body {
@@ -1220,6 +1337,7 @@ body {
 
 </style>
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
+<script src="/assets/st_attendance_tracker/js/whats_new.js"></script>
 <script>
 var ALL_EMPS = [];
 var CUR_FILTER = 'all';
@@ -1289,11 +1407,77 @@ function renderTeam(){
           '<div class="td-cell"><div class="td-l">Logout</div><div class="td-v">'+loTime+'</div></div>'/*+
           '<div class="td-cell"><div class="td-l">Net hours</div><div class="td-v g">'+netH+'</div></div>'*/+
         '</div>'+
-        '<div class="td-tasks-lbl">Tasks ('+tasks.length+')</div>'+
+        '<div class="td-tasks-lbl">Tasks ('+tasks.length+')'+
+          '<button class="td-assign-btn" onclick="event.stopPropagation(); openAssignModal(\''+esc(emp.name)+'\',\''+esc(emp.employee_name)+'\')"><i class="ti ti-plus" aria-hidden="true"></i>Assign task</button>'+
+        '</div>'+
         taskRows+
       '</div>'+
     '</div>';
   }).join('');
+}
+
+// ── Assign task modal ───────────────────────────────────────────────────
+var ASSIGN_EMP = null;
+var ASSIGN_MODE = 'today';
+function setAssignMode(mode){
+  ASSIGN_MODE = mode;
+  document.querySelectorAll('.assign-toggle-opt').forEach(function(b){ b.classList.toggle('on', b.dataset.mode === mode); });
+  document.getElementById('assign-submit-btn').innerHTML = mode === 'backlog'
+    ? '<i class="ti ti-list-details" aria-hidden="true"></i>Add to backlog'
+    : '<i class="ti ti-send" aria-hidden="true"></i>Assign task';
+}
+function openAssignModal(empName, empDisplayName){
+  ASSIGN_EMP = empName;
+  document.getElementById('assign-emp-name').textContent = 'For ' + empDisplayName;
+  document.getElementById('assign-desc').value = '';
+  document.getElementById('assign-project').value = '';
+  document.getElementById('assign-est').value = '';
+  setAssignMode('today');
+  document.getElementById('assign-ov').style.display = 'flex';
+  document.getElementById('assign-desc').focus();
+}
+function closeAssignModal(){
+  document.getElementById('assign-ov').style.display = 'none';
+  ASSIGN_EMP = null;
+}
+document.addEventListener('click', function(e){
+  if (e.target === document.getElementById('assign-ov')) closeAssignModal();
+});
+async function submitAssignTask(){
+  if (!ASSIGN_EMP) return;
+  var desc = document.getElementById('assign-desc').value.trim();
+  if (!desc) { frappe.show_alert({ message: 'Please enter a task description.', indicator: 'red' }, 3); return; }
+  var isBacklog = ASSIGN_MODE === 'backlog';
+  var btn = document.getElementById('assign-submit-btn');
+  var origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin" style="display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,0.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite"></span> ' + (isBacklog ? 'Adding...' : 'Assigning...');
+  try {
+    var r = await frappe.call({
+      method: isBacklog
+        ? 'st_attendance_tracker.api.push_task_to_backlog'
+        : 'st_attendance_tracker.api.assign_task_to_employee',
+      args: {
+        assignee_employee: ASSIGN_EMP,
+        description: desc,
+        project_name: document.getElementById('assign-project').value.trim(),
+        estimated_time: document.getElementById('assign-est').value.trim(),
+      },
+    });
+    if (r.message && r.message.success) {
+      frappe.show_alert({
+        message: (isBacklog ? 'Added to ' : 'Task assigned to ') + r.message.employee_name + (isBacklog ? '\'s backlog.' : '.'),
+        indicator: 'green',
+      }, 3);
+      closeAssignModal();
+      loadTeam();
+    }
+  } catch (e) {
+    frappe.show_alert({ message: (e && e.message) || 'Could not assign task.', indicator: 'red' }, 4);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
 }
 
 function toggleCard(card, empName){
@@ -1382,6 +1566,7 @@ document.querySelectorAll('.fc').forEach(function(chip){
 
 frappe.ready(function(){
   loadTeam('{{ date }}');
+  initWhatsNew();
 
   // Live update: a team member just saved a mid-day ad-hoc task
   // (st_attendance_tracker.api.add_adhoc_task). Re-fetch the currently

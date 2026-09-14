@@ -6,6 +6,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/whats_new.css">
 <style>
 :root {
   --primary: #6366f1;
@@ -1038,6 +1039,7 @@ body {
     <div class="tnav-r">
       <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-user" aria-hidden="true"></i>My check-in</a>
       <a href="/hr-manager-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
+      <div class="wn-bell-wrap" id="wn-mount"></div>
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
       <div class="profile-dropdown" id="profile-dropdown">
         {% if employee.name %}
@@ -1049,6 +1051,7 @@ body {
     </div>
   </div>
 </nav>
+<div id="wn-banner-mount"></div>
 <div class="wrap">
   <div class="hero">
     <div class="hero-top">
@@ -1104,6 +1107,7 @@ body {
   </div>
 </div>
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
+<script src="/assets/st_attendance_tracker/js/whats_new.js"></script>
 <script>
 var ALL_DEPTS = [];
 var CUR_FILTER = 'all';
@@ -1323,7 +1327,7 @@ function loadAll(date){
   });
 }
 
-frappe.ready(function(){ loadAll('{{ date }}'); });
+frappe.ready(function(){ loadAll('{{ date }}'); initWhatsNew(); });
 
 function toggleProfileDropdown(e) {
   if (e) e.stopPropagation();

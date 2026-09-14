@@ -1,0 +1,127 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-09-14 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "category",
+  "col_break_1",
+  "audience",
+  "is_published",
+  "section_break_1",
+  "description",
+  "link",
+  "publish_date"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "default": "Feature",
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Category",
+   "options": "Feature\nImprovement\nFix\nReport",
+   "reqd": 1
+  },
+  {
+   "fieldname": "col_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Everyone",
+   "description": "Who sees this in their What's New panel: Everyone, Team Leaders & above (Team Lead/HR Manager/Management), or HR Manager & Management only.",
+   "fieldname": "audience",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Audience",
+   "options": "Everyone\nTeam Leaders & above\nHR Manager & Management",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "is_published",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Published"
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Short, one to two sentences — shown as-is in the What's New panel.",
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description",
+   "reqd": 1
+  },
+  {
+   "description": "Optional — e.g. a link to the relevant Wiki guide page.",
+   "fieldname": "link",
+   "fieldtype": "Data",
+   "label": "Learn More Link"
+  },
+  {
+   "description": "Defaults to now if left blank. Controls both display order and what counts as \"new\" for each user.",
+   "fieldname": "publish_date",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Publish Date"
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-14 00:00:00",
+ "modified_by": "Administrator",
+ "module": "ST Attendance Tracker",
+ "name": "ST Announcement",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HR Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "publish_date",
+ "sort_order": "DESC",
+ "title_field": "title",
+ "track_changes": 1
+}

@@ -1,0 +1,198 @@
+/*
+ * "What's New" notification bell — deliberately uses each portal page's own
+ * local design tokens (--primary, --success-bg, --border, etc.), not a
+ * shared stylesheet: every www/*.html page in this app defines the same
+ * token names itself rather than pulling from one shared file (only Desk
+ * pages get st_tracker_shared.css via app_include_css). Included via
+ * <link> on each portal page; markup/behavior injected by
+ * public/js/whats_new.js into a `#wn-mount` element in the page's nav.
+ */
+
+.wn-bell-wrap { position: relative; }
+
+.wn-bell-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  position: relative;
+}
+.wn-bell-btn:hover { color: var(--primary); border-color: var(--border-focus); }
+.wn-bell-btn svg { width: 16px; height: 16px; }
+
+.wn-bell-dot {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger, #DC2626);
+  border: 2px solid var(--bg-card);
+}
+
+.wn-panel {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md), 0 12px 32px -8px rgba(15, 23, 42, 0.18);
+  z-index: 200;
+  overflow: hidden;
+}
+.wn-panel[hidden] { display: none; }
+
+.wn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.wn-head h2 {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.2px;
+}
+.wn-head .wn-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-light);
+}
+.wn-close {
+  border: none;
+  background: none;
+  color: var(--text-light);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wn-close:hover { background: var(--bg-canvas, #F8FAFC); color: var(--text-main); }
+.wn-close svg { width: 14px; height: 14px; }
+
+.wn-list { max-height: 380px; overflow-y: auto; }
+.wn-empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 12.5px;
+}
+
+.wn-item {
+  display: flex;
+  gap: 11px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.wn-item:last-child { border-bottom: none; }
+
+.wn-ico {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wn-ico svg { width: 15px; height: 15px; }
+.wn-ico--feature { background: var(--primary-light); color: var(--primary); }
+.wn-ico--improvement { background: var(--success-bg); color: var(--success-text); }
+.wn-ico--fix { background: var(--warning-bg, var(--success-bg)); color: var(--warning); }
+.wn-ico--report { background: var(--info-bg, var(--primary-light)); color: var(--info, var(--primary)); }
+
+.wn-body { min-width: 0; flex: 1; }
+.wn-title-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.wn-title { font-size: 12.5px; font-weight: 700; color: var(--text-main); }
+.wn-pill {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--primary);
+  padding: 1.5px 6px;
+  border-radius: 999px;
+}
+.wn-desc { margin: 3px 0 6px; font-size: 11.8px; color: var(--text-muted); line-height: 1.45; }
+.wn-meta { font-size: 10.5px; color: var(--text-light); display: flex; gap: 8px; align-items: center; }
+.wn-link { font-size: 11px; font-weight: 700; color: var(--primary); text-decoration: none; }
+.wn-link:hover { text-decoration: underline; }
+
+@media (max-width: 520px) {
+  .wn-panel { position: fixed; top: 56px; right: 12px; left: 12px; width: auto; }
+}
+
+/* ── Inline banner (lighter-touch nudge, shown below the nav) ─────────── */
+.wn-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 18px;
+  margin: 16px auto 0;
+  max-width: 1600px;
+  background: var(--primary-light);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-md);
+}
+.wn-banner-ico {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wn-banner-ico svg { width: 13px; height: 13px; }
+.wn-banner-text { flex: 1; font-size: 12.8px; color: var(--text-main); }
+.wn-banner-text strong { font-weight: 700; }
+.wn-banner-link {
+  font-size: 12.3px;
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.wn-banner-link:hover { text-decoration: underline; }
+.wn-banner-x {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--text-light);
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+}
+.wn-banner-x:hover { background: rgba(0, 0, 0, 0.06); color: var(--text-main); }
+.wn-banner-x svg { width: 13px; height: 13px; }
+
+@media (max-width: 640px) {
+  .wn-banner { flex-wrap: wrap; margin: 12px 16px 0; }
+  .wn-banner-text { flex-basis: 100%; order: 1; }
+}

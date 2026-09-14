@@ -63,4 +63,5 @@ website_route_rules = [
     {"from_route": "/my-history",           "to_route": "my_history"},
     {"from_route": "/recurring-tasks",      "to_route": "recurring_tasks"},
     {"from_route": "/additional-work",      "to_route": "additional_work"},
+    {"from_route": "/task-backlog",         "to_route": "task_backlog"},
 ]

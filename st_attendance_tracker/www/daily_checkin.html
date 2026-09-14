@@ -5,7 +5,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"><style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/whats_new.css"><style>
 :root {
   --primary-h: 243;
   --primary-s: 75%;
@@ -1309,6 +1310,16 @@ textarea.desc-edit:focus, textarea.carried-desc:focus, textarea.npg-desc:focus, 
   color: var(--primary);
   border: 1px solid hsl(243, 75%, 90%);
 }
+
+.ttag-assigned {
+  background: var(--info-bg);
+  color: var(--info-text);
+  border: 1px solid var(--info-border);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.ttag-assigned i { font-size: 10px; }
 
 .trm {
   color: hsl(214, 32%, 75%);
@@ -3045,6 +3056,7 @@ body > .container { padding-top: 0 !important; }
       <span class="tnav-date">{{ date }}</span>
       <a href="/docs" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
       <a href="/my-history" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
+      <div class="wn-bell-wrap" id="wn-mount"></div>
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
       <div class="profile-dropdown" id="profile-dropdown">
         <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
@@ -3054,6 +3066,7 @@ body > .container { padding-top: 0 !important; }
     </div>
   </div>
 </nav>
+<div id="wn-banner-mount"></div>
 <div class="cols">
 <aside class="sidebar">
   <div class="sb-top">
@@ -3073,6 +3086,7 @@ body > .container { padding-top: 0 !important; }
     <a href="/daily-checkin" class="sb-link on"><i class="ti ti-check" aria-hidden="true"></i>Today<span class="sb-cnt">{{ total_count }}</span></a>
     <a href="/my-history" class="sb-link"><i class="ti ti-history" aria-hidden="true"></i>My history</a>
     <a href="/recurring-tasks" class="sb-link"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring{% if recurring_count %}<span class="sb-cnt">{{ recurring_count }}</span>{% endif %}</a>
+    <a href="/task-backlog" class="sb-link"><i class="ti ti-list-details" aria-hidden="true"></i>Task Backlog{% if backlog_count %}<span class="sb-cnt">{{ backlog_count }}</span>{% endif %}</a>
     <a href="/additional-work" class="sb-link"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional work</a>
     {% if is_team_leader %}<a href="/team-dashboard" class="sb-link"><i class="ti ti-users" aria-hidden="true"></i>My team</a>{% endif %}
     {% if is_hr_manager %}<a href="/management-dashboard" class="sb-link"><i class="ti ti-building" aria-hidden="true"></i>Management Dashboard</a>{% endif %}
@@ -3281,8 +3295,12 @@ body > .container { padding-top: 0 !important; }
           <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
           <div class="tdesc-wrap">
             <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description|e }}</textarea>
-            {% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}
+            {% if task.is_carried or task.assigned_by_name %}<div class="ttags">
+              {% if task.is_carried %}<span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}{% endif %}
+              {% if task.assigned_by_name %}<span class="ttag ttag-assigned"><i class="ti ti-user-plus" aria-hidden="true"></i>Assigned by {{ task.assigned_by_name|e }}</span>{% endif %}
+            </div>{% endif %}
           </div>
+          <div class="trm" onclick="moveToBacklog('{{ task.name }}',this)" title="Move to backlog"><i class="ti ti-list-details" aria-hidden="true"></i></div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="trow-meta">
@@ -3317,8 +3335,12 @@ body > .container { padding-top: 0 !important; }
           <div class="tck {% if task.status=='Done' %}dn{% endif %}" onclick="toggleCheck(this,'{{ task.name }}')">{% if task.status=='Done' %}<i class="ti ti-check" aria-hidden="true"></i>{% endif %}</div>
           <div class="tdesc-wrap">
             <textarea class="tdesc tinp desc-edit {% if task.status=='Done' %}dn{% endif %}" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:34px;line-height:1.45;width:100%;font-family:inherit;border-color:transparent;background:transparent;padding:0" onchange="saveDescEdit(this)">{{ task.description|e }}</textarea>
-            {% if task.is_carried %}<div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>{% endif %}
+            {% if task.is_carried or task.assigned_by_name %}<div class="ttags">
+              {% if task.is_carried %}<span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}{% endif %}
+              {% if task.assigned_by_name %}<span class="ttag ttag-assigned"><i class="ti ti-user-plus" aria-hidden="true"></i>Assigned by {{ task.assigned_by_name|e }}</span>{% endif %}
+            </div>{% endif %}
           </div>
+          <div class="trm" onclick="moveToBacklog('{{ task.name }}',this)" title="Move to backlog"><i class="ti ti-list-details" aria-hidden="true"></i></div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
         <div class="stask-meta">
@@ -3431,11 +3453,12 @@ body > .container { padding-top: 0 !important; }
         <div class="trow-main">
           <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
           <div class="tdesc-wrap">
-            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description|e }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>
+            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description|e }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}{% if task.assigned_by_name %}<span class="ttag ttag-assigned"><i class="ti ti-user-plus" aria-hidden="true"></i>Assigned by {{ task.assigned_by_name|e }}</span>{% endif %}</div>
           </div>
           <div class="tmeta-fields" style="margin-top:0">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
+          <div class="trm" onclick="moveToBacklog('{{ task.name }}',this)" title="Move to backlog"><i class="ti ti-list-details" aria-hidden="true"></i></div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
       </div>
@@ -3455,11 +3478,12 @@ body > .container { padding-top: 0 !important; }
         <div class="stask-main">
           <div style="display:flex;align-items:center;justify-content:center;margin-top:2px"><i class="ti ti-history" style="font-size:13px;color:#f59e0b" aria-hidden="true"></i></div>
           <div class="tdesc-wrap">
-            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description|e }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}</div>
+            <textarea class="tinp carried-desc" data-id="{{ task.name }}" rows="1" style="resize:none;min-height:32px;line-height:1.4;width:100% ">{{ task.description|e }}</textarea><div class="ttags"><span class="ttag ttag-c">Carried</span>{% if task.days_pending > 0 %}<span class="ttag ttag-d">Day {{ task.days_pending }}</span>{% endif %}{% if task.assigned_by_name %}<span class="ttag ttag-assigned"><i class="ti ti-user-plus" aria-hidden="true"></i>Assigned by {{ task.assigned_by_name|e }}</span>{% endif %}</div>
           </div>
           <div class="tmeta-fields" style="margin-top:0">
             <div class="tmeta-field"><label>Est.</label><input type="text" class="tinp carried-est" data-id="{{ task.name }}" value="{{ (task.estimated_time_display or '')|e }}" placeholder="e.g. 1h 30m, 45m"></div>
           </div>
+          <div class="trm" onclick="moveToBacklog('{{ task.name }}',this)" title="Move to backlog"><i class="ti ti-list-details" aria-hidden="true"></i></div>
           <div class="trm" onclick="delCarried('{{ task.name }}',this)"><i class="ti ti-x" aria-hidden="true"></i></div>
         </div>
       </div>
@@ -3520,6 +3544,7 @@ body > .container { padding-top: 0 !important; }
   <a href="/daily-checkin" class="mn-it on"><i class="ti ti-check" aria-hidden="true"></i>Today</a>
   <a href="/my-history" class="mn-it"><i class="ti ti-history" aria-hidden="true"></i>History</a>
   <a href="/recurring-tasks" class="mn-it"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
+  <a href="/task-backlog" class="mn-it"><i class="ti ti-list-details" aria-hidden="true"></i>Backlog</a>
   <a href="/additional-work" class="mn-it"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional Work</a>
   {% if is_team_leader %}<a href="/team-dashboard" class="mn-it"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
   {% if is_hr_manager %}<a href="/management-dashboard" class="mn-it"><i class="ti ti-building" aria-hidden="true"></i>Management</a>{% endif %}
@@ -3559,7 +3584,9 @@ body > .container { padding-top: 0 !important; }
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
+<script src="/assets/st_attendance_tracker/js/whats_new.js"></script>
 <script>
+frappe.ready(function(){ initWhatsNew(); });
 var LOGIN_TIME = "{{ login_time or current_time }}";
 var LOG_DATE = "{{ date }}";
 var TODAY_DATE = "{{ actual_today }}"; // server's current calendar date, independent of LOG_DATE (which can be backdated for a late checkout)
@@ -4067,6 +4094,24 @@ async function delCarried(name, btn) {
     toast('Task removed.','ok',2000);
   } catch(e) { toast(e.message||'Could not delete task.','err'); btn.innerHTML='<i class="ti ti-x" aria-hidden="true"></i>'; }
 }
+async function moveToBacklog(name, btn) {
+  var origHtml = btn.innerHTML;
+  btn.innerHTML='<i class="ti ti-loader" style="animation:spin .7s linear infinite" aria-hidden="true"></i>';
+  try {
+    await frappe.call({ method:'st_attendance_tracker.api.move_task_to_backlog', args:{name:name} });
+    var row = btn.closest('[data-id]');
+    if (row) {
+      var body = row.closest('.pg-body');
+      row.remove();
+      if (body && body.querySelectorAll('.trow').length === 0) {
+        var pg = body.closest('.pg');
+        if (pg) pg.remove();
+      }
+    }
+    CARRIED = Math.max(0, CARRIED-1); updCounts(); updProg();
+    toast('Moved to backlog.','ok',2000);
+  } catch(e) { toast(e.message||'Could not move this task.','err'); btn.innerHTML=origHtml; }
+}
 async function delCarriedProject(pname, id, btn) {
   if (!confirm('Are you sure you want to delete this project and all its tasks?')) return;
   var origHtml = btn.innerHTML;
@@ -4468,6 +4513,12 @@ async function saveAllAdhocTasks(){
       });
       unsavedAdhocCount = 0;
       if (btn) btn.style.display = 'none';
+      // Without this, the localStorage draft written before this Save
+      // still holds the now-saved rows (nothing else re-runs saveEodDraft
+      // between clicking Save and a refresh) — a refresh would then
+      // recreate them as brand-new unsaved rows, popping the Save button
+      // back up for tasks already safely in the database.
+      if (typeof saveEodDraft === 'function') saveEodDraft();
       toast('Tasks saved.','ok',1500);
     }
   } catch(e) { toast(e.message||'Could not save tasks.','err'); }
@@ -4936,7 +4987,14 @@ function saveEodDraft() {
   if(!document.getElementById('btn-eod')) return;
   var draft = [];
   
-  document.querySelectorAll('.stask[data-adhocid]').forEach(function(el) {
+  // :not([data-saved-name]) — a row already persisted via the footer Save
+  // button (saveAllAdhocTasks) must never re-enter the draft. Without this,
+  // every saveEodDraft() call after that Save keeps re-drafting the
+  // already-saved row, and loadEodDraft() recreates it as a brand-new
+  // *unsaved* row on the next page load — the footer Save button reappears
+  // for a task that's already safely in the database, and saving again
+  // would create a duplicate Task Entry.
+  document.querySelectorAll('.stask[data-adhocid]:not([data-saved-name])').forEach(function(el) {
     var stat = (el.querySelector('.tsel')||{}).value||'Pending';
     var head = (el.querySelector('.adhoc-head')||{}).value||'';
     var desc = (el.querySelector('.adhoc-d')||{}).value||'';
@@ -4949,7 +5007,7 @@ function saveEodDraft() {
   document.querySelectorAll('.pg[id^="epg_new_"]').forEach(function(pg) {
     var pName = (pg.querySelector('.npg-ni')||{}).value||'';
     var tasks = [];
-    pg.querySelectorAll('.trow[data-adhocid]').forEach(function(el) {
+    pg.querySelectorAll('.trow[data-adhocid]:not([data-saved-name])').forEach(function(el) {
       var stat = (el.querySelector('.tsel')||{}).value||'Pending';
       var desc = (el.querySelector('.adhoc-d')||{}).value||'';
       var act = (el.querySelector('.adhoc-act')||{}).value||'';
@@ -4957,14 +5015,18 @@ function saveEodDraft() {
       var rmkOn = (el.querySelector('.remark-chk')||{}).checked||false;
       tasks.push({ desc: desc, act: act, stat: stat, rmk: rmk, rmkOn: rmkOn, att: getRowAttachments(el) });
     });
-    draft.push({ type: 'project', name: pName, tasks: tasks });
+    // Every row in this project may have already been saved — nothing left
+    // to draft, so don't recreate an empty project shell on refresh either.
+    if (tasks.length > 0) {
+      draft.push({ type: 'project', name: pName, tasks: tasks });
+    }
   });
-  
+
   document.querySelectorAll('.pg:not([id^="epg_new_"])').forEach(function(pg) {
     var pgId = pg.id;
     var tasks = [];
-    pg.querySelectorAll('.trow[data-adhocid]').forEach(function(el) {
-      if(!el.dataset.adhocid.startsWith('pad')) return; 
+    pg.querySelectorAll('.trow[data-adhocid]:not([data-saved-name])').forEach(function(el) {
+      if(!el.dataset.adhocid.startsWith('pad')) return;
       var stat = (el.querySelector('.tsel')||{}).value||'Pending';
       var desc = (el.querySelector('.adhoc-d')||{}).value||'';
       var act = (el.querySelector('.adhoc-act')||{}).value||'';

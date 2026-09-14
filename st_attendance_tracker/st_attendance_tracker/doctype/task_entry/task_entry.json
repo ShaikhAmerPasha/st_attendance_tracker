@@ -15,6 +15,8 @@
   "project_name",
   "description",
   "remarks",
+  "assigned_by",
+  "assigned_by_name",
   "section_break_time",
   "estimated_time",
   "actual_time",
@@ -85,6 +87,22 @@
    "fieldname": "remarks",
    "fieldtype": "Small Text",
    "label": "Remarks"
+  },
+  {
+   "fieldname": "assigned_by",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Assigned By",
+   "options": "Employee",
+   "read_only": 1,
+   "description": "Set only when a Team Leader assigns this task to the employee (via the Team Dashboard or the Telegram bot) — blank for a task the employee planned themselves."
+  },
+  {
+   "fetch_from": "assigned_by.employee_name",
+   "fieldname": "assigned_by_name",
+   "fieldtype": "Data",
+   "label": "Assigned By Name",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_time",

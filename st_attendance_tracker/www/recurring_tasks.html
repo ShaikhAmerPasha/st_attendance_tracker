@@ -6,6 +6,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/whats_new.css">
 <style>
 :root {
   --primary: #6366f1;
@@ -563,7 +564,9 @@ body { padding-top: 0 !important; }
     <span class="tnav-bc">Recurring Tasks</span>
     <div class="tnav-r">
       <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-check" aria-hidden="true"></i>My check-in</a>
+      <a href="/task-backlog" class="tnav-btn"><i class="ti ti-list-details" aria-hidden="true"></i>Backlog</a>
       <a href="/my-history" class="tnav-btn"><i class="ti ti-history" aria-hidden="true"></i>History</a>
+      <div class="wn-bell-wrap" id="wn-mount"></div>
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
       <div class="profile-dropdown" id="profile-dropdown">
         <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
@@ -573,6 +576,7 @@ body { padding-top: 0 !important; }
     </div>
   </div>
 </nav>
+<div id="wn-banner-mount"></div>
 <div class="wrap">
   <div class="hero">
     <div class="hero-left">
@@ -629,6 +633,7 @@ body { padding-top: 0 !important; }
 </div>
 
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
+<script src="/assets/st_attendance_tracker/js/whats_new.js"></script>
 <script>
 var ROWS = {};
 var EDIT_NAME = null;
@@ -785,7 +790,7 @@ function deleteTask(name){
   });
 }
 
-frappe.ready(function(){ loadRecurringTasks(); });
+frappe.ready(function(){ loadRecurringTasks(); initWhatsNew(); });
 
 function toggleProfileDropdown(e) {
   if (e) e.stopPropagation();

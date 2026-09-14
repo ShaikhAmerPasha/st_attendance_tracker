@@ -212,6 +212,8 @@ def _task_entry_dict(row, parent_date):
         "actual_time": get("actual_time"),
         "project_name": get("project_name"),
         "series_id": get("series_id"),
+        "assigned_by": get("assigned_by"),
+        "assigned_by_name": get("assigned_by_name"),
     })
 
 
@@ -1498,6 +1500,196 @@ def delete_recurring_task(name):
     return {"success": True}
 
 
+# ── Task Backlog (employee-facing CRUD + Team Leader push + pull-to-today) ─────
+# Tasks with no target day. Nothing here is a Task Entry / doesn't count toward
+# any day's pending total — it only becomes one (and starts counting) the
+# moment it's pulled into today via pull_backlog_item_to_today. All mutating
+# calls below pass ignore_permissions=True and rely on
+# TaskBacklogItem._check_ownership() (keyed on the `employee` field) as the
+# real authorization check — the framework's own if_owner doctype permission
+# can't express "Team-Leader-created, employee-owned" items correctly, since
+# `owner` on a TL-pushed item is the TL's user, not the employee's.
+
+BACKLOG_STALE_DAYS = 14
+
+
+@frappe.whitelist()
+def get_task_backlog():
+    """Current employee's own backlog, oldest first. Each row carries how
+    many days it's been sitting there so the UI can flag stale ones —
+    anti-rot nudge instead of a forced due date."""
+    employee = _get_employee()
+    rows = frappe.get_all("Task Backlog Item",
+        filters={"employee": employee.name},
+        fields=["name", "description", "project_name", "estimated_time", "remarks",
+                "assigned_by", "assigned_by_name", "creation"],
+        order_by="creation asc")
+    for r in rows:
+        age_days = (getdate(today()) - getdate(r.creation)).days
+        r["age_days"] = age_days
+        r["is_stale"] = age_days > BACKLOG_STALE_DAYS
+    return rows
+
+
+@frappe.whitelist()
+def save_backlog_item(name=None, description="", project_name="", estimated_time="", remarks=""):
+    """Create or update (upsert by `name`) a self-service backlog item."""
+    employee = _get_employee()
+    if not (description or "").strip():
+        frappe.throw("Task description cannot be empty.")
+
+    if name:
+        doc = frappe.get_doc("Task Backlog Item", name)
+        if doc.employee != employee.name:
+            frappe.throw("Not authorised to edit this task.", frappe.PermissionError)
+    else:
+        doc = frappe.new_doc("Task Backlog Item")
+        doc.employee = employee.name
+
+    doc.description = description.strip()
+    doc.project_name = (project_name or "").strip()
+    doc.estimated_time = estimated_time or ""
+    doc.remarks = remarks or ""
+    doc.save(ignore_permissions=True)
+    return {"success": True, "name": doc.name}
+
+
+@frappe.whitelist()
+def save_backlog_items(items):
+    """Persist every not-yet-saved Project/Task row from the /task-backlog
+    footer's Project/Task buttons in one batch — same "type several rows,
+    Save once" pattern as add_adhoc_tasks on /daily-checkin, so adding a
+    dozen backlog items doesn't mean a modal round-trip per item.
+
+    items: JSON list of {client_id, description, project_name, estimated_time}.
+    `client_id` is whatever the caller used to identify the row client-side
+    and is echoed back so that row can be marked saved.
+    """
+    items = json.loads(items) if isinstance(items, str) else (items or [])
+    if not items:
+        return {"success": True, "created": []}
+
+    employee = _get_employee()
+    created = []
+    for it in items:
+        description = (it.get("description") or "").strip()
+        if not description:
+            continue
+        doc = frappe.new_doc("Task Backlog Item")
+        doc.employee = employee.name
+        doc.description = description
+        doc.project_name = (it.get("project_name") or "").strip()
+        doc.estimated_time = it.get("estimated_time") or ""
+        doc.insert(ignore_permissions=True)
+        created.append({"client_id": it.get("client_id"), "name": doc.name})
+
+    return {"success": True, "created": created}
+
+
+@frappe.whitelist()
+def delete_backlog_item(name):
+    employee = _get_employee()
+    item_employee = frappe.db.get_value("Task Backlog Item", name, "employee")
+    if item_employee != employee.name:
+        frappe.throw("Not authorised to delete this task.", frappe.PermissionError)
+    frappe.delete_doc("Task Backlog Item", name, ignore_permissions=True)
+    return {"success": True}
+
+
+@frappe.whitelist()
+def push_task_to_backlog(assignee_employee, description, project_name=None, estimated_time=None):
+    """A Team Leader captures a future task for a team member's backlog —
+    the no-date counterpart to assign_task_to_employee. Re-verifies team
+    membership server-side exactly like that function does."""
+    current_emp = _get_employee()
+    team_members = _get_team_members(current_emp.name)
+    if assignee_employee not in team_members:
+        frappe.throw(f"{assignee_employee} is not on your team.", frappe.PermissionError)
+
+    description = (description or "").strip()
+    if not description:
+        frappe.throw("Task description cannot be empty.", frappe.ValidationError)
+
+    doc = frappe.new_doc("Task Backlog Item")
+    doc.employee = assignee_employee
+    doc.description = description
+    doc.project_name = project_name
+    doc.estimated_time = estimated_time or ""
+    doc.assigned_by = current_emp.name
+
+    frappe.flags.in_task_backlog_push = True
+    try:
+        doc.insert(ignore_permissions=True)
+    finally:
+        frappe.flags.in_task_backlog_push = False
+
+    return {
+        "success": True,
+        "name": doc.name,
+        "employee_name": frappe.db.get_value("Employee", assignee_employee, "employee_name"),
+    }
+
+
+@frappe.whitelist()
+def pull_backlog_item_to_today(name):
+    """"Add to today" / drag-onto-Today — turns a backlog item into a real
+    Task Entry on today's Daily Work Log, then removes the backlog row.
+    Only the owning employee can pull their own item (even a Team-Leader-
+    pushed one now lives in *their* backlog). Preserves assigned_by so the
+    "Assigned by {name}" tag still shows once it lands on /daily-checkin."""
+    employee = _get_employee()
+    item = frappe.get_doc("Task Backlog Item", name)
+    if item.employee != employee.name:
+        frappe.throw("Not authorised to pull this task.", frappe.PermissionError)
+
+    date = today()
+    log = _get_or_new_work_log(employee.name, date)
+    row = log.append("tasks", {})
+    row.task_type = "Ad-hoc"
+    row.status = "Pending"
+    row.description = item.description
+    row.project_name = item.project_name
+    # Passed through as raw text — Daily Work Log's own validate()/
+    # _prepare_tasks() parses estimated_time exactly once on save (same
+    # convention as every other ad-hoc/recurring insert in this file).
+    row.estimated_time = item.estimated_time or ""
+    row.remarks = item.remarks or ""
+    row.series_id = frappe.generate_hash(length=32)
+    row.origin_date = date
+    row.assigned_by = item.assigned_by
+    row.sequence = _next_sequence(log) + 1
+
+    _save_work_log(log)
+    frappe.db.commit()
+
+    # Only remove the backlog item once the task has actually landed —
+    # a save failure above leaves the backlog item intact instead of
+    # silently losing the task.
+    frappe.delete_doc("Task Backlog Item", name, ignore_permissions=True)
+    frappe.db.commit()
+
+    return {"success": True, "task_name": row.name, "series_id": row.series_id}
+
+
+@frappe.whitelist()
+def get_today_task_summary():
+    """Lean read-only preview of today's already-committed tasks, for the
+    Task Backlog page's "Today" column. Deliberately lighter than
+    get_page_state — no rollover/shift/checkin side effects, this is just a
+    glance, not the check-in flow itself."""
+    employee = _get_employee()
+    work_log = _get_work_log(employee.name, today())
+    if not work_log:
+        return {"is_checked_in": False, "tasks": []}
+    tasks = [_task_entry_dict(row, today()) for row in work_log.tasks]
+    return {
+        "is_checked_in": bool(work_log.morning_submitted),
+        "tasks": [{"description": t["description"], "status": t["status"],
+                   "project_name": t.get("project_name"), "assigned_by_name": t.get("assigned_by_name")}
+                  for t in tasks],
+    }
+
+
 # ── Additional work self-service (employee-facing CRUD) ────────────────────────
 # Independent of Daily Task Log — never reopens or recalculates a submitted
 # EOD log's net_hours/working_hours. Ownership/validation is enforced by the
@@ -2446,6 +2638,56 @@ def delete_carried_task(name):
     return {"success": True}
 
 
+@frappe.whitelist()
+def move_task_to_backlog(name):
+    """Move an already-existing Task Entry — today's or a carried-forward
+    one — into the backlog. The reverse of pull_backlog_item_to_today, for
+    the case where a task was added for today but turns out not to belong
+    there. Employee can only move their own tasks; same ownership/locked-day
+    guard as delete_carried_task."""
+    employee = _get_employee()
+    parent = frappe.db.get_value("Task Entry", name, "parent")
+    if not parent:
+        frappe.throw("Not authorised to move this task.", frappe.PermissionError)
+
+    work_log = frappe.get_doc("Daily Work Log", parent)
+    if work_log.employee != employee.name:
+        frappe.throw("Not authorised to move this task.", frappe.PermissionError)
+    if work_log.eod_submitted:
+        frappe.throw("Cannot move tasks after checkout is submitted.", frappe.ValidationError)
+
+    row = next((r for r in work_log.tasks if r.name == name), None)
+    if not row:
+        frappe.throw("Not authorised to move this task.", frappe.PermissionError)
+    if row.task_type == "Recurring":
+        frappe.throw("Recurring tasks can't be moved to the backlog — deactivate the template instead.")
+    if row.status == "Done":
+        frappe.throw("Completed tasks can't be moved to the backlog.")
+
+    backlog_doc = frappe.new_doc("Task Backlog Item")
+    backlog_doc.employee = employee.name
+    backlog_doc.description = row.description
+    backlog_doc.project_name = row.project_name
+    backlog_doc.estimated_time = _format_hours(row.estimated_time) if row.estimated_time else ""
+    backlog_doc.remarks = row.remarks
+    backlog_doc.assigned_by = row.assigned_by
+    backlog_doc.insert(ignore_permissions=True)
+
+    # Same lineage cleanup delete_carried_task does — without this, safety
+    # rollover would resurrect this series tomorrow even though it now
+    # lives in the backlog instead of on any Daily Work Log.
+    frappe.db.sql("""
+        UPDATE `tabTask Entry`
+        SET status = 'Rolled Over'
+        WHERE series_id = %s AND status IN ('Pending', 'In Progress')
+    """, (row.series_id,))
+
+    work_log.tasks.remove(row)
+    _save_work_log(work_log)
+    frappe.db.commit()
+    return {"success": True, "backlog_name": backlog_doc.name}
+
+
 @frappe.whitelist(methods=["POST"])
 def upload_task_attachment(task_name):
     """Attach an uploaded file to an existing task. Employee can only attach
@@ -2656,7 +2898,8 @@ def _build_team_data(employees, date):
         raw_tasks = frappe.get_all("Task Entry", filters={
             "parent": ["in", list(parent_to_emp.keys())],
         }, fields=["name", "parent", "description", "status", "project_name",
-                   "task_type", "estimated_time", "actual_time", "origin_date"])
+                   "task_type", "estimated_time", "actual_time", "origin_date",
+                   "assigned_by_name"])
         for t in raw_tasks:
             entry = _task_entry_dict(t, date)
             entry["employee"] = parent_to_emp.get(t.parent)
@@ -2722,6 +2965,56 @@ def _build_team_data(employees, date):
     }
 
 
+def _assign_task(assignee_employee, assigned_by_employee, description, project_name=None, estimated_time=None):
+    """Shared by assign_task_via_agent (Telegram bot) and
+    assign_task_to_employee (Team Dashboard "Assign task"). Appends an
+    Ad-hoc task to the assignee's Daily Work Log for today, stamped with
+    who assigned it so it can show "Assigned by {name}" wherever the
+    employee sees their tasks.
+
+    Saves with ignore_permissions=True rather than going through
+    _save_work_log's normal self-service check — this is someone else's
+    Daily Work Log by design (the assigner isn't its "own employee"), and
+    both callers already do their own explicit authorization (role check +
+    team-membership check, or team-membership check) before ever reaching
+    here, so the generic per-document permission check would only ever
+    incorrectly block a call this function has already vetted.
+    """
+    description = (description or "").strip()
+    if not description:
+        frappe.throw("Task description cannot be empty.", frappe.ValidationError)
+
+    date = today()
+    log = _get_or_new_work_log(assignee_employee, date)
+
+    row = log.append("tasks", {})
+    row.task_type = "Ad-hoc"
+    row.status = "Pending"
+    row.description = description
+    row.project_name = project_name
+    # Raw text passed through as-is — Daily Work Log's own validate()/
+    # _prepare_tasks() parses every row's estimated_time exactly once on
+    # save; pre-parsing here too would double it down to bare minutes
+    # (see the matching comments on the other task_updates/carried
+    # assignments above).
+    row.estimated_time = estimated_time or ""
+    row.series_id = frappe.generate_hash(length=32)
+    row.origin_date = date
+    row.assigned_by = assigned_by_employee
+    row.sequence = _next_sequence(log) + 1
+
+    frappe.flags.in_task_assignment = True
+    try:
+        if log.is_new():
+            log.insert(ignore_permissions=True)
+        else:
+            log.save(ignore_permissions=True)
+    finally:
+        frappe.flags.in_task_assignment = False
+    frappe.db.commit()
+    return log, row
+
+
 @frappe.whitelist()
 def assign_task_via_agent(assignee_employee, description, assigned_by_employee, project_name=None, estimated_time=None):
     """
@@ -2739,30 +3032,7 @@ def assign_task_via_agent(assignee_employee, description, assigned_by_employee, 
     if assignee_employee not in team_members:
         frappe.throw(f"{assignee_employee} is not a direct report of {assigned_by_employee}.", frappe.PermissionError)
 
-    description = (description or "").strip()
-    if not description:
-        frappe.throw("Task description cannot be empty.", frappe.ValidationError)
-
-    date = today()
-    log = _get_or_new_work_log(assignee_employee, date)
-    
-    log.append("tasks", {
-        "task_type": "Ad-hoc",
-        "status": "Pending",
-        "description": description,
-        "project_name": project_name,
-        # Raw text passed through as-is — Daily Work Log's own validate()/
-        # _prepare_tasks() parses every row's estimated_time exactly once on
-        # save; pre-parsing here too would double it down to bare minutes
-        # (see the matching comments on the other task_updates/carried
-        # assignments above).
-        "estimated_time": estimated_time or "",
-        "series_id": frappe.generate_hash(length=32),
-        "origin_date": date,
-        "sequence": _next_sequence(log) + 1
-    })
-    
-    _save_work_log(log)
+    log, row = _assign_task(assignee_employee, assigned_by_employee, description, project_name, estimated_time)
 
     emp_data = frappe.db.get_value(
         "Employee", assignee_employee,
@@ -2775,7 +3045,30 @@ def assign_task_via_agent(assignee_employee, description, assigned_by_employee, 
         "employee": assignee_employee,
         "employee_name": emp_data.get("employee_name") or "",
         "cell_number": emp_data.get("cell_number") or None,
-        "date": date,
+        "date": today(),
+    }
+
+
+@frappe.whitelist()
+def assign_task_to_employee(assignee_employee, description, project_name=None, estimated_time=None):
+    """A Team Leader assigns a task to one of their own team members,
+    directly from the Team Dashboard. Re-verifies server-side that
+    `assignee_employee` is actually on the calling user's team (the same
+    `_get_team_members` check that gates who shows up on their Team
+    Dashboard in the first place) — never trusts the client.
+    """
+    current_emp = _get_employee()
+    team_members = _get_team_members(current_emp.name)
+    if assignee_employee not in team_members:
+        frappe.throw(f"{assignee_employee} is not on your team.", frappe.PermissionError)
+
+    log, row = _assign_task(assignee_employee, current_emp.name, description, project_name, estimated_time)
+
+    return {
+        "success": True,
+        "task_name": row.name,
+        "series_id": row.series_id,
+        "employee_name": frappe.db.get_value("Employee", assignee_employee, "employee_name"),
     }
 
 

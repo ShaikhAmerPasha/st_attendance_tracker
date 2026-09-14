@@ -64,6 +64,15 @@ class DailyWorkLog(Document):
         """Block logging attendance for another employee (BOLA guard)."""
         if frappe.session.user in ("Administrator", "Guest"):
             return
+        # Set only by api._assign_task, for the one legitimate cross-employee
+        # write this guard needs to allow: a Team Leader assigning a task to
+        # a team member. Narrower than granting "Team Lead" a role-wide
+        # bypass here (that would let them edit ANY employee's work log via
+        # Desk, not just their own team's) — _assign_task's callers already
+        # re-verify actual team membership via _get_team_members before this
+        # flag is ever set.
+        if getattr(frappe.flags, "in_task_assignment", False):
+            return
         allowed_roles = {"HR Manager", "System Manager", "ST Task Assignment Agent"}
         if allowed_roles & set(frappe.get_roles(frappe.session.user)):
             return

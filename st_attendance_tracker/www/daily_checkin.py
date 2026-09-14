@@ -190,6 +190,9 @@ def get_context(context):
     context.recurring_count = frappe.db.count(
         "Recurring Task Template", {"employee": employee.name, "is_active": 1}
     )
+    context.backlog_count = frappe.db.count(
+        "Task Backlog Item", {"employee": employee.name}
+    )
     context.current_time = now_datetime().strftime("%H:%M")
     context.current_time_ampm = _to_ampm(now_datetime().strftime("%H:%M:%S"))
     context.is_checked_in = bool(morning_log)
