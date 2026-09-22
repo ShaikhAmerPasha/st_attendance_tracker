@@ -19,3 +19,6 @@ def get_context(context):
     context.no_cache = 1
     context.employee = employee
     context.title = "Recurring Tasks"
+
+    tours_seen = frappe.db.get_value("ST Tour Seen", frappe.session.user, "tours_seen") or ""
+    context.show_tour_recurring_tasks = "recurring_tasks_v1" not in tours_seen.split(",")

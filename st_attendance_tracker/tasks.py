@@ -430,24 +430,54 @@ def _already_sent_today(field_name, date):
 
 
 def _get_expected_employees(date):
-    """Active employees excluding those on approved leave (Leave Application
-    or an Attendance record already marked "On Leave") or holiday today.
-    Employees with the "Management" role never have an Employee record, so
-    they're naturally excluded here too — nothing to check for them."""
+    """Active employees excluding: approved leave (Leave Application or an
+    Attendance record already marked "On Leave"), a Leave Application for
+    today in ANY non-rejected/non-cancelled state — including still-Draft/
+    Open, awaiting approval — holiday today, or a User with the
+    "Management" role (oversight-only; excluded regardless of whether that
+    User also happens to have their own Employee record, so this is a real
+    role check, not just "no Employee record to find")."""
     all_employees = frappe.get_all("Employee",
         filters={"status": "Active"},
-        fields=["name", "employee_name", "department", "holiday_list"],
+        fields=["name", "employee_name", "department", "holiday_list", "user_id"],
     )
-    on_leave = _get_employees_on_leave([e.name for e in all_employees], date)
+    emp_names = [e.name for e in all_employees]
+    on_leave = _get_employees_on_leave(emp_names, date)
+    leave_requested = _get_employees_with_leave_requested(emp_names, date)
+    management_users = set(frappe.get_all(
+        "Has Role", filters={"role": "Management", "parenttype": "User"}, pluck="parent"
+    ))
 
     result = []
     for emp in all_employees:
-        if emp.name in on_leave:
+        if emp.name in on_leave or emp.name in leave_requested:
             continue
         if _is_holiday(emp.holiday_list, date):
             continue
+        if emp.user_id and emp.user_id in management_users:
+            continue
         result.append(emp)
     return result
+
+
+def _get_employees_with_leave_requested(employee_names, date):
+    """Employee names with a Leave Application covering `date` in any state
+    except Rejected/Cancelled — including a still-Draft (docstatus 0) or
+    Open-awaiting-approval request. Deliberately broader than
+    api._get_employees_on_leave (Approved + submitted only, what dashboards
+    use for the "on leave" badge): a pending request is reason enough to
+    stop nagging someone with check-in/checkout reminders or flagging them
+    "missing" in the HR report before HR has even acted on it.
+    """
+    if not employee_names:
+        return set()
+    return set(frappe.get_all("Leave Application", filters={
+        "employee": ["in", employee_names],
+        "from_date": ["<=", date],
+        "to_date": [">=", date],
+        "status": ["not in", ["Rejected", "Cancelled"]],
+        "docstatus": ["!=", 2],
+    }, pluck="employee"))
 
 
 def _is_holiday(holiday_list_name, date):

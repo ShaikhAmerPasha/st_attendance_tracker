@@ -6,6 +6,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 <link rel="stylesheet" href="/assets/st_attendance_tracker/css/whats_new.css"><style>
 :root {
   --primary-h: 243;
@@ -3062,6 +3063,7 @@ body > .container { padding-top: 0 !important; }
     <div class="tnav-r">
       <a href="/docs" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
       <a href="/my-history" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
+      <button type="button" class="tnav-btn" onclick="STTour.start('task_backlog_v1', TASK_BACKLOG_TOUR_STEPS)"><i class="ti ti-map-2" aria-hidden="true"></i>Tour</button>
       <div class="wn-bell-wrap" id="wn-mount"></div>
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
       <div class="profile-dropdown" id="profile-dropdown">
@@ -3176,6 +3178,8 @@ body > .container { padding-top: 0 !important; }
 
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script src="/assets/st_attendance_tracker/js/whats_new.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+<script src="/assets/st_attendance_tracker/js/tour.js"></script>
 <script>
 var ROWS = {};
 var DRAG_NAME = null;
@@ -3427,7 +3431,20 @@ function saveNewBacklogItems(){
   });
 }
 
-frappe.ready(function(){ loadBacklog(); loadToday(); initWhatsNew(); });
+var TASK_BACKLOG_TOUR_STEPS = [
+  { element: '.ph-title', popover: { title: 'Task Backlog', description: 'Capture future work here — it never counts toward today\'s pending tasks until you pull it in.', side: 'bottom' } },
+  { element: '.hstrip', popover: { title: 'Quick stats', description: 'See how many items are waiting, how many are going stale (14+ days old), and how many are already on today\'s list.', side: 'bottom' } },
+  { element: '#bl-list', popover: { title: 'Your backlog', description: 'All backlog items live here, grouped by project.', side: 'top' } },
+  { element: '.app-footer', popover: { title: 'Add items', description: 'Add a project or a task to the backlog anytime from here.', side: 'top' } },
+  { element: '#today-list', popover: { title: 'Pull into today', description: 'Drag any backlog card here to move it onto today\'s checklist.', side: 'left' } }
+];
+
+frappe.ready(function(){
+  loadBacklog(); loadToday(); initWhatsNew();
+  {% if show_tour_task_backlog %}
+  setTimeout(function(){ STTour.start('task_backlog_v1', TASK_BACKLOG_TOUR_STEPS); }, 600);
+  {% endif %}
+});
 
 function toggleProfileDropdown(e) {
   if (e) e.stopPropagation();

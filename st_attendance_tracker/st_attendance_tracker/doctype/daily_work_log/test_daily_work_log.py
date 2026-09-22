@@ -1854,8 +1854,10 @@ class TestManagementRoleRouting(FrappeTestCase):
 # ── SECTION 14 — Leave exclusion (reminders/reports) & Missed Checkin ──────
 #    Checkout report. Regression coverage for: an employee on leave must
 #    never get a checkin/checkout reminder or appear as "missing" — whether
-#    the leave is recorded as a Leave Application OR directly on Attendance
-#    (status "On Leave"), which _get_expected_employees previously ignored.
+#    the leave is recorded as a Leave Application (any non-rejected/
+#    non-cancelled state, including still-Draft) OR directly on Attendance
+#    (status "On Leave") — and a User with the Management role must never
+#    appear here even if they also have their own Employee record.
 
 class TestLeaveExclusionAndMissedReport(FrappeTestCase):
 
@@ -1870,17 +1872,27 @@ class TestLeaveExclusionAndMissedReport(FrappeTestCase):
         )
         cls.emp_user = "qa_leave_emp@test.example.com"
         cls.emp_name = _make_employee("QALeaveEmp", cls.dept, cls.emp_user, ["Employee"])
+
+        # A real employee who *also* holds the Management role — the case
+        # that broke the old "Management users never have an Employee
+        # record" assumption in _get_expected_employees.
+        if not frappe.db.exists("Role", "Management"):
+            frappe.get_doc({"doctype": "Role", "role_name": "Management", "desk_access": 0}).insert(ignore_permissions=True)
+        cls.mgmt_emp_user = "qa_leave_mgmt_emp@test.example.com"
+        cls.mgmt_emp_name = _make_employee("QALeaveMgmtEmp", cls.dept, cls.mgmt_emp_user, ["Employee", "Management"])
+
         frappe.db.commit()
 
     @classmethod
     def tearDownClass(cls):
         frappe.set_user("Administrator")
-        frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
-                       "(SELECT name FROM `tabDaily Work Log` WHERE employee=%s)", (cls.emp_name,))
-        frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee=%s", (cls.emp_name,))
-        frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee=%s", (cls.emp_name,))
-        frappe.db.sql("DELETE FROM `tabEmployee` WHERE name=%s", (cls.emp_name,))
-        frappe.db.sql("DELETE FROM `tabUser` WHERE email=%s", (cls.emp_user,))
+        for emp_name, emp_user in ((cls.emp_name, cls.emp_user), (cls.mgmt_emp_name, cls.mgmt_emp_user)):
+            frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
+                           "(SELECT name FROM `tabDaily Work Log` WHERE employee=%s)", (emp_name,))
+            frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee=%s", (emp_name,))
+            frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee=%s", (emp_name,))
+            frappe.db.sql("DELETE FROM `tabEmployee` WHERE name=%s", (emp_name,))
+            frappe.db.sql("DELETE FROM `tabUser` WHERE email=%s", (emp_user,))
         frappe.db.commit()
 
     def setUp(self):
@@ -1942,10 +1954,75 @@ class TestLeaveExclusionAndMissedReport(FrappeTestCase):
         expected = tasks_module._get_expected_employees(date)
         self.assertIn(self.emp_name, [e.name for e in expected])
 
+    def _make_leave_application(self, date, status, docstatus):
+        leave_type = frappe.db.get_value("Leave Type", {}, "name")
+        leave = frappe.new_doc("Leave Application")
+        leave.employee = self.emp_name
+        leave.leave_type = leave_type
+        leave.from_date = date
+        leave.to_date = date
+        leave.status = status
+        leave.flags.ignore_permissions = True
+        leave.flags.ignore_validate = True
+        leave.flags.ignore_mandatory = True
+        leave.insert(ignore_permissions=True)
+        if docstatus:
+            frappe.db.set_value("Leave Application", leave.name, "docstatus", docstatus)
+        return leave.name
+
+    def test_expected_employees_excludes_draft_leave_application(self):
+        """A still-Draft (never submitted, docstatus 0) leave request for
+        today must already exclude the employee — don't wait for HR to
+        approve it before we stop nagging them."""
+        date = add_days(today(), 14)
+        self._make_leave_application(date, "Open", docstatus=0)
+
+        expected = tasks_module._get_expected_employees(date)
+        self.assertNotIn(self.emp_name, [e.name for e in expected])
+
+    def test_expected_employees_excludes_open_submitted_leave_application(self):
+        """Submitted but not yet approved (status Open, docstatus 1) also
+        excludes — still a pending request, not a rejected/cancelled one."""
+        date = add_days(today(), 15)
+        self._make_leave_application(date, "Open", docstatus=1)
+
+        expected = tasks_module._get_expected_employees(date)
+        self.assertNotIn(self.emp_name, [e.name for e in expected])
+
+    def test_expected_employees_keeps_rejected_leave_application(self):
+        """A Rejected leave request does not excuse the employee — they're
+        still expected to check in/out."""
+        date = add_days(today(), 16)
+        self._make_leave_application(date, "Rejected", docstatus=1)
+
+        expected = tasks_module._get_expected_employees(date)
+        self.assertIn(self.emp_name, [e.name for e in expected])
+
+    def test_expected_employees_excludes_management_role_employee(self):
+        """A real Employee record whose linked User also holds the
+        Management role must be excluded — regression for the old code
+        that only inferred "Management" by the *absence* of an Employee
+        record, which breaks the moment Management is granted to someone
+        who also checks in as a normal employee."""
+        expected = tasks_module._get_expected_employees(today())
+        self.assertNotIn(self.mgmt_emp_name, [e.name for e in expected])
+
     def test_missed_report_excludes_attendance_marked_on_leave(self):
         from st_attendance_tracker.st_attendance_tracker.report.missed_checkin_checkout.missed_checkin_checkout import get_data
         date = add_days(today(), 13)
         self._make_attendance(date, "On Leave")
+
+        rows = get_data(date)
+        self.assertNotIn(self.emp_name, [r["employee"] for r in rows])
+
+    def test_missed_report_excludes_draft_leave_application(self):
+        """The report shares _get_expected_employees with the scheduler
+        jobs — a still-Draft leave request for today must keep the
+        employee off the missing-checkin/checkout report too, not just
+        out of the reminder emails."""
+        from st_attendance_tracker.st_attendance_tracker.report.missed_checkin_checkout.missed_checkin_checkout import get_data
+        date = add_days(today(), 17)
+        self._make_leave_application(date, "Open", docstatus=0)
 
         rows = get_data(date)
         self.assertNotIn(self.emp_name, [r["employee"] for r in rows])

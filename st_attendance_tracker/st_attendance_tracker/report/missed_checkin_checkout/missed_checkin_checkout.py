@@ -31,10 +31,10 @@ def get_columns():
 
 def get_data(date, department=None):
     """One row per employee who is expected to check in/out on `date` (per
-    _get_expected_employees — Active, not on approved leave/Attendance
-    "On Leave", not a holiday) but hasn't checked in and/or hasn't checked
-    out. Employees with the "Management" role never have an Employee
-    record, so they never appear here — nothing to filter for them.
+    _get_expected_employees — Active, not on approved leave/Attendance "On
+    Leave", not on a pending/draft leave request either, not a holiday, and
+    not a User holding the "Management" role) but hasn't checked in and/or
+    hasn't checked out.
     """
     expected = _get_expected_employees(date)
     if department:

@@ -78,6 +78,9 @@ class TestGetCredentialsByTelegramId(FrappeTestCase):
 
     def setUp(self):
         frappe.set_user("Administrator")
+        # Reset the per-telegram_id rate-limit counter so repeated local test
+        # runs within the same window don't spuriously trip the limiter.
+        frappe.cache().delete_value(f"telegram_cred_lookup_count:{self.TELEGRAM_ID}")
 
     # ── (a) Happy path ─────────────────────────────────────────────────────────
 
@@ -125,4 +128,17 @@ class TestGetCredentialsByTelegramId(FrappeTestCase):
         frappe.set_user(self.no_role_user)
 
         with self.assertRaises(frappe.PermissionError):
+            get_credentials_by_telegram_id(telegram_id=self.TELEGRAM_ID)
+
+    # ── (d) Rate limiting ───────────────────────────────────────────────────────
+
+    def test_rate_limit_blocks_excessive_lookups(self):
+        """More than 10 lookups for the same telegram_id within the window
+        raises ValidationError instead of continuing to issue credentials."""
+        frappe.set_user(self.service_user)
+
+        for _ in range(10):
+            get_credentials_by_telegram_id(telegram_id=self.TELEGRAM_ID)
+
+        with self.assertRaises(frappe.ValidationError):
             get_credentials_by_telegram_id(telegram_id=self.TELEGRAM_ID)

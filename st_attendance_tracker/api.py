@@ -3074,6 +3074,14 @@ def assign_task_to_employee(assignee_employee, description, project_name=None, e
 
 # ── Telegram credential lookup ─────────────────────────────────────────────────
 
+# Credential issuance is a high-value target (it mints live API secrets), so
+# lookups per telegram_id are rate-limited beyond normal usage patterns to
+# blunt enumeration/brute-forcing if the calling service account is ever
+# compromised.
+_TELEGRAM_LOOKUP_RATE_LIMIT = 10
+_TELEGRAM_LOOKUP_RATE_WINDOW_SEC = 300
+
+
 @frappe.whitelist()
 def get_credentials_by_telegram_id(telegram_id):
     """Whitelisted for the Hermes lookup service account only. Looks up the
@@ -3083,14 +3091,37 @@ def get_credentials_by_telegram_id(telegram_id):
     No password verification - the telegram_id field itself, set by an
     admin, is the trust anchor here."""
 
+    logger = frappe.logger("st_attendance_tracker.telegram_credential_lookup")
+
     if "Telegram Credential Lookup" not in frappe.get_roles(frappe.session.user):
+        logger.warning(
+            f"Unauthorised credential lookup by {frappe.session.user} "
+            f"for telegram_id={telegram_id}"
+        )
         frappe.throw("Not authorised.", frappe.PermissionError)
+
+    rate_key = f"telegram_cred_lookup_count:{telegram_id}"
+    # expires=True skips process-local memoization so each call re-reads the
+    # live counter from Redis instead of a stale value cached earlier in the
+    # same process/request lifecycle.
+    attempts = frappe.cache().get_value(rate_key, expires=True) or 0
+    if attempts >= _TELEGRAM_LOOKUP_RATE_LIMIT:
+        logger.warning(
+            f"Rate limit hit for telegram_id={telegram_id} "
+            f"caller={frappe.session.user}"
+        )
+        frappe.throw("Too many lookup attempts. Try again later.", frappe.ValidationError)
+    frappe.cache().set_value(rate_key, attempts + 1, expires_in_sec=_TELEGRAM_LOOKUP_RATE_WINDOW_SEC)
 
     employee = frappe.db.get_value(
         "Employee", {"telegram_id": telegram_id, "status": "Active"},
         ["name", "user_id", "employee_name"], as_dict=True,
     )
     if not employee or not employee.user_id:
+        logger.warning(
+            f"No active employee for telegram_id={telegram_id} "
+            f"caller={frappe.session.user}"
+        )
         frappe.throw(f"No active employee linked to Telegram ID {telegram_id}.",
                      frappe.DoesNotExistError)
 
@@ -3107,6 +3138,12 @@ def get_credentials_by_telegram_id(telegram_id):
         api_secret = frappe.utils.password.get_decrypted_password(
             "User", user_doc.name, "api_secret"
         )
+
+    logger.info(
+        f"Issued API credentials for employee={employee.name} "
+        f"user={employee.user_id} via telegram_id={telegram_id} "
+        f"caller={frappe.session.user}"
+    )
 
     return {
         "user": employee.user_id,

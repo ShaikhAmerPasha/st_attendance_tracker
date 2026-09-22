@@ -6,6 +6,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 <link rel="stylesheet" href="/assets/st_attendance_tracker/css/whats_new.css">
 <style>
 :root {
@@ -1011,6 +1012,7 @@ body {
       <a href="/team-leader-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
       <a href="/my-history" class="tnav-btn"><i class="ti ti-history" aria-hidden="true"></i>History</a>
       <a href="/recurring-tasks" class="tnav-btn"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
+      <button type="button" class="tnav-btn" onclick="STTour.start('team_dashboard_v1', TEAM_DASHBOARD_TOUR_STEPS)"><i class="ti ti-map-2" aria-hidden="true"></i>Tour</button>
       <div class="wn-bell-wrap" id="wn-mount"></div>
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
       <div class="profile-dropdown" id="profile-dropdown">
@@ -1338,6 +1340,8 @@ body {
 </style>
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script src="/assets/st_attendance_tracker/js/whats_new.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+<script src="/assets/st_attendance_tracker/js/tour.js"></script>
 <script>
 var ALL_EMPS = [];
 var CUR_FILTER = 'all';
@@ -1564,9 +1568,19 @@ document.querySelectorAll('.fc').forEach(function(chip){
   });
 });
 
+var TEAM_DASHBOARD_TOUR_STEPS = [
+  { element: '.hero', popover: { title: 'Team snapshot', description: "See who's checked in, checkout status, missing, and late — at a glance.", side: 'bottom' } },
+  { element: '.filter-bar', popover: { title: 'Filter', description: 'Narrow the list down by status.', side: 'bottom' } },
+  { element: '#member-list', popover: { title: 'Your team', description: 'Click any card to see that person\'s tasks and time details.', side: 'right' } },
+  { element: '.rp', popover: { title: 'Details', description: "Details for whoever you pick show up here.", side: 'left' } }
+];
+
 frappe.ready(function(){
   loadTeam('{{ date }}');
   initWhatsNew();
+  {% if show_tour_team_dashboard %}
+  setTimeout(function(){ STTour.start('team_dashboard_v1', TEAM_DASHBOARD_TOUR_STEPS); }, 600);
+  {% endif %}
 
   // Live update: a team member just saved a mid-day ad-hoc task
   // (st_attendance_tracker.api.add_adhoc_task). Re-fetch the currently

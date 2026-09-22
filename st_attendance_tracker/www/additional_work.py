@@ -60,3 +60,6 @@ def get_context(context):
     context.completed_count = completed_count
     context.pending_count = pending_count
     context.recent_entries = recent_entries
+
+    tours_seen = frappe.db.get_value("ST Tour Seen", frappe.session.user, "tours_seen") or ""
+    context.show_tour_additional_work = "additional_work_v1" not in tours_seen.split(",")

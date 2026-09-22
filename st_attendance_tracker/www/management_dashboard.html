@@ -6,6 +6,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 <link rel="stylesheet" href="/assets/st_attendance_tracker/css/whats_new.css">
 <style>
 :root {
@@ -1039,6 +1040,7 @@ body {
     <div class="tnav-r">
       <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-user" aria-hidden="true"></i>My check-in</a>
       <a href="/hr-manager-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
+      <button type="button" class="tnav-btn" onclick="STTour.start('management_dashboard_v1', MANAGEMENT_DASHBOARD_TOUR_STEPS)"><i class="ti ti-map-2" aria-hidden="true"></i>Tour</button>
       <div class="wn-bell-wrap" id="wn-mount"></div>
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
       <div class="profile-dropdown" id="profile-dropdown">
@@ -1108,6 +1110,8 @@ body {
 </div>
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script src="/assets/st_attendance_tracker/js/whats_new.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+<script src="/assets/st_attendance_tracker/js/tour.js"></script>
 <script>
 var ALL_DEPTS = [];
 var CUR_FILTER = 'all';
@@ -1172,7 +1176,12 @@ function selectEmp(cell, empName){
   frappe.call({
     method:'st_attendance_tracker.api.get_employee_task_detail',
     args:{ employee_name:empName, date:document.getElementById('sel-date').value },
-    callback:function(r){ if(gen === SEL_EMP_GEN && r.message) renderDetail(r.message); }
+    callback:function(r){ if(gen === SEL_EMP_GEN && r.message) renderDetail(r.message); },
+    error:function(){
+      if(gen !== SEL_EMP_GEN) return;
+      document.getElementById('detail-panel').innerHTML =
+        '<div class="dp-body"><div style="text-align:center;padding:32px;color:#b91c1c;font-size:13px">Could not load employee details. <a href="#" onclick="selectEmp(document.querySelector(\'.ec.sel\'),\''+esc(empName)+'\');return false;">Retry</a></div></div>';
+    }
   });
 }
 
@@ -1323,11 +1332,29 @@ function loadAll(date){
       updateGlobal(r.message.summary);
       if(r.message.rankings) renderLeaderboard(r.message.rankings);
       renderDepts();
+    },
+    error:function(){
+      if(gen !== LOAD_ALL_GEN) return;
+      document.getElementById('dept-list').innerHTML =
+        '<div style="text-align:center;padding:48px;color:#b91c1c;font-size:13px">Could not load dashboard. <a href="#" onclick="loadAll();return false;">Retry</a></div>';
     }
   });
 }
 
-frappe.ready(function(){ loadAll('{{ date }}'); initWhatsNew(); });
+var MANAGEMENT_DASHBOARD_TOUR_STEPS = [
+  { element: '.gstats', popover: { title: 'Company overview', description: 'Total employees, checked in, checkout done, missing, and on leave — for the selected date.', side: 'bottom' } },
+  { element: '.filter-bar', popover: { title: 'Filter departments', description: 'Narrow every department card down by status.', side: 'bottom' } },
+  { element: '#dept-list', popover: { title: 'Departments', description: 'Click any employee card to see their tasks and time for the day.', side: 'right' } },
+  { element: '#detail-panel', popover: { title: 'Employee detail', description: 'Details for whoever you pick show up here.', side: 'left' } },
+  { element: '#leaderboard-body', popover: { title: 'Checkout leaderboard', description: 'Everyone who has submitted checkout for the date, ranked by net hours.', side: 'left' } }
+];
+
+frappe.ready(function(){
+  loadAll('{{ date }}'); initWhatsNew();
+  {% if show_tour_management_dashboard %}
+  setTimeout(function(){ STTour.start('management_dashboard_v1', MANAGEMENT_DASHBOARD_TOUR_STEPS); }, 600);
+  {% endif %}
+});
 
 function toggleProfileDropdown(e) {
   if (e) e.stopPropagation();

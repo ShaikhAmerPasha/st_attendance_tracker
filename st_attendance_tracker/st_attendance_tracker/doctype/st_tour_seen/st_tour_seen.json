@@ -1,0 +1,45 @@
+{
+ "actions": [],
+ "autoname": "field:user",
+ "creation": "2026-09-19 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "tours_seen"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "User",
+   "options": "User",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "tours_seen",
+   "fieldtype": "Small Text",
+   "label": "Tours Seen",
+   "description": "Comma-separated tour ids this user has completed or dismissed."
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-19 00:00:00",
+ "modified_by": "Administrator",
+ "module": "ST Attendance Tracker",
+ "name": "ST Tour Seen",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

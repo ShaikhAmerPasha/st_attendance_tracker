@@ -28,3 +28,6 @@ def get_context(context):
     context.backlog_count = frappe.db.count(
         "Task Backlog Item", {"employee": employee.name}
     )
+
+    tours_seen = frappe.db.get_value("ST Tour Seen", frappe.session.user, "tours_seen") or ""
+    context.show_tour_task_backlog = "task_backlog_v1" not in tours_seen.split(",")

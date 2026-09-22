@@ -6,11 +6,12 @@ app_email = "ameer@standardtouch.com"
 app_license = "MIT"
 
 # ── Desk branding polish (spacing/radius/font only, no color changes) ─────────
-app_include_css = [
-    "/assets/st_attendance_tracker/css/branding.css",
-    "/assets/st_attendance_tracker/css/st_tracker_shared.css",
-]
+app_include_css = ["/assets/st_attendance_tracker/css/branding.css"]
 app_include_js = ["/assets/st_attendance_tracker/js/st_attendance_tracker.js"]
+
+# ── Shared design tokens for the www/ portal pages (app_include_css only
+# reaches Desk, not website pages, so this needs its own include) ────────────
+web_include_css = ["/assets/st_attendance_tracker/css/st_tracker_shared.css"]
 
 # ── Custom fields on Employee doctype ─────────────────────────────────────────
 # Automatically created on bench migrate

@@ -223,6 +223,9 @@ def get_context(context):
     context.is_late_checkout = is_late_checkout
     context.checkout_date_label = date_obj.strftime("%A, %d %B %Y")
 
+    tours_seen = frappe.db.get_value("ST Tour Seen", frappe.session.user, "tours_seen") or ""
+    context.show_tour_daily_checkin = "daily_checkin_v1" not in tours_seen.split(",")
+
 
 def _get_work_location_config(employee, date_obj):
     """
