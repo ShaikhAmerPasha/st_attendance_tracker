@@ -30,6 +30,8 @@ from html import escape as html_escape
 import json
 from frappe.utils import today, now_datetime, getdate, add_days, cint
 from frappe.desk.form.load import get_attachments
+from frappe.rate_limiter import rate_limit
+from frappe.utils.user import get_users_with_role
 from st_attendance_tracker.time_utils import parse_duration_to_hours
 
 
@@ -407,18 +409,15 @@ def clear_attendance_settings_cache(doc=None, method=None):
 # ── HR Manager emails ──────────────────────────────────────────────────────────
 
 def _get_hr_manager_emails():
-    """Fetch emails of all enabled users with HR Manager role."""
-    rows = frappe.db.sql("""
-        SELECT DISTINCT u.email
-        FROM `tabUser` u
-        INNER JOIN `tabHas Role` hr ON hr.parent = u.name
-        WHERE hr.role = 'HR Manager'
-          AND u.enabled = 1
-          AND u.email IS NOT NULL
-          AND u.email != ''
-          AND u.name != 'Administrator'
-    """, as_dict=True)
-    return [r.email for r in rows if r.email]
+    """Emails of all enabled users with HR Manager role (User.name is the
+    email for standard Frappe Users, so get_users_with_role's names double
+    as emails here). Excludes Administrator: this was already this
+    function's own behavior before it was extracted for reuse, and
+    tasks.py's scheduled HR reports now go through it too — previously
+    tasks.py had its own inline copy that didn't exclude Administrator,
+    an inconsistency between the two call sites rather than an
+    intentional difference."""
+    return get_users_with_role("HR Manager")
 
 
 # ── Checkin helper ─────────────────────────────────────────────────────────────
@@ -3077,12 +3076,19 @@ def assign_task_to_employee(assignee_employee, description, project_name=None, e
 # Credential issuance is a high-value target (it mints live API secrets), so
 # lookups per telegram_id are rate-limited beyond normal usage patterns to
 # blunt enumeration/brute-forcing if the calling service account is ever
-# compromised.
-_TELEGRAM_LOOKUP_RATE_LIMIT = 10
-_TELEGRAM_LOOKUP_RATE_WINDOW_SEC = 300
-
-
+# compromised. ip_based=False since the caller is a single shared service
+# account/IP (Hermes) — the identity that matters here is the telegram_id
+# being looked up, not the caller's IP.
+#
+# frappe.rate_limiter.rate_limit only enforces inside a real bound HTTP
+# request (frappe.request); it silently no-ops for a direct/console call
+# with no request context. That's fine as long as Hermes-over-HTTP stays
+# the only caller. If this is ever called from another whitelisted method,
+# a scheduled job, or a console script, re-add explicit throttling that
+# doesn't depend on frappe.request — don't assume the decorator alone
+# still protects it.
 @frappe.whitelist()
+@rate_limit(key="telegram_id", limit=10, seconds=300, ip_based=False)
 def get_credentials_by_telegram_id(telegram_id):
     """Whitelisted for the Hermes lookup service account only. Looks up the
     Employee with this telegram_id, finds their linked User, generates (or
@@ -3099,19 +3105,6 @@ def get_credentials_by_telegram_id(telegram_id):
             f"for telegram_id={telegram_id}"
         )
         frappe.throw("Not authorised.", frappe.PermissionError)
-
-    rate_key = f"telegram_cred_lookup_count:{telegram_id}"
-    # expires=True skips process-local memoization so each call re-reads the
-    # live counter from Redis instead of a stale value cached earlier in the
-    # same process/request lifecycle.
-    attempts = frappe.cache().get_value(rate_key, expires=True) or 0
-    if attempts >= _TELEGRAM_LOOKUP_RATE_LIMIT:
-        logger.warning(
-            f"Rate limit hit for telegram_id={telegram_id} "
-            f"caller={frappe.session.user}"
-        )
-        frappe.throw("Too many lookup attempts. Try again later.", frappe.ValidationError)
-    frappe.cache().set_value(rate_key, attempts + 1, expires_in_sec=_TELEGRAM_LOOKUP_RATE_WINDOW_SEC)
 
     employee = frappe.db.get_value(
         "Employee", {"telegram_id": telegram_id, "status": "Active"},

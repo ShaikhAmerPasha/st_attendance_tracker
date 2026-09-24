@@ -1,9 +1,113 @@
 """Shared duration/time-parsing helpers used by api.py and the Daily Task /
 Daily Task Log controllers, so a correctness fix only needs to happen once."""
 
+import datetime as _datetime
+
+import frappe
 from frappe.utils import date_diff, today
 
 MAX_WORKDAY_MINUTES = 24 * 60
+
+
+def time_to_minutes(t):
+    """Parse a Time-fieldtype value (timedelta, as Frappe hands back DB
+    Time fields) or an 'HH:MM'/'HH:MM am/pm' string into minutes-since-
+    midnight. Unparseable or empty input returns 0 — callers that need to
+    tell "midnight" apart from "couldn't parse" must check the raw value
+    themselves before calling this."""
+    if isinstance(t, _datetime.timedelta):
+        return int(t.total_seconds()) // 60
+    s = str(t or "").strip().lower()
+    if not s:
+        return 0
+
+    is_pm = "pm" in s
+    is_am = "am" in s
+    s = s.replace("pm", "").replace("am", "").strip()
+
+    parts = s.split(":")
+    if len(parts) >= 2:
+        try:
+            h = int(parts[0])
+            m = int(parts[1])
+            if is_pm and h < 12:
+                h += 12
+            elif is_am and h == 12:
+                h = 0
+            return h * 60 + m
+        except Exception:
+            pass
+    return 0
+
+
+def validate_lunch_hours(login_time, logout_time, lunch_from, lunch_to):
+    """Reject reversed, zero-duration, or out-of-shift lunch intervals via
+    frappe.throw. No-op if any of the four values is missing."""
+    if not (login_time and logout_time and lunch_from and lunch_to):
+        return
+
+    login_mins = time_to_minutes(login_time)
+    logout_mins = time_to_minutes(logout_time)
+    lf_mins = time_to_minutes(lunch_from)
+    lt_mins = time_to_minutes(lunch_to)
+
+    # Handle overnight shift: if logout < login, treat shift as wrapping midnight
+    shift_len = (logout_mins - login_mins) if logout_mins >= login_mins \
+        else (logout_mins + 24 * 60 - login_mins)
+
+    # Relative positions of lunch within shift (offset from login)
+    lf_abs = (lf_mins - login_mins) if lf_mins >= login_mins \
+        else (lf_mins + 24 * 60 - login_mins)
+    lt_abs = (lt_mins - login_mins) if lt_mins >= login_mins \
+        else (lt_mins + 24 * 60 - login_mins)
+
+    # If lt is before lf in absolute terms, wrap it to the next day
+    if lt_abs < lf_abs:
+        lt_abs += 24 * 60
+
+    lunch_duration = lt_abs - lf_abs
+
+    if lunch_duration <= 0:
+        frappe.throw(
+            f"Lunch duration cannot be zero or negative. "
+            f"Selected interval: {lunch_from} → {lunch_to}."
+        )
+
+    if lf_abs < 0 or lt_abs > shift_len:
+        frappe.throw(
+            f"Lunch interval ({lunch_from} → {lunch_to}) must fall "
+            f"completely within your shift ({login_time} → {logout_time})."
+        )
+
+
+def calculate_net_minutes(login_time, logout_time, lunch_from, lunch_to, date):
+    """Net worked minutes: (logout - login), midnight-wrap-safe, minus a
+    valid lunch interval if both lunch fields are set. Returns None if
+    login_time/logout_time aren't both set."""
+    if not login_time or not logout_time:
+        return None
+
+    login_mins = time_to_minutes(login_time)
+    logout_mins = time_to_minutes(logout_time)
+    total_mins = logout_mins - login_mins
+    # Handle overnight / night-shift (midnight wrap)
+    if total_mins < 0:
+        total_mins += 24 * 60
+    elif total_mins == 0:
+        total_mins = resolve_zero_diff_minutes(date)
+
+    lunch_mins = 0
+    if lunch_from and lunch_to:
+        lf_mins = time_to_minutes(lunch_from)
+        lt_mins = time_to_minutes(lunch_to)
+        d = lt_mins - lf_mins
+        if d < 0:
+            d += 24 * 60
+        # Only subtract valid lunch (already validated upstream)
+        if 0 < d:
+            lunch_mins = d
+
+    return max(0, total_mins - lunch_mins)
 
 
 def parse_duration_to_hours(s):

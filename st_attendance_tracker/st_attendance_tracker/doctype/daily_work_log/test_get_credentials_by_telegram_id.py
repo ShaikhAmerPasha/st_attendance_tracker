@@ -76,11 +76,14 @@ class TestGetCredentialsByTelegramId(FrappeTestCase):
             frappe.db.sql("DELETE FROM `tabUser` WHERE email=%s", (email,))
         frappe.db.commit()
 
+    RATE_LIMIT_CACHE_KEY = f"rl:st_attendance_tracker.api.get_credentials_by_telegram_id:{TELEGRAM_ID}"
+
     def setUp(self):
         frappe.set_user("Administrator")
-        # Reset the per-telegram_id rate-limit counter so repeated local test
-        # runs within the same window don't spuriously trip the limiter.
-        frappe.cache().delete_value(f"telegram_cred_lookup_count:{self.TELEGRAM_ID}")
+        # Reset frappe.rate_limiter's own counter for this identity so
+        # repeated local test runs within the same window don't spuriously
+        # trip the limiter.
+        frappe.cache.delete_value(frappe.cache.make_key(self.RATE_LIMIT_CACHE_KEY), make_keys=False)
 
     # ── (a) Happy path ─────────────────────────────────────────────────────────
 
@@ -134,11 +137,27 @@ class TestGetCredentialsByTelegramId(FrappeTestCase):
 
     def test_rate_limit_blocks_excessive_lookups(self):
         """More than 10 lookups for the same telegram_id within the window
-        raises ValidationError instead of continuing to issue credentials."""
+        raises RateLimitExceededError instead of continuing to issue
+        credentials. frappe.rate_limiter's @rate_limit decorator only
+        activates inside a real bound HTTP request (it no-ops otherwise —
+        see every other test in this file, which call the function
+        directly with no request bound and are correctly never
+        rate-limited), so this test fakes one."""
+        from werkzeug.test import EnvironBuilder
+        from werkzeug.wrappers import Request
+
         frappe.set_user(self.service_user)
+        frappe.local.form_dict = frappe._dict({
+            "telegram_id": self.TELEGRAM_ID,
+            "cmd": "st_attendance_tracker.api.get_credentials_by_telegram_id",
+        })
+        frappe.local.request = Request(EnvironBuilder(method="POST").get_environ())
+        try:
+            for _ in range(10):
+                get_credentials_by_telegram_id(telegram_id=self.TELEGRAM_ID)
 
-        for _ in range(10):
-            get_credentials_by_telegram_id(telegram_id=self.TELEGRAM_ID)
-
-        with self.assertRaises(frappe.ValidationError):
-            get_credentials_by_telegram_id(telegram_id=self.TELEGRAM_ID)
+            with self.assertRaises(frappe.RateLimitExceededError):
+                get_credentials_by_telegram_id(telegram_id=self.TELEGRAM_ID)
+        finally:
+            frappe.local.request = None
+            frappe.cache.delete_value(frappe.cache.make_key(self.RATE_LIMIT_CACHE_KEY), make_keys=False)

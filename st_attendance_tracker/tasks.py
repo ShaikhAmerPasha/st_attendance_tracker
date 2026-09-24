@@ -13,7 +13,7 @@ from datetime import timedelta
 
 import frappe
 from frappe.utils import today, getdate, now_datetime
-from st_attendance_tracker.api import _to_hhmm, _get_employees_on_leave
+from st_attendance_tracker.api import _to_hhmm, _get_employees_on_leave, _get_hr_manager_emails
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -444,6 +444,11 @@ def _get_expected_employees(date):
     emp_names = [e.name for e in all_employees]
     on_leave = _get_employees_on_leave(emp_names, date)
     leave_requested = _get_employees_with_leave_requested(emp_names, date)
+    # Deliberately not frappe.utils.user.get_users_with_role: that helper
+    # also drops disabled users and Administrator, which would put a
+    # disabled-but-still-Active-Employee Management user back into the
+    # reminder pool. This exemption is a role check only, independent of
+    # the User account's enabled state.
     management_users = set(frappe.get_all(
         "Has Role", filters={"role": "Management", "parenttype": "User"}, pluck="parent"
     ))
@@ -490,21 +495,8 @@ def _is_holiday(holiday_list_name, date):
 
 
 def _send_to_hr_managers(subject, message):
-    """
-    Fetch all enabled users with HR Manager role and send email.
-    Uses SQL to reliably get the recipients.
-    """
-    recipients = frappe.db.sql("""
-        SELECT DISTINCT u.email
-        FROM `tabUser` u
-        INNER JOIN `tabHas Role` hr ON hr.parent = u.name
-        WHERE hr.role = 'HR Manager'
-          AND u.enabled = 1
-          AND u.email IS NOT NULL
-          AND u.email != ''
-    """, as_dict=True)
-
-    emails = [r.email for r in recipients if r.email]
+    """Fetch all enabled users with HR Manager role and send email."""
+    emails = _get_hr_manager_emails()
 
     if not emails:
         frappe.log_error(

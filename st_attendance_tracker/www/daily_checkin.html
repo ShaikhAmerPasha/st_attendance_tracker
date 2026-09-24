@@ -2631,6 +2631,12 @@ body {
   cursor: pointer;
   color: var(--text-muted);
 }
+.attach-wrap.attach-drag {
+  outline: 2px dashed var(--border);
+  outline-offset: 4px;
+  background: #f8fafc;
+  border-radius: var(--radius-sm);
+}
 
 /* Standalone task container and placeholder */
 .standalone-container {
@@ -4614,6 +4620,31 @@ function removeTaskAttachment(fileName, taskName, chipEl) {
     }
   }).catch(function(e){ toast(e.message||'Failed to remove attachment.','err'); });
 }
+// Drag-and-drop file attach: reuses uploadTaskFiles, the same upload path
+// as the click-to-attach input. Global dragover preventDefault is required
+// for drop to fire at all, and doubles as a safety net so an accidental
+// file drop outside a drop zone opens the file in the browser tab instead
+// of navigating away from an in-progress, unsaved check-in.
+document.addEventListener('dragover', function(e){ e.preventDefault(); });
+document.addEventListener('dragenter', function(e){
+  var wrap = e.target.closest && e.target.closest('.attach-wrap');
+  if (wrap) wrap.classList.add('attach-drag');
+});
+document.addEventListener('dragleave', function(e){
+  var wrap = e.target.closest && e.target.closest('.attach-wrap');
+  if (wrap && !wrap.contains(e.relatedTarget)) wrap.classList.remove('attach-drag');
+});
+document.addEventListener('drop', function(e){
+  e.preventDefault();
+  var wrap = e.target.closest && e.target.closest('.attach-wrap');
+  if (!wrap) return;
+  wrap.classList.remove('attach-drag');
+  var files = e.dataTransfer && e.dataTransfer.files;
+  if (!files || !files.length) return;
+  var listEl = wrap.querySelector('.attach-list');
+  var taskName = listEl && listEl.dataset.id ? listEl.dataset.id : null;
+  uploadTaskFiles(files, taskName, listEl);
+});
 function formatTimeAMPM(t) {
   if (!t) return '—';
   if (/AM|PM/i.test(t)) return t;
@@ -4874,6 +4905,40 @@ function closePasteConfirm() {
   _stPendingPaste = null;
 }
 document.addEventListener('paste', _stHandlePaste, true);
+// Clipboard-image paste (e.g. Cmd+V of a macOS screenshot): attaches to
+// whichever task row the focus/click was last in, same upload path as
+// drag-and-drop and the click-to-attach input. Runs in the bubble phase
+// (not capture, unlike _stHandlePaste above) so it never fires ahead of
+// the text-splitting handler; in practice they never both act on the same
+// paste since an image-only clipboard has no text for that one to split.
+function _stHandleImagePaste(e) {
+  var cd = e.clipboardData || window.clipboardData;
+  if (!cd || !cd.items) return;
+  var files = [];
+  for (var i = 0; i < cd.items.length; i++) {
+    var item = cd.items[i];
+    if (item.kind === 'file' && item.type.indexOf('image/') === 0) {
+      var blob = item.getAsFile();
+      if (!blob) continue;
+      var ext = (blob.type.split('/')[1] || 'png').split('+')[0];
+      files.push(new File([blob], 'screenshot-' + Date.now() + '-' + i + '.' + ext, { type: blob.type }));
+    }
+  }
+  if (!files.length) return;
+
+  var rowEl = e.target.closest && e.target.closest('.trow, .stask');
+  var wrap = rowEl && rowEl.querySelector('.attach-wrap');
+  if (!wrap) {
+    toast('Click into a task first, then paste to attach a screenshot.', 'err');
+    return;
+  }
+  e.preventDefault();
+  var listEl = wrap.querySelector('.attach-list');
+  var taskName = listEl && listEl.dataset.id ? listEl.dataset.id : null;
+  toast('Attaching screenshot…', 'ok', 1200);
+  uploadTaskFiles(files, taskName, listEl);
+}
+document.addEventListener('paste', _stHandleImagePaste);
 document.addEventListener('click', function(e){ if (e.target === document.getElementById('paste-confirm-ov')) closePasteConfirm(); });
 function confirmCheckout() {
   document.getElementById('checkout-confirm-ov').style.display = 'flex';

@@ -1,7 +1,7 @@
 import frappe
 from frappe.model.document import Document
 from frappe.utils import now_datetime, get_datetime, time_diff_in_hours
-from st_attendance_tracker.time_utils import resolve_zero_diff_minutes
+from st_attendance_tracker.time_utils import time_to_minutes, validate_lunch_hours, calculate_net_minutes
 
 
 class DailyTaskLog(Document):
@@ -79,32 +79,6 @@ class DailyTaskLog(Document):
                 f"on {self.date} already exists: {existing}"
             )
 
-    def _time_to_mins(self, t):
-        import datetime
-        if isinstance(t, datetime.timedelta):
-            return int(t.total_seconds()) // 60
-        s = str(t or "").strip().lower()
-        if not s:
-            return 0
-        
-        is_pm = "pm" in s
-        is_am = "am" in s
-        s = s.replace("pm", "").replace("am", "").strip()
-        
-        parts = s.split(":")
-        if len(parts) >= 2:
-            try:
-                h = int(parts[0])
-                m = int(parts[1])
-                if is_pm and h < 12:
-                    h += 12
-                elif is_am and h == 12:
-                    h = 0
-                return h * 60 + m
-            except Exception:
-                pass
-        return 0
-
     def _check_late(self):
         if self.log_type != "Morning Check-In" or not self.login_time:
             return
@@ -114,77 +88,24 @@ class DailyTaskLog(Document):
             )
             if not threshold:
                 return
-            login_mins = self._time_to_mins(self.login_time)
-            threshold_mins = self._time_to_mins(threshold)
+            login_mins = time_to_minutes(self.login_time)
+            threshold_mins = time_to_minutes(threshold)
             self.is_late = 1 if login_mins > threshold_mins else 0
         except Exception:
             pass
 
     def _validate_lunch_hours(self):
-        """Reject reversed, zero-duration, or out-of-shift lunch intervals."""
-        if not (self.login_time and self.logout_time and self.lunch_from and self.lunch_to):
-            return
-
-        login_mins  = self._time_to_mins(self.login_time)
-        logout_mins = self._time_to_mins(self.logout_time)
-        lf_mins     = self._time_to_mins(self.lunch_from)
-        lt_mins     = self._time_to_mins(self.lunch_to)
-
-        # Handle overnight shift: if logout < login, treat shift as wrapping midnight
-        shift_len = (logout_mins - login_mins) if logout_mins >= login_mins \
-                    else (logout_mins + 24 * 60 - login_mins)
-
-        # Relative positions of lunch within shift (offset from login)
-        lf_abs = (lf_mins - login_mins) if lf_mins >= login_mins \
-                 else (lf_mins + 24 * 60 - login_mins)
-        lt_abs = (lt_mins - login_mins) if lt_mins >= login_mins \
-                 else (lt_mins + 24 * 60 - login_mins)
-
-        # If lt is before lf in absolute terms, wrap it to the next day
-        if lt_abs < lf_abs:
-            lt_abs += 24 * 60
-
-        lunch_duration = lt_abs - lf_abs
-
-        if lunch_duration <= 0:
-            frappe.throw(
-                f"Lunch duration cannot be zero or negative. "
-                f"Selected interval: {self.lunch_from} \u2192 {self.lunch_to}."
-            )
-
-        if lf_abs < 0 or lt_abs > shift_len:
-            frappe.throw(
-                f"Lunch interval ({self.lunch_from} \u2192 {self.lunch_to}) must fall "
-                f"completely within your shift ({self.login_time} \u2192 {self.logout_time})."
-            )
+        validate_lunch_hours(self.login_time, self.logout_time, self.lunch_from, self.lunch_to)
 
     def _calculate_net_hours(self):
         if not self.login_time or not self.logout_time:
             return
         try:
-            login_mins  = self._time_to_mins(self.login_time)
-            logout_mins = self._time_to_mins(self.logout_time)
-            total_mins  = logout_mins - login_mins
-            # Handle overnight / night-shift (midnight wrap)
-            if total_mins < 0:
-                total_mins += 24 * 60
-            elif total_mins == 0:
-                total_mins = resolve_zero_diff_minutes(self.date)
-
-            lunch_mins = 0
-            if self.lunch_from and self.lunch_to:
-                lf_mins = self._time_to_mins(self.lunch_from)
-                lt_mins = self._time_to_mins(self.lunch_to)
-                d = lt_mins - lf_mins
-                if d < 0:
-                    d += 24 * 60
-                # Only subtract valid lunch (already validated upstream)
-                if 0 < d:
-                    lunch_mins = d
-
-            net_mins = max(0, total_mins - lunch_mins)
+            net_mins = calculate_net_minutes(
+                self.login_time, self.logout_time, self.lunch_from, self.lunch_to, self.date
+            )
             hours = net_mins // 60
-            mins  = net_mins % 60
+            mins = net_mins % 60
             self.net_hours = f"{hours}h {mins}m"
         except Exception:
             frappe.log_error(frappe.get_traceback(), "ST Attendance Tracker — net hours calculation failed")
