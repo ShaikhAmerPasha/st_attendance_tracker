@@ -134,7 +134,15 @@ class DailyWorkLog(Document):
             if not (row.description or "").strip():
                 frappe.throw("Task description cannot be empty.")
             if row.status == "Done" and not row.actual_time:
-                frappe.throw("Time Taken for Task Completion is mandatory for completed tasks.")
+                if getattr(frappe.flags, "in_eod_draft", False):
+                    # Mid-edit autosave — the employee may have flipped the
+                    # status just before typing the time. Downgrade instead
+                    # of hard-failing a background save; submit_eod_log's
+                    # own path never sets this flag, so its "Done requires
+                    # actual_time" guarantee at final checkout is unchanged.
+                    row.status = "In Progress"
+                else:
+                    frappe.throw("Time Taken for Task Completion is mandatory for completed tasks.")
 
     def _check_late(self):
         if not self.login_time:

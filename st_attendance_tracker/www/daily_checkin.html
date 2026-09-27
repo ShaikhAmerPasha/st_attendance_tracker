@@ -3176,18 +3176,18 @@ body > .container { padding-top: 0 !important; }
         <input type="time" id="logout_time" value="{{ current_time }}" readonly>
       </div>
       <label class="ef-lunch-toggle">
-        <input type="checkbox" id="include_lunch" onchange="toggleLunchFields()">
+        <input type="checkbox" id="include_lunch" onchange="toggleLunchFields()" {% if include_lunch %}checked{% endif %}>
         <span>Lunch break</span>
       </label>
-      <div class="ef-lunch-fields hidden" id="lunch-fields-wrap">
+      <div class="ef-lunch-fields {% if not include_lunch %}hidden{% endif %}" id="lunch-fields-wrap">
         <div class="ef-field">
           <span class="ef-field-label">From</span>
-          <input type="time" id="lunch_from" value="14:00" oninput="recalc()">
+          <input type="time" id="lunch_from" value="{{ lunch_from_input or '14:00' }}" oninput="recalc()">
         </div>
         <span class="ef-lunch-sep">→</span>
         <div class="ef-field">
           <span class="ef-field-label">To</span>
-          <input type="time" id="lunch_to" value="15:00" oninput="recalc()">
+          <input type="time" id="lunch_to" value="{{ lunch_to_input or '15:00' }}" oninput="recalc()">
         </div>
       </div>
       <div class="ef-rec" id="rec-lo-banner">
@@ -3379,6 +3379,7 @@ body > .container { padding-top: 0 !important; }
   <button class="fbtn gh" onclick="addAdhoc()" title="Add a task (Shift+T)"><i class="ti ti-plus" aria-hidden="true"></i>Task</button>
   <button class="fbtn grn" id="btn-save-adhoc" onclick="saveAllAdhocTasks()" title="Save newly added tasks now so your Team Leader sees them right away" style="display:none"><i class="ti ti-device-floppy" aria-hidden="true"></i>Save</button>
   <button class="fbtn gh" id="btn-reset-ci" onclick="resetCheckin()" style="background:#fff5f5;color:#dc2626;border:1px solid #fecaca"><i class="ti ti-rotate-clockwise" aria-hidden="true"></i>Reset check-in</button>
+  <span id="autosave-status" style="font-size:11px;color:var(--text-muted);margin-left:auto;align-self:center;white-space:nowrap"></span>
 
 </footer>
 {% else %}
@@ -3712,21 +3713,19 @@ function parseTimeToMinutes(t) {
   return h * 60 + m;
 }
 
-var serverTimeStr = "{{ current_time }}";
-var serverMin = parseTimeToMinutes(serverTimeStr);
-var pageLoadPerformanceMs = performance.now();
-
 function getServerSyncedTime() {
-  if (serverMin === null) {
-    var now = new Date();
-    return String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-  }
-  var elapsedMs = performance.now() - pageLoadPerformanceMs;
-  var elapsedMin = elapsedMs / 60000.0;
-  var syncedMin = Math.floor((serverMin + elapsedMin) % (24 * 60));
-  var h = Math.floor(syncedMin / 60);
-  var m = syncedMin % 60;
-  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  // Read the client's own wall clock directly rather than tracking elapsed
+  // time since page load via performance.now(): that monotonic delta does
+  // not reliably reflect real elapsed time across a laptop sleep / long
+  // OS-level tab suspension, so a tab left inactive for hours recomputed a
+  // still-stale time even on the visibilitychange-triggered refresh below —
+  // only a full reload (which re-fetches the server's current time) showed
+  // correctly. This field is purely informational: submit_eod_log() always
+  // stamps logout_time from the server's own clock at submit time regardless
+  // of what's displayed here, so there's no correctness reason to prefer a
+  // "server-synced" value over the browser's actual current time.
+  var now = new Date();
+  return String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
 }
 
 function updateClockAndLogoutTime() {
@@ -4454,6 +4453,7 @@ async function submitEOD(){
     if(r.message&&r.message.success){
       localStorage.removeItem('st_eod_draft');
       localStorage.removeItem('st_eod_edits');
+      localStorage.removeItem('st_eod_lunch');
       var p=r.message.pending_count, msg='Checked out at '+r.message.logout_time;
       if(p>0) msg+=' · '+p+' task'+(p>1?'s':'')+' carried to tomorrow';
       toast(msg,'ok',2000); setTimeout(function(){ window.location.href=window.location.href.split('?')[0]; },1800);
@@ -5138,6 +5138,19 @@ function saveEodDraft() {
     }
   });
   localStorage.setItem('st_eod_edits', JSON.stringify(existingEdits));
+
+  // Lunch checkbox/from/to live outside any task row, so they aren't covered
+  // by the drafts above — without this, a refresh silently reset them to
+  // unchecked/default times, unlike every other field on this page.
+  var lunchChk = document.getElementById('include_lunch');
+  if (lunchChk) {
+    var lunchFromEl = document.getElementById('lunch_from'), lunchToEl = document.getElementById('lunch_to');
+    localStorage.setItem('st_eod_lunch', JSON.stringify({
+      on: lunchChk.checked,
+      from: lunchFromEl ? lunchFromEl.value : '',
+      to: lunchToEl ? lunchToEl.value : ''
+    }));
+  }
 }
 
 function loadMorningDraft() {
@@ -5290,6 +5303,19 @@ function loadEodDraft() {
       });
     }
 
+    var lunchStr = localStorage.getItem('st_eod_lunch');
+    if (lunchStr) {
+      var lunch = JSON.parse(lunchStr);
+      var lunchChk = document.getElementById('include_lunch');
+      if (lunchChk && lunch.on) {
+        lunchChk.checked = true;
+        toggleLunchFields();
+        var lunchFromEl = document.getElementById('lunch_from'), lunchToEl = document.getElementById('lunch_to');
+        if (lunchFromEl && lunch.from) lunchFromEl.value = lunch.from;
+        if (lunchToEl && lunch.to) lunchToEl.value = lunch.to;
+      }
+    }
+
     recalc(); // restored rows arrive with their own time values already filled in
   } catch(e){}
 }
@@ -5298,7 +5324,7 @@ document.addEventListener('input', function(e) {
   var t = e.target;
   if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') {
     if(document.getElementById('btn-ci')) saveMorningDraft();
-    if(document.getElementById('btn-eod')) saveEodDraft();
+    if(document.getElementById('btn-eod')) { saveEodDraft(); scheduleAutosave(); }
   }
 });
 
@@ -5309,10 +5335,75 @@ document.addEventListener('change', function(e) {
     if (val && /^\d+(\.\d+)?$/.test(val)) {
       t.value = val + 'm';
       if(document.getElementById('btn-ci')) saveMorningDraft();
-      if(document.getElementById('btn-eod')) saveEodDraft();
+      if(document.getElementById('btn-eod')) { saveEodDraft(); scheduleAutosave(); }
     }
   }
 });
+
+// ── Backend autosave of in-progress checkout edits ──────────────────────────
+// Debounced, best-effort periodic save of status/actual_time/remarks/lunch to
+// the server so they survive a refresh AND a switch to another device/browser
+// even before "Check out & submit" — localStorage (saveEodDraft, above) alone
+// only protects the current browser/tab.
+var autosaveTimer = null, autosaveInFlight = false, autosavePending = false;
+
+function scheduleAutosave() {
+  if (!document.getElementById('btn-eod')) return;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(runAutosave, 1500);
+}
+
+async function runAutosave() {
+  if (!document.getElementById('btn-eod')) return;
+  if (autosaveInFlight) { autosavePending = true; return; }
+  autosaveInFlight = true;
+
+  var taskUpdates = [];
+  document.querySelectorAll('.trow[data-id], .stask[data-id]').forEach(function(row) {
+    var sel = row.querySelector('.tsel'), act = row.querySelector('.act-in');
+    var rmkChk = row.querySelector('.remark-chk'), rmkIn = row.querySelector('.remark-in');
+    taskUpdates.push({
+      name: row.dataset.id,
+      status: sel ? sel.value : '',
+      actual_time: act ? act.value : '',
+      remarks: (rmkChk && rmkChk.checked && rmkIn) ? rmkIn.value : ''
+    });
+  });
+
+  var lunchChk = document.getElementById('include_lunch');
+  var lunchOn = lunchChk && lunchChk.checked;
+  var lunchFrom = lunchOn ? (document.getElementById('lunch_from') || {}).value : '';
+  var lunchTo = lunchOn ? (document.getElementById('lunch_to') || {}).value : '';
+
+  var statusEl = document.getElementById('autosave-status');
+  if (statusEl) statusEl.textContent = 'Saving…';
+
+  try {
+    var r = await frappe.call({
+      method: 'st_attendance_tracker.api.autosave_eod_progress',
+      args: { task_updates: JSON.stringify(taskUpdates), lunch_from: lunchFrom, lunch_to: lunchTo }
+    });
+    if (r.message && r.message.success) {
+      // Sync-then-clear: these fields are now durable server-side, so drop
+      // the local-only copy — otherwise a later loadEodDraft() (e.g. after
+      // an unrelated reload) would overlay this now-stale local snapshot
+      // back on top of fresher server-rendered values.
+      localStorage.removeItem('st_eod_edits');
+      localStorage.removeItem('st_eod_lunch');
+      if (statusEl) {
+        var d = new Date(r.message.server_time);
+        var timeStr = isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        statusEl.textContent = 'Saved' + (timeStr ? ' ' + timeStr : '');
+      }
+    }
+  } catch (e) {
+    if (statusEl) statusEl.textContent = "Couldn't save — will retry";
+  } finally {
+    autosaveInFlight = false;
+    if (autosavePending) { autosavePending = false; scheduleAutosave(); }
+  }
+}
+
 loadMorningDraft();
 loadEodDraft();
 

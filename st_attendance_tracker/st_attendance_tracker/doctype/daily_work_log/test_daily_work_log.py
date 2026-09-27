@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from st_attendance_tracker.api import (
     _to_hhmm, _to_ampm,
-    submit_morning_log, submit_eod_log, add_adhoc_tasks,
+    submit_morning_log, submit_eod_log, add_adhoc_tasks, autosave_eod_progress,
     get_page_state, get_management_dashboard, _get_team_leader_emails,
     delete_carried_task, reset_morning_checkin,
     _ensure_recurring_tasks, _rollover_pending_tasks, _get_work_log, _get_next_working_date,
@@ -805,6 +805,171 @@ class TestQACheckinFull(FrappeTestCase):
 
         frappe.set_user("Administrator")
         log1.delete()
+
+    # ── SECTION 5B — Autosave (draft) EOD progress ─────────────────────────────
+
+    def test_5b_1_autosave_persists_without_flipping_eod_submitted(self):
+        """Autosave writes status/actual_time/remarks to the DB but does not
+        submit checkout — eod_submitted stays 0 and the row stays editable."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Autosave task"}]),
+            login_time="09:00", work_location="Office",
+        )
+        task_name = _task_name(self.emp_name, today(), "Autosave task")
+
+        r = autosave_eod_progress(
+            task_updates=json.dumps([{
+                "name": task_name, "status": "In Progress",
+                "actual_time": "45m", "remarks": "still working on it",
+            }]),
+        )
+        self.assertTrue(r.get("success"))
+        self.assertIn("server_time", r)
+
+        work_log = _get_work_log(self.emp_name, today())
+        self.assertFalse(work_log.eod_submitted, "Autosave must not submit checkout")
+        row = next(t for t in work_log.tasks if t.name == task_name)
+        self.assertEqual(row.status, "In Progress")
+        self.assertAlmostEqual(row.actual_time, 0.75)
+        self.assertEqual(row.remarks, "still working on it")
+
+    def test_5b_2_autosave_done_without_actual_time_downgrades_instead_of_throwing(self):
+        """Draft path: flipping a task to Done before typing the time must not
+        hard-fail a background autosave — it downgrades to In Progress."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Mid-edit task"}]),
+            login_time="09:00", work_location="Office",
+        )
+        task_name = _task_name(self.emp_name, today(), "Mid-edit task")
+
+        autosave_eod_progress(
+            task_updates=json.dumps([{"name": task_name, "status": "Done", "actual_time": ""}]),
+        )
+        self.assertEqual(_task_status(self.emp_name, today(), "Mid-edit task"), "In Progress")
+
+    def test_5b_3_final_submit_still_hard_requires_actual_time_for_done(self):
+        """Regression: submit_eod_log's own path never sets in_eod_draft, so
+        its existing hard-required "Done needs actual_time" guarantee at
+        final checkout must be completely unaffected by the autosave flag."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Final submit task"}]),
+            login_time="09:00", work_location="Office",
+        )
+        task_name = _task_name(self.emp_name, today(), "Final submit task")
+        with self.assertRaises(frappe.ValidationError):
+            submit_eod_log(
+                lunch_from="", lunch_to="", logout_time="18:00",
+                task_updates=json.dumps([{"name": task_name, "status": "Done", "actual_time": ""}]),
+                adhoc_tasks="[]",
+            )
+
+    def test_5b_4_autosave_persists_lunch_fields_before_final_submit(self):
+        """Lunch fields reach the DB via autosave, before Check out & submit."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Task"}]),
+            login_time="09:00", work_location="Office",
+        )
+        autosave_eod_progress(lunch_from="13:15", lunch_to="14:00")
+
+        work_log = _get_work_log(self.emp_name, today())
+        self.assertFalse(work_log.eod_submitted)
+        self.assertEqual(str(work_log.lunch_from)[:5], "13:15")
+        self.assertEqual(str(work_log.lunch_to)[:5], "14:00")
+
+    def test_5b_4b_lunch_prefilled_on_page_reload_before_final_submit(self):
+        """Regression: get_context() used to only compute lunch_from/lunch_to
+        display values when eod_submitted was already true, so a value saved
+        by autosave_eod_progress() mid-day (before "Check out & submit") was
+        never redisplayed on a refresh — the pre-checkout lunch inputs always
+        rendered the hardcoded 14:00/15:00 unchecked defaults regardless of
+        what was actually in the DB. Verifies the fix: the checkbox/time
+        inputs are pre-filled from the Daily Work Log's real DB value even
+        while eod_submitted is still 0."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Task"}]),
+            login_time="09:00", work_location="Office",
+        )
+        autosave_eod_progress(lunch_from="13:15", lunch_to="14:00")
+
+        context = frappe._dict()
+        daily_checkin_page.get_context(context)
+        self.assertFalse(context.get("eod_done"))
+        self.assertTrue(context.get("include_lunch"),
+            "Lunch checkbox must be pre-checked once a lunch time is on the DB record")
+        self.assertEqual(context.get("lunch_from_input"), "13:15")
+        self.assertEqual(context.get("lunch_to_input"), "14:00")
+
+    def test_5b_4c_no_lunch_saved_yet_shows_unchecked(self):
+        """The pre-fill fix must not force-check the lunch box before the
+        employee has ever set a lunch time."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Task"}]),
+            login_time="09:00", work_location="Office",
+        )
+        context = frappe._dict()
+        daily_checkin_page.get_context(context)
+        self.assertFalse(context.get("include_lunch"))
+        self.assertEqual(context.get("lunch_from_input"), "")
+        self.assertEqual(context.get("lunch_to_input"), "")
+
+    def test_5b_5_autosave_blocked_after_eod_submitted(self):
+        """Once checked out, autosave must refuse — nothing left to draft."""
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "Task"}]),
+            login_time="09:00", work_location="Office",
+        )
+        submit_eod_log(
+            lunch_from="", lunch_to="", logout_time="18:00",
+            task_updates="[]", adhoc_tasks="[]",
+        )
+        with self.assertRaises(frappe.ValidationError):
+            autosave_eod_progress(task_updates="[]")
+
+    def test_5b_6_autosave_blocked_before_morning_submitted(self):
+        """Nothing to attach a draft to before check-in has happened."""
+        frappe.set_user(self.emp_user)
+        with self.assertRaises(frappe.ValidationError):
+            autosave_eod_progress(task_updates="[]")
+
+    def test_5b_7_autosave_cross_employee_task_rejected(self):
+        """BOLA regression: an employee cannot autosave onto another
+        employee's task row by passing its name. _resolve_task_row only
+        looks up rows on the CALLER's own Daily Work Log, so the other
+        employee's row is simply absent from it — surfaced as the same
+        "stale row, please refresh" ValidationError as test_1_8, not a
+        PermissionError (deliberate: see _resolve_task_row's docstring).
+        Either way, nothing crosses over into the other employee's record."""
+        frappe.set_user("Administrator")
+        other_log = frappe.new_doc("Daily Work Log")
+        other_log.employee = self.hr_name
+        other_log.date = today()
+        other_log.morning_submitted = 1
+        other_log.append("tasks", {"description": "HR task", "status": "Pending", "task_type": "Planned"})
+        other_log.insert(ignore_permissions=True)
+        other_task_name = other_log.tasks[0].name
+
+        frappe.set_user(self.emp_user)
+        submit_morning_log(
+            new_tasks=json.dumps([{"description": "My own task"}]),
+            login_time="09:00", work_location="Office",
+        )
+        with self.assertRaises(frappe.ValidationError):
+            autosave_eod_progress(
+                task_updates=json.dumps([{"name": other_task_name, "status": "Done", "actual_time": "1h"}]),
+            )
+
+        frappe.set_user("Administrator")
+        other_log.reload()
+        self.assertEqual(other_log.tasks[0].status, "Pending",
+            "The other employee's task must be untouched")
+        other_log.delete()
 
     # ── SECTION 6 — Multi-Department Team Leader Notification ─────────────────
     # (unrelated to the schema change — kept as regression coverage)

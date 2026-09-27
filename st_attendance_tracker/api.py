@@ -2268,6 +2268,64 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
 
 
 @frappe.whitelist()
+def autosave_eod_progress(task_updates=None, lunch_from=None, lunch_to=None):
+    """Periodic draft save of in-progress checkout edits (status, actual
+    time, remarks, lunch) so they survive a refresh or a switch to another
+    device even before the employee clicks "Check out & submit". Never
+    flips eod_submitted and never runs any of submit_eod_log's once-per-day
+    finalization side effects (checkin record, rollover, notifications) —
+    this is a draft save, not a submission.
+
+    task_updates: JSON list of {name, status, actual_time, remarks}. Entries
+    with no `name` are skipped — a not-yet-persisted ad-hoc row has nothing
+    to attach to until add_adhoc_tasks()/saveAllAdhocTasks() gives it one.
+    """
+    employee = _get_employee()
+    # Lock employee record to serialize with check-in/checkout processing
+    frappe.db.sql("select name from `tabEmployee` where name = %s for update", (employee.name,))
+
+    date = _resolve_active_checkin_date(employee.name)
+    if not isinstance(date, str):
+        date = frappe.utils.getdate(date).strftime("%Y-%m-%d")
+
+    work_log = _get_or_new_work_log(employee.name, date)
+    if not work_log.morning_submitted:
+        frappe.throw("Please check in before saving progress.")
+    if work_log.eod_submitted:
+        frappe.throw(f"You have already checked out for {date}.")
+
+    updates = json.loads(task_updates) if isinstance(task_updates, str) else (task_updates or [])
+    rows_by_name = {row.name: row for row in work_log.tasks if row.name}
+    for t in updates:
+        name = t.get("name")
+        if not name:
+            continue
+        row = _resolve_task_row(rows_by_name, name, work_log, employee.name, "autosave_eod_progress")
+        status = t.get("status")
+        if status:
+            row.status = status
+        # Raw text passed through as-is, same as submit_eod_log — parsed
+        # exactly once by DailyWorkLog._prepare_tasks() on save.
+        row.actual_time = t.get("actual_time", row.actual_time)
+        row.remarks = t.get("remarks", row.remarks)
+
+    if lunch_from is not None:
+        work_log.lunch_from = lunch_from or ""
+    if lunch_to is not None:
+        work_log.lunch_to = lunch_to or ""
+
+    frappe.flags.in_eod_draft = True
+    try:
+        _save_work_log(work_log)
+    finally:
+        frappe.flags.in_eod_draft = False
+
+    frappe.db.commit()
+
+    return {"success": True, "server_time": now_datetime().isoformat()}
+
+
+@frappe.whitelist()
 def add_adhoc_tasks(tasks):
     """Persist every not-yet-saved mid-day ad-hoc task/project in one batch
     (the single "Save" button in the /daily-checkin footer), instead of

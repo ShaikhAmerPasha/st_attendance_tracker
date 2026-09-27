@@ -60,6 +60,15 @@ def get_context(context):
     morning_log = bool(work_log and work_log.morning_submitted)
     eod_log = bool(work_log and work_log.eod_submitted)
 
+    # Pre-fill the (pre-checkout) lunch checkbox/time inputs from whatever
+    # was last saved on this Daily Work Log — via autosave_eod_progress()
+    # mid-day, or from a prior EOD submission on a reopened late-checkout
+    # day. Computed unconditionally (not gated on eod_submitted) so a
+    # refresh redisplays the real DB value instead of always resetting to
+    # the unchecked/14:00-15:00 defaults.
+    lunch_from_input = _to_hhmm(work_log.lunch_from) if work_log and work_log.lunch_from else ""
+    lunch_to_input = _to_hhmm(work_log.lunch_to) if work_log and work_log.lunch_to else ""
+
     login_time_val  = ""
     net_hours_val   = ""
     logout_time_val = ""
@@ -207,6 +216,9 @@ def get_context(context):
     context.net_hours = net_hours_val
     context.lunch_from = lunch_from_val
     context.lunch_to   = lunch_to_val
+    context.lunch_from_input = lunch_from_input
+    context.lunch_to_input = lunch_to_input
+    context.include_lunch = bool(lunch_from_input)
     context.work_location = work_location_val
     context.is_team_leader = is_team_leader
     context.is_hr_manager = is_hr_manager
