@@ -3007,10 +3007,10 @@ async function submitAdditionalWork(){
     for (var j = 0; j < items.length; j++){
       var it = items[j];
       var r = await frappe.call({
-        method: 'st_attendance_tracker.api.save_additional_work',
-        args: { work_date: date, project_name: it.project_name, hours_spent: it.hours_spent, description: it.description, login_time: login_time, logout_time: logout_time, status: it.status }
+        method: 'frappe.client.insert',
+        args: { doc: { doctype: "Additional Work", work_date: date, project_name: it.project_name, hours_spent: it.hours_spent, description: it.description, login_time: login_time, logout_time: logout_time, status: it.status } }
       });
-      if (!r.message || !r.message.success) throw new Error('Could not save one of the tasks.');
+      if (!r.message || !r.message.name) throw new Error('Could not save one of the tasks.');
     }
     toast('Additional work logged for ' + date + '.', 'ok', 2500);
     document.getElementById('aw-new-area').innerHTML = '';
@@ -3238,7 +3238,7 @@ function loadAWHistory(reset){
 async function deleteAWEntry(name, el){
   if (!confirm('Delete this additional work entry?')) return;
   try {
-    await frappe.call({ method: 'st_attendance_tracker.api.delete_additional_work', args: { name: name } });
+    await frappe.call({ method: 'frappe.client.delete', args: { doctype: "Additional Work", name: name } });
     var card = el.closest('.aw-hist-full');
     if (card) { card.style.transition='all 0.3s'; card.style.opacity='0'; card.style.transform='translateX(20px)'; setTimeout(function(){ card.remove(); }, 300); }
     toast('Entry deleted.', 'ok', 2000);

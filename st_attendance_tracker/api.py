@@ -1674,48 +1674,7 @@ def get_additional_work(page=0):
     return {"entries": rows, "total_hours": total_hours, "has_more": has_more}
 
 
-@frappe.whitelist()
-def save_additional_work(name=None, work_date=None, project_name="", hours_spent="", description="", remarks="", login_time="", logout_time="", status=""):
-    """Create or update (upsert by `name`) a self-service Additional Work entry."""
-    employee = _get_employee()
-    if not (description or "").strip():
-        frappe.throw("Description cannot be empty.")
-    if not work_date:
-        frappe.throw("Work date is required.")
 
-    if name:
-        doc = frappe.get_doc("Additional Work", name)
-        if doc.employee != employee.name:
-            frappe.throw("Not authorised to edit this entry.", frappe.PermissionError)
-    else:
-        doc = frappe.new_doc("Additional Work")
-        doc.employee = employee.name
-
-    doc.work_date = work_date
-    doc.project_name = (project_name or "").strip()
-    # Raw text ("1h 30m") passed through as-is — Additional Work's own
-    # validate() parses hours_spent exactly once on save; pre-parsing here
-    # too would feed it an already-numeric value, which parse_duration_to_hours
-    # treats as bare minutes (its documented convention for unit-less input)
-    # and divides by 60.
-    doc.hours_spent = hours_spent or ""
-    doc.description = description.strip()
-    doc.remarks = (remarks or "").strip()
-    doc.login_time = login_time or ""
-    doc.logout_time = logout_time or ""
-    doc.status = status or "Done"
-    doc.save()
-    return {"success": True, "name": doc.name}
-
-
-@frappe.whitelist()
-def delete_additional_work(name):
-    employee = _get_employee()
-    entry_employee = frappe.db.get_value("Additional Work", name, "employee")
-    if entry_employee != employee.name:
-        frappe.throw("Not authorised to delete this entry.", frappe.PermissionError)
-    frappe.delete_doc("Additional Work", name)
-    return {"success": True}
 
 
 # ── WFH validation ─────────────────────────────────────────────────────────────

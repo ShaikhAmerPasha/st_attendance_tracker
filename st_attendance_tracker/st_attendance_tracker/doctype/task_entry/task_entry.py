@@ -3,7 +3,13 @@ from frappe.model.document import Document
 
 
 class TaskEntry(Document):
-    pass
+    def on_trash(self):
+        if self.series_id:
+            frappe.db.sql("""
+                UPDATE `tabTask Entry`
+                SET status = 'Rolled Over'
+                WHERE series_id = %s AND status IN ('Pending', 'In Progress')
+            """, (self.series_id,))
 
 
 def on_doctype_update():
