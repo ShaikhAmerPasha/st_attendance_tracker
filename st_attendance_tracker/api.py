@@ -2219,26 +2219,11 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     for row, attachment_names in new_rows_with_attachments:
         _reparent_attachments(attachment_names, row.name)
 
-    for series_id in newly_done_series:
-        _cascade_series_done(series_id, date)
-
-    _make_checkin(employee.name, "OUT", logout_time)
-    pending_count = _rollover_pending_tasks(employee.name, date)
     frappe.db.commit()
-
-    frappe.enqueue(
-        _send_eod_notifications,
-        queue="short",
-        enqueue_after_commit=True,
-        employee_name=employee.name,
-        date=date,
-        checkout_action_time=checkout_action_time,
-        is_late_checkout=is_late_checkout,
-    )
 
     return {
         "success":       True,
-        "pending_count": pending_count,
+        "pending_count": 0,
         "net_hours":     net_hours,
         "logout_time":   _to_ampm(logout_time),
     }

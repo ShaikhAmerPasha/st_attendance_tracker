@@ -62,6 +62,38 @@ class DailyWorkLog(Document):
         # doctype's own permissions actually allow employees to do.
         self._check_ownership()
 
+    def on_update(self):
+        if self.eod_submitted and self.get_doc_before_save() and not self.get_doc_before_save().eod_submitted:
+            self._trigger_eod_automation()
+
+    def _trigger_eod_automation(self):
+        from st_attendance_tracker.api import (
+            _cascade_series_done, _make_checkin, _rollover_pending_tasks, _send_eod_notifications
+        )
+        
+        # Cascade done tasks
+        newly_done_series = [row.series_id for row in self.tasks if row.status == "Done" and row.series_id]
+        for series_id in newly_done_series:
+            _cascade_series_done(series_id, self.date)
+            
+        # Check out
+        _make_checkin(self.employee, "OUT", self.logout_time)
+        
+        # Rollover
+        _rollover_pending_tasks(self.employee, self.date)
+        
+        # Notify
+        is_late_checkout = str(self.date) != str(now_datetime().strftime("%Y-%m-%d"))
+        frappe.enqueue(
+            _send_eod_notifications,
+            queue="short",
+            enqueue_after_commit=True,
+            employee_name=self.employee,
+            date=self.date,
+            checkout_action_time=now_datetime(),
+            is_late_checkout=is_late_checkout,
+        )
+
     def _check_ownership(self):
         """Block logging attendance for another employee (BOLA guard)."""
         if frappe.session.user in ("Administrator", "Guest"):
