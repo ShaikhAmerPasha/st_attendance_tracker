@@ -2159,9 +2159,11 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
 
     frappe.db.commit()
 
+    pending_count = sum(1 for r in work_log.tasks if r.status in ("Pending", "In Progress"))
+
     return {
         "success":       True,
-        "pending_count": 0,
+        "pending_count": pending_count,
         "net_hours":     net_hours,
         "logout_time":   _to_ampm(logout_time),
     }
