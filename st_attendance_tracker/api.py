@@ -256,25 +256,26 @@ def _is_series_done(series_id):
 
 def _cascade_series_done(series_id, as_of_date):
     """Mark every past/current copy of a task's lineage Done, and delete every
-    future carried-forward copy that hasn't been touched yet. Replaces the old
-    rolled_over_from ancestor-walk + future-chain delete with two indexed
-    queries instead of walking a chain. See spec Section 4.2."""
+    future carried-forward copy that hasn't been touched yet."""
     if not series_id:
         return
-    frappe.db.sql("""
-        UPDATE `tabTask Entry` te
-        INNER JOIN `tabDaily Work Log` dwl ON dwl.name = te.parent
-        SET te.status = 'Done'
-        WHERE te.series_id = %s AND dwl.date <= %s
-    """, (series_id, as_of_date))
-    future_rows = frappe.db.sql("""
-        SELECT te.name FROM `tabTask Entry` te
-        INNER JOIN `tabDaily Work Log` dwl ON dwl.name = te.parent
-        WHERE te.series_id = %s AND dwl.date > %s
-          AND te.status IN ('Pending', 'In Progress', 'Rolled Over')
-    """, (series_id, as_of_date), as_dict=True)
-    for row in future_rows:
-        frappe.db.delete("Task Entry", {"name": row.name})
+
+    query = (
+        frappe.qb.from_("Task Entry")
+        .inner_join("Daily Work Log").on(frappe.qb.Field("parent") == frappe.qb.Field("name", table="Daily Work Log"))
+        .select(
+            frappe.qb.Field("name", table="Task Entry"),
+            frappe.qb.Field("status", table="Task Entry"),
+            frappe.qb.Field("date", table="Daily Work Log")
+        )
+        .where(frappe.qb.Field("series_id", table="Task Entry") == series_id)
+    ).run(as_dict=True)
+
+    for row in query:
+        if getdate(row.date) <= getdate(as_of_date):
+            frappe.db.set_value("Task Entry", row.name, "status", "Done")
+        elif row.status in ('Pending', 'In Progress', 'Rolled Over'):
+            frappe.db.delete("Task Entry", {"name": row.name})
 
 
 def _is_half_day_leave_today(employee_name, date):
@@ -335,29 +336,8 @@ def _resolve_half_day_session(employee_name, date, raw_value):
 def _get_team_members(employee_name):
     """
     All active employees this person leads — via reports_to OR any Employee
-    Department Assignment row naming them Team Leader. Keeps dashboard
-    visibility aligned with who actually gets notified for that employee
-    (_get_team_leader_emails draws from the same two sources) — previously
-    the dashboard only checked reports_to, so a Team Leader defined solely
-    via the Department Assignment table got emailed about an employee they
-    couldn't actually see on /team-dashboard.
-
-    Results are cached in Redis for 5 minutes to avoid repeating 2-3 DB
-    queries on every call (this function is invoked multiple times per
-    request from _assert_task_visible, get_page_state, get_team_dashboard,
-    and both www/*.py context builders). Team membership changes
-    infrequently — a few minutes of staleness is acceptable for read paths.
+    Department Assignment row naming them Team Leader.
     """
-    cache_key = f"st_att:team_members:{employee_name}"
-    # expires=True: without it, a miss gets memoized as None in frappe.local's
-    # per-request cache, and set_value()'s TTL below never clears that memo —
-    # so a later call in the same request would keep returning the stale
-    # None even after Redis has the real value (see _get_attendance_settings
-    # for the full explanation; same bug, same fix).
-    cached = frappe.cache().get_value(cache_key, expires=True)
-    if cached is not None:
-        return cached
-
     reports_to_names = frappe.get_all("Employee", filters={
         "reports_to": employee_name, "status": "Active",
     }, pluck="name")
@@ -369,9 +349,7 @@ def _get_team_members(employee_name):
         "name": ["in", eda_parents], "status": "Active",
     }, pluck="name") if eda_parents else []
 
-    result = list(set(reports_to_names) | set(eda_names))
-    frappe.cache().set_value(cache_key, result, expires_in_sec=300)
-    return result
+    return list(set(reports_to_names) | set(eda_names))
 
 
 def _is_team_leader(employee_name):
