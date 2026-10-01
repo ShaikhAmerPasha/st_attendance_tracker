@@ -260,15 +260,14 @@ def _cascade_series_done(series_id, as_of_date):
     if not series_id:
         return
 
+    te = frappe.qb.DocType("Task Entry")
+    dwl = frappe.qb.DocType("Daily Work Log")
+
     query = (
-        frappe.qb.from_("Task Entry")
-        .inner_join("Daily Work Log").on(frappe.qb.Field("parent") == frappe.qb.Field("name", table="Daily Work Log"))
-        .select(
-            frappe.qb.Field("name", table="Task Entry"),
-            frappe.qb.Field("status", table="Task Entry"),
-            frappe.qb.Field("date", table="Daily Work Log")
-        )
-        .where(frappe.qb.Field("series_id", table="Task Entry") == series_id)
+        frappe.qb.from_(te)
+        .inner_join(dwl).on(te.parent == dwl.name)
+        .select(te.name, te.status, dwl.date)
+        .where(te.series_id == series_id)
     ).run(as_dict=True)
 
     for row in query:
