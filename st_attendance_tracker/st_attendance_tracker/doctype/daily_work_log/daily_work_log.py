@@ -38,7 +38,6 @@ class DailyWorkLog(Document):
                 frappe.throw("No Employee record linked to your user account.")
 
     def validate(self):
-        self._check_ownership()
         self._check_locked()
         self._validate_no_duplicate()
         self._prepare_tasks()
@@ -57,10 +56,7 @@ class DailyWorkLog(Document):
             self.locked_at = None
 
     def on_trash(self):
-        # validate() is never called on delete — without this, the ownership
-        # guard above is silently bypassed for the one action (delete) the
-        # doctype's own permissions actually allow employees to do.
-        self._check_ownership()
+        pass
 
     def on_update(self):
         if self.eod_submitted and self.get_doc_before_save() and not self.get_doc_before_save().eod_submitted:
@@ -94,30 +90,6 @@ class DailyWorkLog(Document):
             is_late_checkout=is_late_checkout,
         )
 
-    def _check_ownership(self):
-        """Block logging attendance for another employee (BOLA guard)."""
-        if frappe.session.user in ("Administrator", "Guest"):
-            return
-        # Set only by api._assign_task, for the one legitimate cross-employee
-        # write this guard needs to allow: a Team Leader assigning a task to
-        # a team member. Narrower than granting "Team Lead" a role-wide
-        # bypass here (that would let them edit ANY employee's work log via
-        # Desk, not just their own team's) — _assign_task's callers already
-        # re-verify actual team membership via _get_team_members before this
-        # flag is ever set.
-        if getattr(frappe.flags, "in_task_assignment", False):
-            return
-        allowed_roles = {"HR Manager", "System Manager", "ST Task Assignment Agent"}
-        if allowed_roles & set(frappe.get_roles(frappe.session.user)):
-            return
-        current_employee = frappe.db.get_value(
-            "Employee", {"user_id": frappe.session.user}, "name"
-        )
-        if self.employee != current_employee:
-            frappe.throw(
-                "You are not allowed to create or edit another employee's attendance log.",
-                frappe.PermissionError,
-            )
 
     def _check_locked(self):
         """Block edits once End of Day has been submitted (regular employee only)."""

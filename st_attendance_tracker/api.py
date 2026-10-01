@@ -53,28 +53,7 @@ def _get_employee():
     return emp
 
 
-def has_permission_daily_work_log(doc, ptype=None, user=None):
-    """Registered in hooks.py as Daily Work Log's has_permission hook.
 
-    Gates direct document access (Desk, REST, and this module's own
-    doc.insert()/save()/delete() calls) to the doc's own `employee`, not
-    Frappe's built-in `if_owner` (creation-time `owner`) — the DocType's own
-    permission row deliberately has if_owner unset so this hook is the sole
-    per-document gate. `owner` diverges from `employee` whenever a record is
-    created on someone's behalf (e.g. assign_task_via_agent, run by a service
-    account), which under if_owner would lock the real employee out of their
-    own record. HR Manager/System Manager/the task-assignment agent are
-    granted here at the role level; dashboards read via frappe.get_all, which
-    bypasses this hook entirely, so Team Leader visibility is unaffected.
-    """
-    user = user or frappe.session.user
-    if user == "Administrator":
-        return True
-    roles = frappe.get_roles(user)
-    if {"System Manager", "HR Manager", "ST Task Assignment Agent"} & set(roles):
-        return True
-    employee = frappe.db.get_value("Employee", {"user_id": user}, "name")
-    return bool(employee) and doc.employee == employee
 
 
 def _task_owner_employee(task_name):
