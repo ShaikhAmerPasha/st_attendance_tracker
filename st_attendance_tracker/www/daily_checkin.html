@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 <link rel="stylesheet" href="/assets/st_attendance_tracker/css/whats_new.css"><style>
@@ -3039,12 +3039,13 @@ body > .container { padding-top: 0 !important; }
   }
 }
 </style>
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic.css?v=7">
 {% endblock %}
 {% block page_content %}
 <div class="app">
 <nav class="tnav">
   <div class="tnav-con">
-    <span class="tnav-logo">ST Tracker</span>
+    <span class="tnav-logo"><b>Standard</b><i>Touch</i></span>
     <span class="tnav-sep"></span>
     <span class="tnav-bc">{% if eod_done %}Day Complete{% elif is_checked_in %}Working{% else %}Check-In{% endif %}</span>
     <div class="tnav-pb" id="tnav-pb" style="display:flex; align-items:center; gap:12px; margin-left:16px; border-left:1px solid var(--border); padding-left:16px; transition:opacity 0.2s;">
@@ -3062,7 +3063,7 @@ body > .container { padding-top: 0 !important; }
     <div class="tnav-r">
       <span class="tnav-date">{{ date }}</span>
       <a href="/docs" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
-      <a href="/my-history" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
+      <a href="/my-history-classic" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
       <button type="button" class="tnav-btn" onclick="STTour.start('daily_checkin_v1', DAILY_CHECKIN_TOUR_STEPS)"><i class="ti ti-map-2" aria-hidden="true"></i>Tour</button>
       <div class="wn-bell-wrap" id="wn-mount"></div>
       <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
@@ -3091,13 +3092,13 @@ body > .container { padding-top: 0 !important; }
   </div>
   <div class="sb-sec">
     <div class="sb-lbl">Navigation</div>
-    <a href="/daily-checkin" class="sb-link on"><i class="ti ti-check" aria-hidden="true"></i>Today<span class="sb-cnt">{{ total_count }}</span></a>
-    <a href="/my-history" class="sb-link"><i class="ti ti-history" aria-hidden="true"></i>My history</a>
-    <a href="/recurring-tasks" class="sb-link"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring{% if recurring_count %}<span class="sb-cnt">{{ recurring_count }}</span>{% endif %}</a>
-    <a href="/task-backlog" class="sb-link"><i class="ti ti-list-details" aria-hidden="true"></i>Task Backlog{% if backlog_count %}<span class="sb-cnt">{{ backlog_count }}</span>{% endif %}</a>
-    <a href="/additional-work" class="sb-link"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional work</a>
-    {% if is_team_leader %}<a href="/team-dashboard" class="sb-link"><i class="ti ti-users" aria-hidden="true"></i>My team</a>{% endif %}
-    {% if is_hr_manager %}<a href="/management-dashboard" class="sb-link"><i class="ti ti-building" aria-hidden="true"></i>Management Dashboard</a>{% endif %}
+    <a href="/daily-checkin-classic" class="sb-link on"><i class="ti ti-check" aria-hidden="true"></i>Today<span class="sb-cnt">{{ total_count }}</span></a>
+    <a href="/my-history-classic" class="sb-link"><i class="ti ti-history" aria-hidden="true"></i>My history</a>
+    <a href="/recurring-tasks-classic" class="sb-link"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring{% if recurring_count %}<span class="sb-cnt">{{ recurring_count }}</span>{% endif %}</a>
+    <a href="/task-backlog-classic" class="sb-link"><i class="ti ti-list-details" aria-hidden="true"></i>Task Backlog{% if backlog_count %}<span class="sb-cnt">{{ backlog_count }}</span>{% endif %}</a>
+    <a href="/additional-work-classic" class="sb-link"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional work</a>
+    {% if is_team_leader %}<a href="/team-dashboard-classic" class="sb-link"><i class="ti ti-users" aria-hidden="true"></i>My team</a>{% endif %}
+    {% if is_hr_manager %}<a href="/management-dashboard-classic" class="sb-link"><i class="ti ti-building" aria-hidden="true"></i>Management Dashboard</a>{% endif %}
   </div>
 </aside>
 <main class="main">
@@ -3153,9 +3154,9 @@ body > .container { padding-top: 0 !important; }
       <div><div class="dg-l">Working Hours</div><div class="dg-v" style="color:var(--primary)">{{ working_hours }}</div></div>
     </div>
     <div class="done-links">
-      <a href="/my-history" class="dl-btn"><i class="ti ti-history" aria-hidden="true"></i>View history</a>
-      {% if is_team_leader %}<a href="/team-dashboard" class="dl-btn"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
-      {% if is_hr_manager %}<a href="/management-dashboard" class="dl-btn"><i class="ti ti-building" aria-hidden="true"></i>Management Dashboard</a>{% endif %}
+      <a href="/my-history-classic" class="dl-btn"><i class="ti ti-history" aria-hidden="true"></i>View history</a>
+      {% if is_team_leader %}<a href="/team-dashboard-classic" class="dl-btn"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
+      {% if is_hr_manager %}<a href="/management-dashboard-classic" class="dl-btn"><i class="ti ti-building" aria-hidden="true"></i>Management Dashboard</a>{% endif %}
     </div>
   </div>
 </div>
@@ -3550,13 +3551,13 @@ body > .container { padding-top: 0 !important; }
 </div>
 </div>
 <nav class="mob-nav">
-  <a href="/daily-checkin" class="mn-it on"><i class="ti ti-check" aria-hidden="true"></i>Today</a>
-  <a href="/my-history" class="mn-it"><i class="ti ti-history" aria-hidden="true"></i>History</a>
-  <a href="/recurring-tasks" class="mn-it"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
-  <a href="/task-backlog" class="mn-it"><i class="ti ti-list-details" aria-hidden="true"></i>Backlog</a>
-  <a href="/additional-work" class="mn-it"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional Work</a>
-  {% if is_team_leader %}<a href="/team-dashboard" class="mn-it"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
-  {% if is_hr_manager %}<a href="/management-dashboard" class="mn-it"><i class="ti ti-building" aria-hidden="true"></i>Management</a>{% endif %}
+  <a href="/daily-checkin-classic" class="mn-it on"><i class="ti ti-check" aria-hidden="true"></i>Today</a>
+  <a href="/my-history-classic" class="mn-it"><i class="ti ti-history" aria-hidden="true"></i>History</a>
+  <a href="/recurring-tasks-classic" class="mn-it"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
+  <a href="/task-backlog-classic" class="mn-it"><i class="ti ti-list-details" aria-hidden="true"></i>Backlog</a>
+  <a href="/additional-work-classic" class="mn-it"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional Work</a>
+  {% if is_team_leader %}<a href="/team-dashboard-classic" class="mn-it"><i class="ti ti-users" aria-hidden="true"></i>Team</a>{% endif %}
+  {% if is_hr_manager %}<a href="/management-dashboard-classic" class="mn-it"><i class="ti ti-building" aria-hidden="true"></i>Management</a>{% endif %}
 </nav>
 <div class="wfh-ov" id="wfh-ov" style="display:none">
   <div class="wfh-mo">
@@ -5483,7 +5484,7 @@ function buildConciseTable() {
   }
 
   // 1. Recurring/Standalone tasks (outside projects)
-  var standaloneRows = document.querySelectorAll('.body > .standalone-container > .stask, .body > div > .stask:not([data-adhocid]), #adhoc-area > .stask');
+  var standaloneRows = document.querySelectorAll('.body .standalone-container > .stask, .body > div > .stask:not([data-adhocid]), #adhoc-area > .stask');
   if (standaloneRows.length > 0) {
     var sHtml = '';
     standaloneRows.forEach(function(r) { sHtml += buildRowHtml(r); });
@@ -5615,4 +5616,5 @@ try {
 } catch(e) {}
 
 </script>
+<script src="/assets/st_attendance_tracker/js/st_classic.js?v=8" data-new="/daily-checkin"></script>
 {% endblock %}

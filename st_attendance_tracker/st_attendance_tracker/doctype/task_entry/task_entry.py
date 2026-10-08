@@ -3,6 +3,15 @@ from frappe.model.document import Document
 
 
 class TaskEntry(Document):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Frappe back-fills every Time field with nowtime() on new docs (create_new)
+        # and again on insert (_set_defaults). An empty start_time must stay empty:
+        # it means "no calendar position chosen yet". Same fix as Daily Work Log.
+        if self.is_new():
+            self.set("start_time", None)
+        self.dont_update_if_missing = ["start_time"]
+
     def on_trash(self):
         if self.series_id:
             frappe.db.sql("""

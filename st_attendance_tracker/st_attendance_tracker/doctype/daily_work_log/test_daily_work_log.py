@@ -138,6 +138,12 @@ class TestQACheckinFull(FrappeTestCase):
 
         cls.emp_name = _make_employee("QA001", cls.dept, cls.emp_user, ["Employee"])
         cls.hr_name  = _make_employee("QAHR",  cls.dept, cls.hr_user,  ["HR Manager"])
+        # Since the permission hooks were removed, an Employee is kept to their own records by a
+        # User Permission on their Employee (what HRMS creates for every employee user). Without
+        # one the test user could edit anyone's log, which is not how a real site is set up.
+        frappe.db.sql("DELETE FROM `tabUser Permission` WHERE user=%s AND allow='Employee'", (cls.emp_user,))
+        frappe.get_doc({"doctype": "User Permission", "user": cls.emp_user, "allow": "Employee",
+                        "for_value": cls.emp_name, "apply_to_all_doctypes": 1}).insert(ignore_permissions=True)
         frappe.db.commit()
 
     @classmethod
@@ -148,6 +154,7 @@ class TestQACheckinFull(FrappeTestCase):
                        (cls.emp_name, cls.hr_name))
         frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee IN (%s,%s)", (cls.emp_name, cls.hr_name))
         frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee IN (%s,%s)", (cls.emp_name, cls.hr_name))
+        frappe.db.sql("DELETE FROM `tabUser Permission` WHERE user IN (%s,%s)", (cls.emp_user, cls.hr_user))
         frappe.db.sql("DELETE FROM `tabEmployee` WHERE name IN (%s,%s)", (cls.emp_name, cls.hr_name))
         frappe.db.sql("DELETE FROM `tabUser` WHERE email IN (%s,%s)", (cls.emp_user, cls.hr_user))
         frappe.db.commit()
@@ -157,10 +164,12 @@ class TestQACheckinFull(FrappeTestCase):
 
     def tearDown(self):
         frappe.set_user("Administrator")
-        frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
-                       "(SELECT name FROM `tabDaily Work Log` WHERE employee=%s)", (self.emp_name,))
-        frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee=%s", (self.emp_name,))
-        frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee=%s", (self.emp_name,))
+        # Both QA employees: a test that logs for the HR employee must not leak into the next one.
+        for emp in (self.emp_name, self.hr_name):
+            frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
+                           "(SELECT name FROM `tabDaily Work Log` WHERE employee=%s)", (emp,))
+            frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee=%s", (emp,))
+            frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee=%s", (emp,))
         frappe.db.commit()
 
     # ── SECTION 1 — Functional Core ────────────────────────────────────────────
@@ -518,21 +527,34 @@ class TestQACheckinFull(FrappeTestCase):
             get_management_dashboard(today())
 
     def test_3_4_bola_task_edit_blocked(self):
-        """TC-3.4: Employee cannot edit tasks belonging to another employee via API."""
+        """TC-3.4: Employee cannot read or edit another employee's log through the document API.
+
+        Enforced by the User Permission on the employee's own Employee record (set up in
+        setUpClass), which the Employee link on Daily Work Log is checked against.
+        """
         frappe.set_user("Administrator")
         other_log = frappe.new_doc("Daily Work Log")
         other_log.employee = self.hr_name
         other_log.date = today()
         other_log.append("tasks", {"description": "HR task", "status": "Pending", "task_type": "Planned"})
         other_log.insert(ignore_permissions=True)
-
-        frappe.set_user(self.emp_user)
-        other_log.employee_name = "Tampered by emp"
-        with self.assertRaises(frappe.PermissionError):
-            other_log.save()
-
-        frappe.set_user("Administrator")
-        other_log.delete()
+        name = other_log.name
+        try:
+            frappe.set_user(self.emp_user)
+            # Load a fresh copy: the inserted object still carries Administrator's ignore_permissions flag.
+            mine = frappe.get_doc("Daily Work Log", name)
+            with self.assertRaises(frappe.PermissionError):
+                mine.check_permission("read")
+            mine.employee_name = "Tampered by emp"
+            with self.assertRaises(frappe.PermissionError):
+                mine.save()
+            with self.assertRaises(frappe.PermissionError):
+                frappe.delete_doc("Daily Work Log", name)
+        finally:
+            frappe.set_user("Administrator")
+            frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent=%s", (name,))
+            frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE name=%s", (name,))
+            frappe.db.commit()
 
     def test_3_5_delete_carried_task_blocked_after_eod(self):
         """TC-3.5: Cannot delete a task after EOD has been submitted for that date."""
@@ -1564,29 +1586,17 @@ class TestQACheckinFull(FrappeTestCase):
             settings.save(ignore_permissions=True)
             clear_attendance_settings_cache()
 
-    def test_10_4_get_team_members_cache_hit_returns_correct_value_not_none(self):
-        """TC-10.4: Same expires=True cache-miss bug/fix as
-        _get_attendance_settings — a cache hit within the same request must
-        return the real cached value, not a stale negative memo left behind
-        by the initial miss."""
-        cache_key = f"st_att:team_members:{self.emp_name}"
-        frappe.cache().delete_value(cache_key)
-
-        result1 = _get_team_members(self.emp_name)
-
-        original_get_all = frappe.get_all
-
-        def _fail_if_called(*args, **kwargs):
-            self.fail("frappe.get_all was called on what should have been a cache hit")
-
-        frappe.get_all = _fail_if_called
+    def test_10_4_get_team_members_reflects_changes_immediately(self):
+        """TC-10.4: _get_team_members is read live (the old Redis cache was removed in the
+        phase 1 clean-up), so a changed reports_to shows up on the very next call."""
+        before = _get_team_members(self.emp_name)
+        frappe.db.set_value("Employee", self.hr_name, "reports_to", self.emp_name)
         try:
-            result2 = _get_team_members(self.emp_name)
-            self.assertIsNotNone(result2)
-            self.assertEqual(result1, result2)
+            self.assertEqual(sorted(set(_get_team_members(self.emp_name)) - set(before)), [self.hr_name])
         finally:
-            frappe.get_all = original_get_all
-            frappe.cache().delete_value(cache_key)
+            frappe.db.set_value("Employee", self.hr_name, "reports_to", None)
+            frappe.db.commit()
+        self.assertEqual(sorted(_get_team_members(self.emp_name)), sorted(before))
 
     # ── SECTION 11 — Mid-day ad-hoc task save (add_adhoc_tasks) ────────────────
     # A single "Save" button in the /daily-checkin footer persists every
@@ -2127,12 +2137,14 @@ class TestLeaveExclusionAndMissedReport(FrappeTestCase):
         leave.from_date = date
         leave.to_date = date
         leave.status = status
-        leave.flags.ignore_permissions = True
-        leave.flags.ignore_validate = True
-        leave.flags.ignore_mandatory = True
-        leave.insert(ignore_permissions=True)
-        if docstatus:
-            frappe.db.set_value("Leave Application", leave.name, "docstatus", docstatus)
+        leave.total_leave_days = 1
+        leave.docstatus = docstatus
+        # Write the row directly. A normal insert fires on_update, and this site has a Server Script
+        # (auto_approve_one_day_leave) that submits one-day leave, which HRMS then rejects because
+        # validate() was skipped (total_leave_days is None). The tests only need the row to exist.
+        leave.name = frappe.generate_hash(length=10)
+        leave.set_user_and_timestamp()
+        leave.db_insert()
         return leave.name
 
     def test_expected_employees_excludes_draft_leave_application(self):
@@ -2226,3 +2238,10 @@ class TestLeaveExclusionAndMissedReport(FrappeTestCase):
         date = add_days(today(), 16)
         rows = get_data(date, department="Some Nonexistent Department - XX")
         self.assertEqual(rows, [])
+
+
+def tearDownModule():
+    # HRMS creates a User Permission for every Employee user, and these tests delete their employees
+    # with raw SQL, so the permissions would pile up in the site database run after run.
+    frappe.db.sql("DELETE FROM `tabUser Permission` WHERE user LIKE %s", ("%@test.example.com",))
+    frappe.db.commit()

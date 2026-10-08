@@ -27,6 +27,9 @@ doc_events = {
     "ST Attendance Settings": {
         "on_update": "st_attendance_tracker.api.clear_attendance_settings_cache",
     },
+    "Employee Checkin": {
+        "after_insert": "st_attendance_tracker.api.notify_external_checkin",
+    },
 }
 
 
@@ -47,11 +50,19 @@ scheduler_events = {
 
 # ── Web routes ─────────────────────────────────────────────────────────────────
 website_route_rules = [
-    {"from_route": "/daily-checkin",        "to_route": "daily_checkin"},
+    {"from_route": "/daily-checkin",        "to_route": "checkin_calendar"},
+    {"from_route": "/daily-checkin-classic", "to_route": "daily_checkin"},
     {"from_route": "/team-dashboard",       "to_route": "team_dashboard"},
     {"from_route": "/management-dashboard", "to_route": "management_dashboard"},
     {"from_route": "/my-history",           "to_route": "my_history"},
     {"from_route": "/recurring-tasks",      "to_route": "recurring_tasks"},
     {"from_route": "/additional-work",      "to_route": "additional_work"},
     {"from_route": "/task-backlog",         "to_route": "task_backlog"},
+    # Original layouts, branded; every page has a classic and a new design.
+    {"from_route": "/my-history-classic",           "to_route": "my_history_classic"},
+    {"from_route": "/recurring-tasks-classic",      "to_route": "recurring_tasks_classic"},
+    {"from_route": "/additional-work-classic",      "to_route": "additional_work_classic"},
+    {"from_route": "/task-backlog-classic",         "to_route": "task_backlog_classic"},
+    {"from_route": "/team-dashboard-classic",       "to_route": "team_dashboard_classic"},
+    {"from_route": "/management-dashboard-classic", "to_route": "management_dashboard_classic"},
 ]

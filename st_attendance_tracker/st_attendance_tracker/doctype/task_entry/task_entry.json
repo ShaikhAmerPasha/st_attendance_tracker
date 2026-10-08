@@ -20,6 +20,7 @@
   "section_break_time",
   "estimated_time",
   "actual_time",
+  "start_time",
   "sequence"
  ],
  "fields": [
@@ -120,6 +121,12 @@
    "fieldtype": "Float",
    "label": "Time Taken for Task Completion",
    "description": "e.g. 2 hrs, 30 mins"
+  },
+  {
+   "fieldname": "start_time",
+   "fieldtype": "Time",
+   "label": "Scheduled Start",
+   "description": "Calendar position on the day; empty = laid out automatically"
   },
   {
    "default": "0",

@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 <link rel="stylesheet" href="/assets/st_attendance_tracker/css/whats_new.css">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
 <style>
 :root {
   --primary-h: 243;
@@ -450,7 +451,7 @@ body {
   right: -40px;
   width: 200px;
   height: 200px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(237, 29, 36, 0.08) 0%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -2485,7 +2486,7 @@ body {
 }
 .tb-icon.blue { background: #eff6ff; color: #3b82f6; }
 .tb-icon.green { background: #ecfdf5; color: #10b981; }
-.tb-icon.purple { background: #faf5ff; color: #a855f7; }
+.tb-icon.purple { background: #faf5ff; color: #ED1D24; }
 .tb-icon.red { background: #fef2f2; color: #ef4444; }
 .tb-icon.gray { background: #f8fafc; color: #64748b; }
 .tb-content {
@@ -2752,52 +2753,44 @@ body {
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 </style>
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_brand.css?v=14">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_pages.css?v=10">
 {% endblock %}
 {% block page_content %}
-<div class="app">
-<nav class="tnav">
-  <div class="tnav-con">
-    <span class="tnav-logo">ST Tracker</span>
-    <span class="tnav-sep"></span>
-    <span class="tnav-bc">Additional Work</span>
-    <div class="tnav-r">
-      <span class="tnav-date">{{ date }}</span>
-      <a href="/my-history" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
-      <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-check" aria-hidden="true"></i>My check-in</a>
-      <button type="button" class="tnav-btn" onclick="STTour.start('additional_work_v1', ADDITIONAL_WORK_TOUR_STEPS)"><i class="ti ti-map-2" aria-hidden="true"></i>Tour</button>
-      <div class="wn-bell-wrap" id="wn-mount"></div>
-      <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
-      <div class="profile-dropdown" id="profile-dropdown">
-        <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
-        <a href="/app" class="pd-item"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Switch to Desk</a>
-        <a href="/?cmd=web_logout" class="pd-item"><i class="ti ti-logout" aria-hidden="true"></i>Logout</a>
-      </div>
-    </div>
-  </div>
-</nav>
-<div id="wn-banner-mount"></div>
+{% from "st_attendance_tracker/templates/macros/st_shell.html" import shell %}
+{% call shell(st_shell, "Additional Work", "STTour.start('additional_work_v1', ADDITIONAL_WORK_TOUR_STEPS)") %}
+<section class="pg-kpis" aria-label="Summary">
+  <div class="pg-kpi"><small>Hours this week</small><b id="sum-week">{{ week_hours }}h</b></div>
+  <div class="pg-kpi"><small>Hours this month</small><b id="sum-month">{{ month_hours }}h</b></div>
+  <div class="pg-kpi"><small>Entries</small><b id="sum-total">{{ total_entries }}</b></div>
+  <div class="pg-kpi"><small>Completed</small><b id="sum-done">{{ completed_count }}</b></div>
+  <div class="pg-kpi"><small>Pending / in progress</small><b id="sum-pend">{{ pending_count }}</b></div>
+</section>
 <div class="cols">
-<aside class="sidebar">
-  <div class="sb-top">
-    <div class="sb-card" style="align-items: flex-start;">
-      <div class="sb-av" style="margin-top: 2px;">{{ employee.employee_name[:2].upper() }}</div>
-      <div style="flex: 1; min-width: 0;">
-        <div class="sb-name" style="word-break: break-word; font-size: 13px; font-weight: 700; color: var(--text-main); line-height: 1.35;">{{ employee.employee_name }}</div>
-        <div class="sb-dept" style="word-break: break-word; font-size: 11px; color: var(--text-muted); margin-top: 2px; margin-bottom: 8px;">{{ employee.department or 'No department' }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="sb-sec">
-    <div class="sb-lbl">Navigation</div>
-    <a href="/daily-checkin" class="sb-link"><i class="ti ti-check" aria-hidden="true"></i>Today</a>
-    <a href="/my-history" class="sb-link"><i class="ti ti-history" aria-hidden="true"></i>My history</a>
-    <a href="/recurring-tasks" class="sb-link"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
-    <a href="/task-backlog" class="sb-link"><i class="ti ti-list-details" aria-hidden="true"></i>Task Backlog</a>
-    <a href="/additional-work" class="sb-link on"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional work</a>
-  </div>
-</aside>
 <main class="main">
 <div class="body">
+  <div class="pg-modebar" role="group" aria-label="Entry type">
+    <div class="st-seg">
+      <button type="button" data-aw-mode="single" aria-pressed="true">Single entry</button>
+      <button type="button" data-aw-mode="multi" aria-pressed="false">Several tasks</button>
+    </div>
+  </div>
+  <form class="pg-card" id="ne-form" novalidate>
+    <h3 class="pg-card-h">Log additional work</h3>
+    <div class="pg-g4">
+      <label class="pg-f">Date<input id="ne-date" type="date" required max="{{ date }}" value="{{ date }}"></label>
+      <label class="pg-f">Login time<input id="ne-in" type="time" required></label>
+      <label class="pg-f">Logout time<input id="ne-out" type="time" required></label>
+      <label class="pg-f">Hours spent<input id="ne-hrs" readonly aria-live="polite" value="-"></label>
+      <label class="pg-f">Project<input id="ne-proj" placeholder="e.g. Hotel PMS"></label>
+      <label class="pg-f">Status<select id="ne-status"><option>Pending</option><option>In Progress</option><option selected>Done</option></select></label>
+      <label class="pg-f pg-full">Task description<input id="ne-desc" required placeholder="What did you work on?"></label>
+      <label class="pg-f pg-full">Remarks<input id="ne-rem" placeholder="Optional"></label>
+    </div>
+    <div class="pg-ctx" id="ne-ctx" aria-live="polite"></div>
+    <div class="pg-actions"><p id="ne-err" class="pg-err" role="alert"></p><button class="pg-btn primary" type="submit" id="ne-submit">Submit entry</button></div>
+  </form>
+  <div id="aw-multi" hidden>
   <div class="wl-wrap" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 12px; background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm);">
     <div>
       <label class="wl-lbl" style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;"><i class="ti ti-calendar" aria-hidden="true"></i>Work date *</label>
@@ -2824,11 +2817,13 @@ body {
     </div>
   </div>
   <div id="aw-new-area"></div>
+  </div>
 
   <!-- ── HISTORY SECTION ── -->
   <div class="tbar" style="margin-top:28px;">
     <span class="tbar-t"><i class="ti ti-history" aria-hidden="true"></i>History</span>
   </div>
+  <div class="aw-table-head" aria-hidden="true"><span>Date</span><span>Login – logout</span><span>Hours</span><span>Project</span><span>Task</span><span>Status</span><span></span></div>
   <div id="aw-history-area">
     <div id="aw-hist-spinner" style="text-align:center;padding:32px;color:var(--text-light);font-size:13px;">
       <i class="ti ti-loader" style="font-size:20px;animation:spin .7s linear infinite" aria-hidden="true"></i><br><br>Loading history…
@@ -2837,27 +2832,14 @@ body {
   <button class="btn" id="aw-load-more" style="display:none;width:100%;justify-content:center;margin-top:8px;" onclick="loadAWHistory()"><i class="ti ti-arrow-down" aria-hidden="true"></i>Load more</button>
   <div style="height:20px"></div>
 </div>
-<footer class="app-footer">
+<footer class="app-footer" id="aw-multi-foot" hidden>
   <button class="fbtn primary" id="btn-aw-submit" onclick="submitAdditionalWork()"><i class="ti ti-device-floppy" aria-hidden="true"></i>Submit additional work</button>
   <button class="fbtn gh" onclick="addAWPG()" title="Add a project (Shift+P)"><i class="ti ti-folder-plus" aria-hidden="true"></i>Project</button>
   <button class="fbtn gh" onclick="addAWTask()" title="Add a task (Shift+T)"><i class="ti ti-plus" aria-hidden="true"></i>Task</button>
   <span class="fhint" id="aw-fhint">0 tasks</span>
 </footer>
 </main>
-<aside class="sidebar-r rp" id="aw-sidebar">
-  <div class="rp-sec">
-    <div class="rp-t"><i class="ti ti-chart-bar" aria-hidden="true"></i>Summary</div>
-    <div class="sg">
-      <div class="sc"><div class="sc-n b" id="sum-week">{{ week_hours }}h</div><div class="sc-l">This week</div></div>
-      <div class="sc"><div class="sc-n g" id="sum-month">{{ month_hours }}h</div><div class="sc-l">This month</div></div>
-      <div class="sc"><div class="sc-n" style="color:var(--success)" id="sum-done">{{ completed_count }}</div><div class="sc-l">Completed</div></div>
-      <div class="sc"><div class="sc-n" style="color:var(--warning)" id="sum-pend">{{ pending_count }}</div><div class="sc-l">Pending</div></div>
-    </div>
-    <div style="background:hsl(210,40%,98%);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 14px;">
-      <div style="font-size:10px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Total entries</div>
-      <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:20px;font-weight:800;color:var(--primary);" id="sum-total">{{ total_entries }}</div>
-    </div>
-  </div>
+<aside class="sidebar-r rp" id="aw-sidebar" data-st-collapsible="summary">
   <div class="rp-sec" style="border-bottom:none;flex:1;overflow-y:auto;">
     <div class="rp-t"><i class="ti ti-history" aria-hidden="true"></i>Recent entries</div>
     <div id="rp-history" style="display:flex;flex-direction:column;gap:8px;">
@@ -2871,7 +2853,7 @@ body {
         <div class="aw-hist-desc">{{ e.description[:80] }}{% if e.description|length > 80 %}…{% endif %}</div>
         <div class="aw-hist-meta">
           {% if e.project_name %}<span><i class="ti ti-folder" aria-hidden="true"></i>{{ e.project_name }}</span>{% endif %}
-          <span><i class="ti ti-clock" aria-hidden="true"></i>{{ e.hours_spent or 0 }}h</span>
+          <span><i class="ti ti-clock" aria-hidden="true"></i>{{ (e.hours_spent or 0)|round(2) }}h</span>
         </div>
       </div>
       {% endfor %}
@@ -2882,8 +2864,9 @@ body {
   </div>
 </aside>
 </div>
-</div>
+{% endcall %}
 
+<script src="/assets/st_attendance_tracker/js/st_shell.js?v=10"></script>
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script src="/assets/st_attendance_tracker/js/whats_new.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
@@ -2965,6 +2948,128 @@ function updAWCount(){
   saveAWDraft();
 }
 
+/* ── Single entry form (default view) ── */
+function neMinutes(){
+  var a = document.getElementById('ne-in').value, b = document.getElementById('ne-out').value;
+  if (!a || !b) return 0;
+  var p = a.split(':'), q = b.split(':');
+  return (+q[0] * 60 + +q[1]) - (+p[0] * 60 + +p[1]);
+}
+function neHoursText(m){ var h = Math.floor(m / 60), mm = m % 60; return h && mm ? h + 'h ' + mm + 'm' : h ? h + 'h' : mm + 'm'; }
+var NE_CTX = null;
+function neMin(t){ var p = String(t).split(':'); return (+p[0]) * 60 + (+p[1] || 0); }
+function neFm(t){ var m = neMin(t); return ((Math.floor(m / 60) % 12) || 12) + ':' + String(m % 60).padStart(2, '0') + ' ' + (Math.floor(m / 60) < 12 ? 'AM' : 'PM'); }
+
+// What this day looks like (check-in window, other extra work) and where the typed time falls.
+function neRenderContext(){
+  var box = document.getElementById('ne-ctx'), submit = document.getElementById('ne-submit');
+  if (!NE_CTX){ box.innerHTML = ''; submit.disabled = false; return; }
+  var log = NE_CTX.log, lines = [], blocked = false;
+  if (NE_CTX.can_log === false){
+    blocked = true;
+    lines.push('<div class="pg-ctx-row err"><i class="ti ti-lock" aria-hidden="true"></i>' + esc(NE_CTX.blocked_message || 'Additional work can be logged after you check out for that day, or on a day you are on leave.') + '</div>');
+  } else if (NE_CTX.can_log_reason === 'on_leave'){
+    lines.push('<div class="pg-ctx-row ok"><i class="ti ti-beach" aria-hidden="true"></i>You are on leave this day, so extra work can be logged.</div>');
+  }
+  var a = document.getElementById('ne-in').value, b = document.getElementById('ne-out').value;
+  var winStart = null, winEnd = null;
+  if (log && log.morning_submitted && log.login_time){
+    winStart = neMin(log.login_time);
+    // Not checked out yet: the working window is still open, so anything after check-in counts as inside it.
+    winEnd = log.eod_submitted && log.logout_time ? neMin(log.logout_time) : 24 * 60;
+    lines.push('<div class="pg-ctx-row"><i class="ti ti-clock-check" aria-hidden="true"></i>Checked in ' + neFm(log.login_time) + (log.eod_submitted && log.logout_time ? ', checked out ' + neFm(log.logout_time) : ', not checked out yet') + '.</div>');
+  } else {
+    lines.push('<div class="pg-ctx-row"><i class="ti ti-clock-off" aria-hidden="true"></i>No check-in on this day.</div>');
+  }
+  if (a && b && neMin(b) > neMin(a)){
+    var s0 = neMin(a), e0 = neMin(b);
+    if (winStart !== null && s0 < winEnd && e0 > winStart){
+      lines.push('<div class="pg-ctx-row warn"><i class="ti ti-alert-triangle" aria-hidden="true"></i>This falls inside your working hours. If it is already part of a task, it is counted twice. Log it only if it was extra work.</div>');
+    } else {
+      lines.push('<div class="pg-ctx-row ok"><i class="ti ti-circle-check" aria-hidden="true"></i>Extra hours: ' + (winStart === null ? 'no check-in that day.' : (s0 >= winEnd ? 'after check-out.' : 'before check-in.')) + '</div>');
+    }
+    (NE_CTX.entries || []).forEach(function(en){
+      if (!en.login_time || !en.logout_time) return;
+      var o0 = neMin(en.login_time), o1 = neMin(en.logout_time);
+      if (o1 > o0 && !(o0 === s0 && o1 === e0) && s0 < o1 && e0 > o0){
+        blocked = true;
+        lines.push('<div class="pg-ctx-row err"><i class="ti ti-ban" aria-hidden="true"></i>Overlaps your entry "' + esc(en.description || '') + '" (' + neFm(en.login_time) + ' – ' + neFm(en.logout_time) + '). Change the time.</div>');
+      }
+    });
+  }
+  if ((NE_CTX.entries || []).length){
+    lines.push('<div class="pg-ctx-row"><i class="ti ti-list" aria-hidden="true"></i>Already logged: ' + NE_CTX.entries.map(function(en){ return esc(en.description || '') + ' (' + (en.login_time ? neFm(en.login_time) : '') + ' – ' + (en.logout_time ? neFm(en.logout_time) : '') + ')'; }).join('; ') + '</div>');
+  }
+  box.innerHTML = lines.join('');
+  submit.disabled = blocked;
+}
+function neLoadContext(){
+  var d = document.getElementById('ne-date').value;
+  if (!d){ NE_CTX = null; neRenderContext(); return; }
+  frappe.call({
+    method: 'st_attendance_tracker.calendar_api.get_day_context', args: { date: d }, silent: true,
+    callback: function(r){ if (document.getElementById('ne-date').value === d){ NE_CTX = r.message; neRenderContext(); } },
+    error: function(){ NE_CTX = null; neRenderContext(); }
+  });
+}
+function neCalc(){
+  var m = neMinutes(), out = document.getElementById('ne-out');
+  document.getElementById('ne-hrs').value = m > 0 ? neHoursText(m) : '-';
+  out.setCustomValidity(document.getElementById('ne-in').value && out.value && m <= 0 ? 'Logout time must be after login time' : '');
+  neRenderContext();
+}
+async function submitSingleEntry(ev){
+  ev.preventDefault();
+  var err = document.getElementById('ne-err'); err.textContent = '';
+  var date = document.getElementById('ne-date').value, desc = document.getElementById('ne-desc').value.trim(), m = neMinutes();
+  if (!date || !document.getElementById('ne-in').value || !document.getElementById('ne-out').value || !desc){ err.textContent = 'Fill in date, login and logout time and the task description.'; return; }
+  if (m <= 0){ err.textContent = 'Logout time must be after login time.'; return; }
+  var btn = document.getElementById('ne-submit'); btn.disabled = true; btn.textContent = 'Submitting…';
+  try {
+    var r = await frappe.call({ method: 'frappe.client.insert', args: { doc: {
+      doctype: 'Additional Work', work_date: date, project_name: document.getElementById('ne-proj').value.trim(), hours_spent: neHoursText(m),
+      description: desc, remarks: document.getElementById('ne-rem').value.trim(), login_time: document.getElementById('ne-in').value, logout_time: document.getElementById('ne-out').value,
+      status: document.getElementById('ne-status').value } } });
+    if (!r.message || !r.message.name) throw new Error('Could not save the entry.');
+    toast('Additional work logged for ' + date + '.', 'ok', 2500);
+    ['ne-in', 'ne-out', 'ne-proj', 'ne-desc', 'ne-rem'].forEach(function(id){ document.getElementById(id).value = ''; });
+    neLoadContext(); neCalc(); loadAWHistory(true); refreshAWSummary();
+  } catch (e) {
+    err.textContent = (e && e.message) || 'Something went wrong.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submit entry';
+  }
+}
+function setAWMode(mode){
+  var multi = mode === 'multi';
+  document.getElementById('ne-form').hidden = multi;
+  document.getElementById('aw-multi').hidden = !multi;
+  document.getElementById('aw-multi-foot').hidden = !multi;
+  document.querySelectorAll('[data-aw-mode]').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.awMode === mode ? 'true' : 'false'); });
+}
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('[data-aw-mode]').forEach(function(b){ b.addEventListener('click', function(){ setAWMode(b.dataset.awMode); }); });
+  document.getElementById('ne-in').addEventListener('input', neCalc);
+  document.getElementById('ne-out').addEventListener('input', neCalc);
+  document.getElementById('ne-date').addEventListener('change', neLoadContext);
+  document.getElementById('ne-form').addEventListener('submit', submitSingleEntry);
+  document.getElementById('aw-date').addEventListener('change', awMultiGuard);
+  frappe.ready(function(){ neLoadContext(); awMultiGuard(); });
+});
+
+// "Several tasks": same rule as the single form - the day must be checked out or a leave day.
+function awMultiGuard(){
+  var d = document.getElementById('aw-date').value, btn = document.getElementById('btn-aw-submit'), note = document.querySelector('#aw-multi .wl-note');
+  if (!d || !btn || !note) return;
+  frappe.call({ method: 'st_attendance_tracker.calendar_api.get_day_context', args: { date: d }, silent: true,
+    callback: function(r){
+      if (document.getElementById('aw-date').value !== d || !r.message) return;
+      var ok = r.message.can_log !== false;
+      if (!note.dataset.orig) note.dataset.orig = note.textContent;
+      btn.disabled = !ok;
+      note.textContent = ok ? note.dataset.orig : (r.message.blocked_message || 'Check out for that day first, or pick a leave day.');
+    } });
+}
 async function submitAdditionalWork(){
   var date = document.getElementById('aw-date').value;
   if (!date){ toast('Pick a work date.', 'err'); return; }
@@ -3173,22 +3278,16 @@ function _fmtTime(t){
 }
 
 function renderHistCard(e){
-  var proj = e.project_name ? '<span class="aw-hf-proj">' + esc(e.project_name) + '</span>' : '';
   var statusCls = _statusCls(e.status || 'Done');
-  var login = e.login_time ? '<span><i class="ti ti-login" aria-hidden="true"></i>' + _fmtTime(e.login_time) + '</span>' : '';
-  var logout = e.logout_time ? '<span><i class="ti ti-logout" aria-hidden="true"></i>' + _fmtTime(e.logout_time) + '</span>' : '';
+  var times = (e.login_time ? _fmtTime(e.login_time) : '—') + ' – ' + (e.logout_time ? _fmtTime(e.logout_time) : '—');
   return '<div class="aw-hist-full" data-name="' + esc(e.name) + '">' +
-    '<div class="aw-hf-top">' +
-      '<span class="aw-hf-date"><i class="ti ti-calendar" aria-hidden="true" style="font-size:14px;margin-right:4px;color:var(--text-light)"></i>' + esc(e.work_date) + '</span>' +
-      proj +
-      '<span class="aw-hf-status ' + statusCls + '">' + esc(e.status || 'Done') + '</span>' +
-    '</div>' +
-    '<div class="aw-hf-desc">' + esc(e.description || '') + '</div>' +
-    '<div class="aw-hf-meta">' +
-      '<span><i class="ti ti-clock" aria-hidden="true"></i>' + (e.hours_spent || 0) + 'h</span>' +
-      login + logout +
-      '<span class="aw-hf-del" onclick="deleteAWEntry(\'' + esc(e.name) + '\',this)" title="Delete"><i class="ti ti-trash" aria-hidden="true"></i></span>' +
-    '</div>' +
+    '<span class="aw-hf-date">' + esc(e.work_date) + '</span>' +
+    '<span class="aw-c-time">' + times + '</span>' +
+    '<span class="aw-c-hrs">' + (Math.round((+e.hours_spent || 0) * 100) / 100) + 'h</span>' +
+    '<span class="aw-c-proj">' + (e.project_name ? esc(e.project_name) : '—') + '</span>' +
+    '<span class="aw-c-desc">' + esc(e.description || '') + (e.remarks ? '<small>' + esc(e.remarks) + '</small>' : '') + '</span>' +
+    '<span class="aw-hf-status ' + statusCls + '">' + esc(e.status || 'Done') + '</span>' +
+    '<span class="aw-hf-del" role="button" tabindex="0" onclick="deleteAWEntry(\'' + esc(e.name) + '\',this)" title="Delete" aria-label="Delete entry"><i class="ti ti-trash" aria-hidden="true"></i></span>' +
   '</div>';
 }
 
@@ -3260,6 +3359,19 @@ function refreshAWSummary(){
   });
   // Reload page to get fresh server-side summary stats
   // Instead, we do a lightweight fetch of summary counts
+  // Hours tiles: sum this month's entries (own rows only, via the normal permission-checked list call).
+  frappe.call({
+    method: 'frappe.client.get_list',
+    args: { doctype: 'Additional Work', filters: { employee: '{{ employee.name }}', work_date: ['>=', '{{ month_start }}'] }, fields: ['work_date', 'hours_spent'], limit_page_length: 0 },
+    callback: function(r){
+      if (!r || !r.message) return;
+      var wk = 0, mo = 0;
+      r.message.forEach(function(x){ var h = +x.hours_spent || 0; mo += h; if (x.work_date >= '{{ week_start }}') wk += h; });
+      var a = document.getElementById('sum-week'), b = document.getElementById('sum-month');
+      if (a) a.textContent = (Math.round(wk * 10) / 10) + 'h';
+      if (b) b.textContent = (Math.round(mo * 10) / 10) + 'h';
+    }
+  });
   frappe.call({
     method: 'frappe.client.get_count',
     args: { doctype: 'Additional Work', filters: { employee: '{{ employee.name }}' } },
@@ -3287,10 +3399,9 @@ function refreshAWSummary(){
 }
 
 var ADDITIONAL_WORK_TOUR_STEPS = [
-  { element: '.wl-wrap', popover: { title: 'Pick the day', description: 'Additional Work is for logging extra/off-hours work separately from your daily tasks — pick which day it happened, and the login/logout time.', side: 'bottom' } },
-  { element: '.tbar', popover: { title: 'Add tasks', description: 'Add a project or a standalone task for that entry.', side: 'bottom' } },
-  { element: '#aw-history-area', popover: { title: 'History', description: 'Your previously logged additional work shows up here.', side: 'top' } },
-  { element: '.app-footer', popover: { title: 'Submit', description: 'Submit once you\'ve added everything for that day.', side: 'top' } }
+  { element: '.pg-kpis', popover: { title: 'Your hours', description: 'Hours logged this week and month, and how many entries are done or still open.', side: 'bottom' } },
+  { element: '#ne-form', popover: { title: 'Log additional work', description: 'Pick the day, your login and logout time, and what you worked on. Hours are calculated for you. Use "Several tasks" to log more than one task at once.', side: 'bottom' } },
+  { element: '#aw-history-area', popover: { title: 'History', description: 'Your previously logged additional work shows up here.', side: 'top' } }
 ];
 
 frappe.ready(function(){
@@ -3300,19 +3411,6 @@ frappe.ready(function(){
   {% if show_tour_additional_work %}
   setTimeout(function(){ STTour.start('additional_work_v1', ADDITIONAL_WORK_TOUR_STEPS); }, 600);
   {% endif %}
-});
-
-function toggleProfileDropdown(e) {
-  if (e) e.stopPropagation();
-  var dd = document.getElementById('profile-dropdown');
-  if (dd) { dd.classList.toggle('show'); }
-}
-
-document.addEventListener('click', function(e) {
-  var dd = document.getElementById('profile-dropdown');
-  if (dd && dd.classList.contains('show')) {
-    if (!dd.contains(e.target)) { dd.classList.remove('show'); }
-  }
 });
 </script>
 {% endblock %}

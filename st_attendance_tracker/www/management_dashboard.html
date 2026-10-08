@@ -8,12 +8,13 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 <link rel="stylesheet" href="/assets/st_attendance_tracker/css/whats_new.css">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --primary-light: #e0e7ff;
-  --primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  --primary: #ED1D24;
+  --primary-hover: #C4151B;
+  --primary-light: #FDE8E9;
+  --primary-gradient: linear-gradient(135deg, #ED1D24 0%, #ED1D24 100%);
   --success: #10b981;
   --success-bg: #ecfdf5;
   --success-border: #a7f3d0;
@@ -421,7 +422,7 @@ body {
 }
 
 .di0 { background: #eff6ff; color: #2563eb; }
-.di1 { background: #faf5ff; color: #7c3aed; }
+.di1 { background: #faf5ff; color: #C4151B; }
 .di2 { background: #f0fdf4; color: #15803d; }
 .di3 { background: #fffbeb; color: #d97706; }
 .di4 { background: #fef2f2; color: #dc2626; }
@@ -525,7 +526,7 @@ body {
 .av-b { background: var(--info-bg); color: var(--info-text); border: 1px solid var(--info-border); }
 .av-a { background: var(--warning-bg); color: var(--warning-text); border: 1px solid var(--warning-border); }
 .av-r { background: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-border); }
-.av-p { background: #faf5ff; color: #7c3aed; border: 1px solid #e9d5ff; }
+.av-p { background: #faf5ff; color: #C4151B; border: 1px solid #e9d5ff; }
 
 .ec-name {
   font-family: 'Plus Jakarta Sans', sans-serif;
@@ -905,7 +906,7 @@ body {
 
 .tnav { border-bottom: 1px solid #e2e8f0 !important; }
 .tnav-logo {
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+    background: linear-gradient(135deg, #C4151B 0%, #C4151B 100%) !important;
     -webkit-background-clip: text !important;
     -webkit-text-fill-color: transparent !important;
 }
@@ -914,22 +915,22 @@ body {
 .ph, .hero {
     background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%),
                 repeating-linear-gradient(45deg, rgba(79, 70, 229, 0.02) 0, rgba(79, 70, 229, 0.02) 1px, transparent 1px, transparent 10px) !important;
-    border: 1px solid #e0e7ff !important;
-    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.05) !important;
+    border: 1px solid #FDE8E9 !important;
+    box-shadow: 0 4px 15px rgba(237, 29, 36, 0.05) !important;
 }
-.ph-title, .hero-info .title { color: #1e1b4b !important; }
-.ph-sub, .hero-info .sub { color: #4338ca !important; }
-.hero-info .eye { color: #4f46e5 !important; }
-.ph-time { color: #312e81 !important; }
-.ph-date { color: #4f46e5 !important; }
+.ph-title, .hero-info .title { color: #111112 !important; }
+.ph-sub, .hero-info .sub { color: #B5121A !important; }
+.hero-info .eye { color: #C4151B !important; }
+.ph-time { color: #111112 !important; }
+.ph-date { color: #C4151B !important; }
 
 /* Avatars */
-.ph-av { background: #e0e7ff !important; color: #4338ca !important; border: 1px solid #c7d2fe !important; }
-.sb-av, .tnav-av { background: #e0e7ff !important; color: #4338ca !important; border: 1px solid #c7d2fe !important; }
+.ph-av { background: #FDE8E9 !important; color: #B5121A !important; border: 1px solid #F5B8BB !important; }
+.sb-av, .tnav-av { background: #FDE8E9 !important; color: #B5121A !important; border: 1px solid #F5B8BB !important; }
 
 /* Primary Buttons (Indigo) */
 .btn.red, .fbtn.red {
-    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+    background: linear-gradient(135deg, #C4151B 0%, #ED1D24 100%) !important;
     color: #ffffff !important;
     border: none !important;
     box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25) !important;
@@ -964,8 +965,8 @@ body {
     border-radius: 6px !important;
 }
 .tinp:focus, .tsel:focus, .date-inp:focus, .wl-sel:focus {
-    border-color: #6366f1 !important;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2) !important;
+    border-color: #ED1D24 !important;
+    box-shadow: 0 0 0 2px rgba(237, 29, 36, 0.2) !important;
     outline: none !important;
 }
 
@@ -985,14 +986,14 @@ body {
 .sb-name, .dept-name, .dp-name { color: #0f172a !important; }
 .dp-hero .dp-name { color: #ffffff !important; }
 .sb-link { color: #475569 !important; }
-.sb-link.on { background: #e0e7ff !important; color: #4338ca !important; border-radius: 6px !important;}
+.sb-link.on { background: #FDE8E9 !important; color: #B5121A !important; border-radius: 6px !important;}
 
 /* Subtle Checkboxes */
 .tck {
     border: 1px solid #cbd5e1 !important;
     border-radius: 4px !important;
 }
-.tck:hover { border-color: #6366f1 !important; background: #e0e7ff !important; }
+.tck:hover { border-color: #ED1D24 !important; background: #FDE8E9 !important; }
 .tck.dn {
     background: #10b981 !important;
     border-color: #10b981 !important;
@@ -1030,30 +1031,46 @@ body {
   margin: 0 !important;
 }
 </style>
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_brand.css?v=14">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_calendar.css?v=19">
 {% endblock %}
 {% block page_content %}
-<nav class="tnav">
-  <div class="tnav-con">
-    <span class="tnav-logo">ST Tracker</span>
-    <span class="tnav-sep"></span>
-    <span class="tnav-bc">Management</span>
-    <div class="tnav-r">
-      <a href="/daily-checkin" class="tnav-btn"><i class="ti ti-user" aria-hidden="true"></i>My check-in</a>
-      <a href="/hr-manager-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
-      <button type="button" class="tnav-btn" onclick="STTour.start('management_dashboard_v1', MANAGEMENT_DASHBOARD_TOUR_STEPS)"><i class="ti ti-map-2" aria-hidden="true"></i>Tour</button>
-      <div class="wn-bell-wrap" id="wn-mount"></div>
-      <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
-      <div class="profile-dropdown" id="profile-dropdown">
-        {% if employee.name %}
-        <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
-        {% endif %}
-        <a href="/app" class="pd-item"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Switch to Desk</a>
-        <a href="/?cmd=web_logout" class="pd-item"><i class="ti ti-logout" aria-hidden="true"></i>Logout</a>
-      </div>
-    </div>
+{% from "st_attendance_tracker/templates/macros/st_shell.html" import shell %}
+<script>window.ST_MGMT = {"today": {{ date | tojson }}}; window.ST_SHELL_DATE = window.ST_MGMT.today;</script>
+{% call shell(st_shell, "Management Dashboard", "STTour.start('management_dashboard_v1', MANAGEMENT_DASHBOARD_TOUR_STEPS)", "/hr-manager-guide", None, True, False) %}
+<div class="tm-bar">
+  <div class="st-seg" role="group" aria-label="Management view">
+    <button type="button" data-mg-view="overview" aria-pressed="true">Overview</button>
+    <button type="button" data-mg-view="departments" aria-pressed="false">Departments</button>
   </div>
-</nav>
-<div id="wn-banner-mount"></div>
+</div>
+<div id="mg-overview">
+  <div class="cal-page" id="mg-page" style="height:calc(100vh - 118px)">
+    <section class="cal-main" id="mg-body" style="overflow:auto" aria-label="Company overview">
+      <div class="tm-kpis" id="mg-kpis"></div>
+      <div class="mg-grid">
+        <div class="mg-card"><h4>Share of employees checked in</h4><div id="mg-chart"></div></div>
+        <div class="mg-card"><h4>By department</h4><div id="mg-depts-bars"></div></div>
+      </div>
+      <div class="tm-bar" style="padding-top:0">
+        <h4 style="margin:0;font-size:15px">Employees</h4>
+        <div class="tm-tools">
+          <input id="mg-q" type="search" placeholder="Search employees" aria-label="Search employees">
+          <select id="mg-dept" aria-label="Department"><option value="">All departments</option></select>
+          <select id="mg-status" aria-label="Status">
+            <option value="all">All statuses</option><option value="checked_in">Checked in</option><option value="late">Late</option>
+            <option value="eod_done">Checked out</option><option value="missing">Missing</option><option value="leave">On leave</option>
+          </select>
+        </div>
+      </div>
+      <div class="mg-table"><div class="cal-xs"><table><thead><tr><th>Employee</th><th>Department</th><th>Status</th><th>Check-in</th><th>Check-out</th><th>Net hours</th><th>Extra hours</th><th>Tasks</th></tr></thead><tbody id="mg-rows"></tbody></table></div></div>
+    </section>
+    <aside class="cal-side" id="mg-side" data-st-collapsible="leaderboard" aria-label="Checkout leaderboard">
+      <h3>Checkout leaderboard</h3><div id="mg-lb"></div>
+    </aside>
+  </div>
+</div>
+<div id="mg-depts-view" hidden>
 <div class="wrap">
   <div class="hero">
     <div class="hero-top">
@@ -1088,7 +1105,7 @@ body {
     </div>
     <div style="position: sticky; top: 84px; display: flex; flex-direction: column; gap: 20px;">
       <div class="dp" id="leaderboard-panel" style="position: static;">
-        <div class="dp-hero" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);">
+        <div class="dp-hero" style="background: linear-gradient(135deg, #111112 0%, #111112 100%);">
           <div style="display: flex; align-items: center; gap: 8px;">
             <i class="ti ti-trophy" style="font-size: 20px; color: #fbbf24;"></i>
             <div class="dp-name" style="font-size: 15px;">Hours Leaderboard</div>
@@ -1108,6 +1125,11 @@ body {
     </div>
   </div>
 </div>
+</div>
+{% endcall %}
+<script src="/assets/st_attendance_tracker/js/st_shell.js?v=10"></script>
+<script src="/assets/st_attendance_tracker/js/st_employee_drawer.js?v=4"></script>
+<script src="/assets/st_attendance_tracker/js/st_mgmt_overview.js?v=2"></script>
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script src="/assets/st_attendance_tracker/js/whats_new.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
@@ -1342,11 +1364,10 @@ function loadAll(date){
 }
 
 var MANAGEMENT_DASHBOARD_TOUR_STEPS = [
-  { element: '.gstats', popover: { title: 'Company overview', description: 'Total employees, checked in, checkout done, missing, and on leave — for the selected date.', side: 'bottom' } },
-  { element: '.filter-bar', popover: { title: 'Filter departments', description: 'Narrow every department card down by status.', side: 'bottom' } },
-  { element: '#dept-list', popover: { title: 'Departments', description: 'Click any employee card to see their tasks and time for the day.', side: 'right' } },
-  { element: '#detail-panel', popover: { title: 'Employee detail', description: 'Details for whoever you pick show up here.', side: 'left' } },
-  { element: '#leaderboard-body', popover: { title: 'Checkout leaderboard', description: 'Everyone who has submitted checkout for the date, ranked by net hours.', side: 'left' } }
+  { element: '#mg-kpis', popover: { title: 'Company overview', description: 'Total employees, checked in, checked out, on leave and missing for the selected date.', side: 'bottom' } },
+  { element: '#mg-chart', popover: { title: 'This week', description: 'Share of employees who checked in each day. The selected day is red.', side: 'bottom' } },
+  { element: '#mg-rows', popover: { title: 'Employees', description: 'Click any employee to see their tasks and time for the day.', side: 'top' } },
+  { element: '#mg-side', popover: { title: 'Checkout leaderboard', description: 'Everyone who has submitted checkout for the date, ranked by net hours.', side: 'left' } }
 ];
 
 frappe.ready(function(){
@@ -1354,23 +1375,6 @@ frappe.ready(function(){
   {% if show_tour_management_dashboard %}
   setTimeout(function(){ STTour.start('management_dashboard_v1', MANAGEMENT_DASHBOARD_TOUR_STEPS); }, 600);
   {% endif %}
-});
-
-function toggleProfileDropdown(e) {
-  if (e) e.stopPropagation();
-  var dd = document.getElementById('profile-dropdown');
-  if (dd) {
-    dd.classList.toggle('show');
-  }
-}
-
-document.addEventListener('click', function(e) {
-  var dd = document.getElementById('profile-dropdown');
-  if (dd && dd.classList.contains('show')) {
-    if (!dd.contains(e.target)) {
-      dd.classList.remove('show');
-    }
-  }
 });
 </script>
 {% endblock %}

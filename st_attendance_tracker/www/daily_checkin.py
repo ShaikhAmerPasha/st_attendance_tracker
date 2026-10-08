@@ -1,4 +1,6 @@
 import frappe
+
+from st_attendance_tracker.ui_shell import redirect_for_design
 from frappe.utils import today, now_datetime, getdate, get_datetime
 from st_attendance_tracker.api import (
     _to_hhmm, _to_ampm, _format_hours, _is_half_day_leave_today, _is_team_leader,
@@ -16,6 +18,8 @@ def get_context(context):
     if frappe.session.user == "Guest":
         frappe.local.flags.redirect_location = "/login?redirect-to=/daily-checkin"
         raise frappe.Redirect
+
+    redirect_for_design()
 
     # Management role has no Employee record and never checks in/out —
     # redirect straight to the management dashboard. HR Manager DOES check
@@ -52,9 +56,10 @@ def get_context(context):
     # carry forward any missed Pending/In-Progress tasks to today's date.
     today_log = _get_work_log(employee.name, actual_today)
     if not (today_log and today_log.morning_submitted):
-        from st_attendance_tracker.api import _safety_rollover, _ensure_recurring_tasks
+        from st_attendance_tracker.api import _safety_rollover, _ensure_recurring_tasks, _pull_scheduled_backlog
         _safety_rollover(employee.name, actual_today)
         _ensure_recurring_tasks(employee.name, actual_today)
+        _pull_scheduled_backlog(employee.name, actual_today)
 
     work_log = _get_work_log(employee.name, date)
     morning_log = bool(work_log and work_log.morning_submitted)

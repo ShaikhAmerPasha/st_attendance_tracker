@@ -195,6 +195,7 @@ def _task_entry_dict(row, parent_date):
         "series_id": get("series_id"),
         "assigned_by": get("assigned_by"),
         "assigned_by_name": get("assigned_by_name"),
+        "start_time": (_to_hhmm(get("start_time")) or None) if get("start_time") else None,
     })
 
 
@@ -1386,6 +1387,42 @@ def _ensure_recurring_tasks(employee, date):
         frappe.db.commit()
 
 
+def _pull_scheduled_backlog(employee, date):
+    """Backlog items scheduled for `date` (or an earlier day that was missed) become Pending tasks on
+    that day's log, so the check-in plan already has them. Only used before morning check-in, next to
+    _ensure_recurring_tasks; idempotent because each pulled item is deleted."""
+    # "is set" matters: Frappe compares a Date as ifnull(col, '0001-01-01'), so a plain <= would match every
+    # backlog item that has no day at all.
+    due = frappe.get_all("Task Backlog Item",
+        filters=[["employee", "=", employee], ["scheduled_for", "is", "set"], ["scheduled_for", "<=", date]],
+        fields=["name", "description", "project_name", "estimated_time", "remarks", "assigned_by", "start_time"],
+        order_by="scheduled_for asc, start_time asc, creation asc")
+    if not due:
+        return
+    work_log = _get_or_new_work_log(employee, date)
+    if work_log.morning_submitted or work_log.eod_submitted:
+        return
+    for item in due:
+        row = work_log.append("tasks", {})
+        row.series_id = frappe.generate_hash(length=32)
+        row.origin_date = date
+        row.description = item.description
+        row.task_type = "Ad-hoc"
+        row.status = "Pending"
+        row.project_name = item.project_name or ""
+        row.estimated_time = item.estimated_time or ""
+        row.remarks = item.remarks or ""
+        row.assigned_by = item.assigned_by
+        if item.start_time:
+            row.start_time = item.start_time
+        row.sequence = _next_sequence(work_log) + 1
+    _save_work_log(work_log)
+    # Delete only after the tasks are saved, so a failed save loses nothing.
+    for item in due:
+        frappe.delete_doc("Task Backlog Item", item.name, ignore_permissions=True)
+    frappe.db.commit()
+
+
 # ── Recurring task self-service (employee-facing CRUD) ─────────────────────────
 # Ownership/validation is enforced by the doctype's own validate()/on_trash()
 # (RecurringTaskTemplate._check_ownership) — these wrappers don't re-check it,
@@ -1477,9 +1514,11 @@ def get_task_backlog():
     rows = frappe.get_all("Task Backlog Item",
         filters={"employee": employee.name},
         fields=["name", "description", "project_name", "estimated_time", "remarks",
-                "assigned_by", "assigned_by_name", "creation"],
+                "assigned_by", "assigned_by_name", "creation", "scheduled_for", "start_time"],
         order_by="creation asc")
     for r in rows:
+        r["scheduled_for"] = str(r.scheduled_for) if r.get("scheduled_for") else None
+        r["start_time"] = _to_hhmm(r.get("start_time")) or None
         age_days = (getdate(today()) - getdate(r.creation)).days
         r["age_days"] = age_days
         r["is_stale"] = age_days > BACKLOG_STALE_DAYS
@@ -1612,6 +1651,8 @@ def pull_backlog_item_to_today(name):
     row.series_id = frappe.generate_hash(length=32)
     row.origin_date = date
     row.assigned_by = item.assigned_by
+    if item.start_time:
+        row.start_time = item.start_time
     row.sequence = _next_sequence(log) + 1
 
     _save_work_log(log)
@@ -1768,6 +1809,7 @@ def get_page_state():
     if not morning_done:
         _safety_rollover(employee.name, date)
         _ensure_recurring_tasks(employee.name, date)
+        _pull_scheduled_backlog(employee.name, date)
         work_log = _get_work_log(employee.name, date)
         morning_done = bool(work_log and work_log.morning_submitted)
 
@@ -1921,6 +1963,95 @@ def _send_eod_notifications(employee_name, date, checkout_action_time, is_late_c
         department=employee.department,
     )
 
+# ── Check-ins made outside the web page (Hermes Telegram bot) ──────────────────
+# The bot creates a bare Employee Checkin as its own agent user instead of
+# calling submit_morning_log / submit_eod_log, so none of the emails the web
+# page sends would fire. This hook sends the same HR / Team Leader / employee
+# emails for those rows. Rows from the web page carry device_id "ST Daily
+# Checkin" and already email through their own path.
+
+BOT_AGENT_ROLE = "ST Task Assignment Agent"
+_BOT_NOTIFY_TTL = 3 * 24 * 60 * 60
+
+
+def notify_external_checkin(doc, method=None):
+    """Employee Checkin after_insert: email for check-ins made by the bot."""
+    if frappe.flags.in_test or frappe.flags.in_import or frappe.flags.in_migrate:
+        return
+    if doc.device_id == "ST Daily Checkin" or doc.log_type not in ("IN", "OUT"):
+        return
+    if BOT_AGENT_ROLE not in frappe.get_roles(doc.owner or frappe.session.user):
+        return
+
+    day = frappe.utils.getdate(doc.time)
+    # Once per employee, day and direction, so a repeated bot tap or retry cannot double-send.
+    marker = f"st_bot_checkin_mail:{doc.employee}:{day}:{doc.log_type}"
+    # Atomic SET NX: a get-then-set pair misses in Frappe's request-local cache and races across workers.
+    cache = frappe.cache()
+    if not cache.set(cache.make_key(marker), 1, nx=True, ex=_BOT_NOTIFY_TTL):
+        return
+
+    frappe.enqueue(
+        _send_external_checkin_notifications,
+        queue="short",
+        enqueue_after_commit=True,
+        employee_name=doc.employee,
+        log_type=doc.log_type,
+        action_time=str(doc.time),
+    )
+
+
+def _send_external_checkin_notifications(employee_name, log_type, action_time):
+    employee = frappe.db.get_value(
+        "Employee", employee_name, ["name", "employee_name", "department"], as_dict=True
+    )
+    if not employee:
+        return
+    when = frappe.utils.get_datetime(action_time)
+    date = str(when.date())
+    time_of_day = when.time().replace(microsecond=0)
+    work_log = _get_work_log(employee_name, date)
+
+    if log_type == "IN":
+        # A web check-in the same day has already emailed everyone.
+        if work_log and work_log.morning_submitted:
+            return
+        detail_rows = [
+            ("Employee", employee.employee_name),
+            ("Date", _format_email_date(date)),
+            ("Login Time", _to_ampm(time_of_day)),
+            ("Checked-In At", _format_action_timestamp(when)),
+            ("Checked in via", "Telegram bot"),
+        ]
+        _notify_hr_and_team_leader(
+            employee.name, employee.employee_name, "checkin",
+            detail_rows, tasks=[], department=employee.department,
+        )
+        _send_employee_checkin_email(
+            employee.name, employee.employee_name, time_of_day, when,
+            "Telegram bot", None, False, [], date, department=employee.department,
+        )
+    else:
+        if work_log and work_log.eod_submitted:
+            return
+        detail_rows = [
+            ("Employee", employee.employee_name),
+            ("Date", _format_email_date(date)),
+            ("Logout Time", _to_ampm(time_of_day)),
+            ("Checked-Out At", _format_action_timestamp(when)),
+            ("Checked out via", "Telegram bot"),
+        ]
+        _notify_hr_and_team_leader(
+            employee.name, employee.employee_name, "checkout",
+            detail_rows, tasks=[], department=employee.department,
+        )
+        _send_employee_eod_email(
+            employee.name, employee.employee_name, time_of_day, when,
+            None, "Telegram bot", None, [], date,
+            is_late_checkout=False, submission_date=date, department=employee.department,
+        )
+
+
 
 # ── Morning submit ─────────────────────────────────────────────────────────────
 
@@ -1943,6 +2074,7 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
     # Safety rollover to catch and carry forward any pending tasks from previous days
     _safety_rollover(employee.name, date)
     _ensure_recurring_tasks(employee.name, date)
+    _pull_scheduled_backlog(employee.name, date)
 
     work_log = _get_or_new_work_log(employee.name, date)
     if work_log.morning_submitted:
@@ -2482,12 +2614,23 @@ def get_employee_task_detail(employee_name, date=None):
         tasks = [_task_entry_dict(row, date) for row in work_log.tasks]
         _attach_task_files(tasks)
 
+    additional_work = frappe.get_all(
+        "Additional Work",
+        filters={"employee": employee_name, "work_date": date},
+        fields=["name", "login_time", "logout_time", "project_name", "hours_spent", "status", "description", "remarks"],
+        order_by="login_time asc",
+    )
+    for entry in additional_work:
+        entry["login_time"] = _to_hhmm(entry.get("login_time")) or None
+        entry["logout_time"] = _to_hhmm(entry.get("logout_time")) or None
+
     return {
         "employee":    emp,
         "date":        date,
         "morning_log": morning_log,
         "eod_log":     eod_log,
         "tasks":       tasks,
+        "additional_work": additional_work,
     }
 
 
