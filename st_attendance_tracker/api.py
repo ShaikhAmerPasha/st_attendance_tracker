@@ -32,7 +32,7 @@ from frappe.utils import today, now_datetime, getdate, add_days, cint
 from frappe.desk.form.load import get_attachments
 from frappe.rate_limiter import rate_limit
 from frappe.utils.user import get_users_with_role
-from st_attendance_tracker.time_utils import parse_duration_to_hours
+from st_attendance_tracker.time_utils import is_checkout_locked, parse_duration_to_hours
 
 
 # ── Employee helper ────────────────────────────────────────────────────────────
@@ -1186,14 +1186,16 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
 
 # ── Next working date ──────────────────────────────────────────────────────────
 
-def _get_next_working_date(employee, from_date):
+def _employee_holidays(employee):
     holiday_list = frappe.db.get_value("Employee", employee, "holiday_list")
-    holidays = set()
-    if holiday_list:
-        rows = frappe.get_all(
-            "Holiday", filters={"parent": holiday_list}, pluck="holiday_date"
-        )
-        holidays = {getdate(h) for h in rows}
+    if not holiday_list:
+        return set()
+    rows = frappe.get_all("Holiday", filters={"parent": holiday_list}, pluck="holiday_date")
+    return {getdate(h) for h in rows}
+
+
+def _get_next_working_date(employee, from_date):
+    holidays = _employee_holidays(employee)
 
     candidate = getdate(add_days(from_date, 1))
     while True:
@@ -1207,6 +1209,27 @@ def _get_next_working_date(employee, from_date):
     return candidate
 
 
+def _get_previous_working_date(employee, from_date):
+    """Last working day before `from_date`: skips Sundays and the employee's
+    holiday list, same rule as _get_next_working_date."""
+    holidays = _employee_holidays(employee)
+
+    candidate = getdate(add_days(from_date, -1))
+    while candidate.weekday() == 6 or candidate in holidays:
+        candidate = getdate(add_days(candidate, -1))
+    return candidate
+
+
+def _assert_checkout_allowed(work_log):
+    """Server-side gate: checkout is closed after the cutoff time unless an
+    HR Manager unlocked it for this employee and date."""
+    if is_checkout_locked(work_log.date, work_log.checkout_unlocked):
+        frappe.throw(
+            "Checkout window is closed. Get late checkout approval from HR.",
+            frappe.PermissionError,
+        )
+
+
 def _resolve_active_checkin_date(employee_name):
     """Which date's check-in is still 'open' (checked in, no EOD submitted
     yet) — the date the checkin/checkout page and EOD submission should act
@@ -1218,15 +1241,31 @@ def _resolve_active_checkin_date(employee_name):
     "don't fabricate a real span past one legitimate day" rule already
     applied in resolve_zero_diff_minutes (time_utils.py).
     """
+    # An HR-approved late checkout (any past date) takes priority: the
+    # employee finishes that EOD before continuing with today.
+    unlocked_stale = frappe.db.get_value("Daily Work Log", {
+        "employee": employee_name,
+        "morning_submitted": 1,
+        "eod_submitted": 0,
+        "checkout_unlocked": 1,
+        "date": ["<", today()],
+    }, "date", order_by="date asc")
+    if unlocked_stale:
+        return unlocked_stale
+
     latest = frappe.db.get_value("Daily Work Log", {
         "employee": employee_name,
         "morning_submitted": 1,
         "date": [">=", add_days(today(), -1)],
-    }, ["date", "eod_submitted"], order_by="date desc", as_dict=True)
+    }, ["date", "eod_submitted", "checkout_unlocked"], order_by="date desc", as_dict=True)
 
-    if not latest:
+    if not latest or latest.eod_submitted:
         return today()
-    return latest.date if not latest.eod_submitted else today()
+    # A past-date log whose checkout window closed without HR approval must
+    # not hijack the page — the employee checks in for today instead.
+    if str(latest.date) != str(today()) and is_checkout_locked(latest.date, latest.checkout_unlocked):
+        return today()
+    return latest.date
 
 
 # ── Rollover on EOD ────────────────────────────────────────────────────────────
@@ -2157,6 +2196,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     work_log = _get_or_new_work_log(employee.name, date)
     if work_log.eod_submitted:
         frappe.throw(f"You have already checked out for {date}.")
+    _assert_checkout_allowed(work_log)
 
     updates = json.loads(task_updates) if isinstance(task_updates, str) else task_updates
     adhocs  = json.loads(adhoc_tasks)  if isinstance(adhoc_tasks, str)  else adhoc_tasks
@@ -2293,6 +2333,7 @@ def autosave_eod_progress(task_updates=None, lunch_from=None, lunch_to=None):
         frappe.throw("Please check in before saving progress.")
     if work_log.eod_submitted:
         frappe.throw(f"You have already checked out for {date}.")
+    _assert_checkout_allowed(work_log)
 
     updates = json.loads(task_updates) if isinstance(task_updates, str) else (task_updates or [])
     rows_by_name = {row.name: row for row in work_log.tasks if row.name}
@@ -3203,3 +3244,95 @@ def get_credentials_by_telegram_id(telegram_id):
         "employee": employee.name,
         "employee_name": employee.employee_name,
     }
+
+
+# ── Late checkout approval ─────────────────────────────────────────────────────
+
+@frappe.whitelist(methods=["POST"])
+def request_late_checkout_approval(date, reason=None):
+    """Employee asks HR to unlock checkout for one of their own locked dates.
+    Identity comes from the session; only the caller's own log is touched."""
+    employee = _get_employee()
+    work_log = _get_work_log(employee.name, getdate(date).strftime("%Y-%m-%d"))
+    if not work_log or not work_log.morning_submitted or work_log.eod_submitted:
+        frappe.throw("There is no open check-in to request checkout approval for.")
+    # Only the most recent working day can be requested; older forgotten
+    # checkouts are an HR correction in Desk, not an employee request.
+    if getdate(work_log.date) not in (getdate(today()), _get_previous_working_date(employee.name, today())):
+        frappe.throw("Late checkout approval can only be requested for your last working day.")
+    if not is_checkout_locked(work_log.date, work_log.checkout_unlocked):
+        frappe.throw("Checkout is still open for this date; no approval is needed.")
+    if work_log.unlock_requested_at:
+        return {"status": "already_requested"}
+
+    work_log.unlock_requested_at = now_datetime()
+    work_log.unlock_request_reason = (reason or "").strip()[:500] or None
+    _save_work_log(work_log)
+
+    hr_emails = [u for u in get_users_with_role("HR Manager") if u not in ("Administrator", "Guest")]
+    if hr_emails:
+        frappe.sendmail(
+            recipients=hr_emails,
+            subject=f"Late checkout approval requested — {employee.employee_name} ({work_log.date})",
+            message=(
+                f"<p>{html_escape(employee.employee_name)} could not check out for "
+                f"{work_log.date} because the checkout window is closed.</p>"
+                f"<p>Reason: {html_escape(work_log.unlock_request_reason or '—')}</p>"
+                f"<p>Open Daily Work Log <b>{html_escape(work_log.name)}</b> and use "
+                "Actions &rarr; Unlock Late Checkout.</p>"
+            ),
+        )
+    return {"status": "requested"}
+
+
+@frappe.whitelist(methods=["POST"])
+def unlock_late_checkout(employee, date, reason):
+    """HR Manager unlocks checkout for exactly one employee and date."""
+    if "HR Manager" not in frappe.get_roles(frappe.session.user):
+        frappe.throw("Only an HR Manager can unlock late checkout.", frappe.PermissionError)
+    reason = (reason or "").strip()
+    if not reason:
+        frappe.throw("A reason is required to unlock late checkout.")
+
+    work_log = _get_work_log(employee, getdate(date).strftime("%Y-%m-%d"))
+    if not work_log or not work_log.morning_submitted or work_log.eod_submitted:
+        frappe.throw("No open check-in found for this employee and date.")
+
+    work_log.checkout_unlocked = 1
+    work_log.unlocked_by = frappe.session.user
+    work_log.unlocked_at = now_datetime()
+    work_log.unlock_reason = reason[:500]
+    # HR Manager role is enforced above. Employee-scoped User Permissions
+    # (auto-created per Employee) would otherwise stop HR saving another
+    # employee's log, so bypass only the document permission check.
+    work_log.save(ignore_permissions=True)
+
+    user_id = frappe.db.get_value("Employee", employee, "user_id")
+    if user_id:
+        frappe.sendmail(
+            recipients=[user_id],
+            subject=f"Late checkout approved for {work_log.date}",
+            message=f"<p>HR approved your late checkout for {work_log.date}. Open Daily Check-in to complete it.</p>",
+        )
+    return {"status": "unlocked"}
+
+
+@frappe.whitelist()
+def get_late_checkout_requests():
+    """Open late-checkout requests awaiting HR, oldest first. HR Manager only,
+    because only that role can act on them."""
+    if "HR Manager" not in frappe.get_roles(frappe.session.user):
+        frappe.throw("Only an HR Manager can view late checkout requests.", frappe.PermissionError)
+    return frappe.get_all(
+        "Daily Work Log",
+        filters={
+            "morning_submitted": 1,
+            "eod_submitted": 0,
+            "checkout_unlocked": 0,
+            "unlock_requested_at": ["is", "set"],
+        },
+        fields=["employee", "employee_name", "department", "date",
+                "unlock_request_reason as reason", "unlock_requested_at as requested_at"],
+        order_by="unlock_requested_at asc",
+        limit=100,
+    )

@@ -24,7 +24,9 @@ from st_attendance_tracker.api import (
     _send_checkin_notifications, _send_eod_notifications,
     _get_attendance_settings, clear_attendance_settings_cache,
     _get_team_members,
+    request_late_checkout_approval, unlock_late_checkout, get_late_checkout_requests, _get_previous_working_date, _resolve_active_checkin_date,
 )
+from st_attendance_tracker.time_utils import is_checkout_locked
 from st_attendance_tracker import tasks as tasks_module
 from st_attendance_tracker.www import daily_checkin as daily_checkin_page
 from st_attendance_tracker.www import management_dashboard as management_dashboard_page
@@ -154,6 +156,11 @@ class TestQACheckinFull(FrappeTestCase):
 
     def setUp(self):
         frappe.set_user("Administrator")
+        # These flows are clock-independent; the 22:00 checkout cutoff has its
+        # own tests in TestCheckoutCutoff.
+        patcher = patch("st_attendance_tracker.api.is_checkout_locked", return_value=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         frappe.set_user("Administrator")
@@ -1876,6 +1883,23 @@ class TestCheckoutReminderReadsDailyWorkLog(FrappeTestCase):
         self.assertIn(self.pending_user, sent_to,
             "Employee who checked in but not out must get a checkout reminder")
 
+    def test_checkout_reminder_states_cutoff_and_hr_approval(self):
+        messages = []
+
+        def fake_sendmail(recipients=None, message="", **kwargs):
+            messages.append(message)
+
+        with patch.object(tasks_module, "_skip_if_not_due", return_value=False), \
+             patch.object(tasks_module, "_already_sent_today", return_value=False), \
+             patch("st_attendance_tracker.tasks.get_checkout_cutoff", return_value=22 * 60), \
+             patch("frappe.sendmail", side_effect=fake_sendmail):
+            tasks_module.send_employee_checkout_reminder()
+
+        self.assertTrue(messages)
+        self.assertIn("before 10:00 PM", messages[0])
+        self.assertIn("late checkout approval from HR", messages[0])
+        self.assertNotIn("marked as absent", messages[0])
+
     def test_checkin_reminder_skips_already_checked_in(self):
         sent_to = []
 
@@ -2226,3 +2250,281 @@ class TestLeaveExclusionAndMissedReport(FrappeTestCase):
         date = add_days(today(), 16)
         rows = get_data(date, department="Some Nonexistent Department - XX")
         self.assertEqual(rows, [])
+
+
+class TestCheckoutCutoff(FrappeTestCase):
+    """Checkout closes at the cutoff time; only an HR Manager can reopen it
+    for one employee and date."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        frappe.set_user("Administrator")
+        company = frappe.db.get_single_value("Global Defaults", "default_company") or "_Test Company"
+        cls.dept = (
+            frappe.db.get_value("Department", {"department_name": "_QA Dept", "company": company}, "name")
+            or f"_QA Dept - {company}"
+        )
+        cls.emp_user = "cutoff_emp@test.example.com"
+        cls.hr_user = "cutoff_hr@test.example.com"
+        cls.sysmgr_user = "cutoff_sys@test.example.com"
+        cls.emp_name = _make_employee("CUT001", cls.dept, cls.emp_user, ["Employee"])
+        cls.hr_name = _make_employee("CUTHR", cls.dept, cls.hr_user, ["HR Manager"])
+        cls.sys_name = _make_employee("CUTSYS", cls.dept, cls.sysmgr_user, ["System Manager"])
+        frappe.db.commit()
+
+    @classmethod
+    def tearDownClass(cls):
+        frappe.set_user("Administrator")
+        names = (cls.emp_name, cls.hr_name, cls.sys_name)
+        frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
+                      "(SELECT name FROM `tabDaily Work Log` WHERE employee IN (%s,%s,%s))", names)
+        frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee IN (%s,%s,%s)", names)
+        frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee IN (%s,%s,%s)", names)
+        frappe.db.sql("DELETE FROM `tabEmployee` WHERE name IN (%s,%s,%s)", names)
+        frappe.db.sql("DELETE FROM `tabUser Permission` WHERE user IN (%s,%s,%s)",
+                      (cls.emp_user, cls.hr_user, cls.sysmgr_user))
+        frappe.db.sql("DELETE FROM `tabUser` WHERE email IN (%s,%s,%s)",
+                      (cls.emp_user, cls.hr_user, cls.sysmgr_user))
+        frappe.db.commit()
+
+    def setUp(self):
+        frappe.set_user("Administrator")
+
+    def tearDown(self):
+        frappe.set_user("Administrator")
+        frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
+                      "(SELECT name FROM `tabDaily Work Log` WHERE employee=%s)", (self.emp_name,))
+        frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee=%s", (self.emp_name,))
+        frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee=%s", (self.emp_name,))
+        frappe.db.commit()
+
+    def _at(self, date, hhmm):
+        return frappe.utils.get_datetime(f"{date} {hhmm}:00")
+
+    def _checked_in_log(self, date):
+        """A checked-in, not-checked-out log for `date`, written directly so
+        the test does not depend on the real clock."""
+        log = frappe.get_doc({
+            "doctype": "Daily Work Log", "employee": self.emp_name, "date": date,
+            "morning_submitted": 1, "login_time": "09:00:00", "work_location": "Office",
+        })
+        log.insert(ignore_permissions=True)
+        return log
+
+    # ── is_checkout_locked ──
+    def test_locked_only_after_cutoff(self):
+        d = today()
+        self.assertFalse(is_checkout_locked(d, 0, self._at(d, "21:59"), 22 * 60))
+        self.assertFalse(is_checkout_locked(d, 0, self._at(d, "22:00"), 22 * 60))
+        self.assertTrue(is_checkout_locked(d, 0, self._at(d, "22:01"), 22 * 60))
+
+    def test_past_date_is_locked_next_morning(self):
+        y = add_days(today(), -1)
+        self.assertTrue(is_checkout_locked(y, 0, self._at(today(), "09:00"), 22 * 60))
+
+    def test_unlock_flag_overrides_cutoff(self):
+        y = add_days(today(), -1)
+        self.assertFalse(is_checkout_locked(y, 1, self._at(today(), "09:00"), 22 * 60))
+
+    # ── submit / autosave guard ──
+    def test_submit_eod_blocked_after_cutoff(self):
+        self._checked_in_log(today())
+        frappe.set_user(self.emp_user)
+        with patch("frappe.utils.now_datetime", return_value=self._at(today(), "22:30")):
+            with self.assertRaises(frappe.PermissionError):
+                submit_eod_log(lunch_from="", lunch_to="", logout_time="22:30",
+                               task_updates="[]", adhoc_tasks="[]")
+            with self.assertRaises(frappe.PermissionError):
+                autosave_eod_progress(task_updates="[]")
+        self.assertFalse(_get_work_log(self.emp_name, today()).eod_submitted)
+
+    # ── resolver ──
+    def test_stale_locked_log_does_not_hijack_page(self):
+        y = add_days(today(), -1)
+        self._checked_in_log(y)
+        with patch("frappe.utils.now_datetime", return_value=self._at(today(), "09:00")):
+            self.assertEqual(str(_resolve_active_checkin_date(self.emp_name)), str(today()))
+
+    def test_unlocked_stale_log_is_resumed(self):
+        y = add_days(today(), -1)
+        log = self._checked_in_log(y)
+        frappe.db.set_value("Daily Work Log", log.name, "checkout_unlocked", 1)
+        self.assertEqual(str(_resolve_active_checkin_date(self.emp_name)), str(y))
+
+    # ── unlock permissions ──
+    def test_hr_manager_unlocks_one_employee_date(self):
+        y = add_days(today(), -1)
+        log = self._checked_in_log(y)
+        frappe.set_user(self.hr_user)
+        with patch("frappe.sendmail"):
+            unlock_late_checkout(self.emp_name, y, "Client call overran")
+        log.reload()
+        self.assertTrue(log.checkout_unlocked)
+        self.assertEqual(log.unlocked_by, self.hr_user)
+
+    def test_unlock_requires_reason(self):
+        y = add_days(today(), -1)
+        self._checked_in_log(y)
+        frappe.set_user(self.hr_user)
+        with self.assertRaises(frappe.ValidationError):
+            unlock_late_checkout(self.emp_name, y, "  ")
+
+    def test_non_hr_cannot_unlock(self):
+        y = add_days(today(), -1)
+        log = self._checked_in_log(y)
+        for user in (self.emp_user, self.sysmgr_user):
+            frappe.set_user(user)
+            with self.assertRaises(frappe.PermissionError):
+                unlock_late_checkout(self.emp_name, y, "self approve")
+        log.reload()
+        self.assertFalse(log.checkout_unlocked)
+
+    # ── request ──
+    def test_request_notifies_hr_once(self):
+        y = _get_previous_working_date(self.emp_name, today())
+        self._checked_in_log(y)
+        frappe.set_user(self.emp_user)
+        with patch("frappe.sendmail") as sendmail, \
+                patch("frappe.utils.now_datetime", return_value=self._at(today(), "09:00")):
+            first = request_late_checkout_approval(y, "Forgot")
+            second = request_late_checkout_approval(y, "Forgot")
+        self.assertEqual(first["status"], "requested")
+        self.assertEqual(second["status"], "already_requested")
+        self.assertEqual(sendmail.call_count, 1)
+
+    def test_request_rejected_while_checkout_open(self):
+        self._checked_in_log(today())
+        frappe.set_user(self.emp_user)
+        with patch("frappe.utils.now_datetime", return_value=self._at(today(), "15:00")):
+            with self.assertRaises(frappe.ValidationError):
+                request_late_checkout_approval(today(), "early")
+
+    # ── page context ──
+    def test_page_context_locks_today_after_cutoff(self):
+        self._checked_in_log(today())
+        frappe.set_user(self.emp_user)
+        context = frappe._dict()
+        with patch("frappe.utils.now_datetime", return_value=self._at(today(), "22:30")):
+            daily_checkin_page.get_context(context)
+        self.assertTrue(context.checkout_locked)
+        self.assertFalse(context.checkout_unlock_requested)
+
+    def test_page_context_open_before_cutoff(self):
+        self._checked_in_log(today())
+        frappe.set_user(self.emp_user)
+        context = frappe._dict()
+        with patch("frappe.utils.now_datetime", return_value=self._at(today(), "15:00")):
+            daily_checkin_page.get_context(context)
+        self.assertFalse(context.checkout_locked)
+        self.assertFalse(context.missed_checkout)
+
+    def test_page_context_shows_missed_checkout_and_checkin_screen(self):
+        y = _get_previous_working_date(self.emp_name, today())
+        self._checked_in_log(y)
+        frappe.set_user(self.emp_user)
+        context = frappe._dict()
+        with patch("frappe.utils.now_datetime", return_value=self._at(today(), "09:00")):
+            daily_checkin_page.get_context(context)
+        self.assertEqual(str(context.missed_checkout.date), str(y))
+        self.assertFalse(context.is_checked_in, "Employee must land on today's check-in")
+        self.assertFalse(context.checkout_locked)
+
+    def _render_page(self):
+        """Render the page_content block with the real get_context output —
+        the base web template needs a full request, the block does not."""
+        import os
+        context = frappe._dict()
+        daily_checkin_page.get_context(context)
+        path = os.path.join(os.path.dirname(daily_checkin_page.__file__), "daily_checkin.html")
+        with open(path) as f:
+            template = frappe.get_jenv().from_string(f.read())
+        return "".join(template.blocks["page_content"](template.new_context(dict(context))))
+
+    def test_rendered_page_shows_lock_card_and_hides_checkout_button(self):
+        self._checked_in_log(today())
+        frappe.set_user(self.emp_user)
+        with patch("frappe.utils.now_datetime", return_value=self._at(today(), "22:30")):
+            html = self._render_page()
+        self.assertIn("Get late checkout approval from HR", html)
+        self.assertIn("requestLateCheckout(", html)
+        self.assertNotIn('id="btn-eod"', html)
+
+    def test_rendered_page_has_checkout_button_before_cutoff(self):
+        self._checked_in_log(today())
+        frappe.set_user(self.emp_user)
+        with patch("frappe.utils.now_datetime", return_value=self._at(today(), "15:00")):
+            html = self._render_page()
+        self.assertIn('id="btn-eod"', html)
+        self.assertNotIn("Get late checkout approval from HR", html)
+
+    # ── pending requests list ──
+    def test_pending_requests_listed_for_hr_only_until_unlocked(self):
+        y = _get_previous_working_date(self.emp_name, today())
+        self._checked_in_log(y)
+        frappe.set_user(self.emp_user)
+        with patch("frappe.sendmail"), \
+                patch("frappe.utils.now_datetime", return_value=self._at(today(), "09:00")):
+            request_late_checkout_approval(y, "Forgot")
+
+        frappe.set_user(self.hr_user)
+        rows = [r for r in get_late_checkout_requests() if r.employee == self.emp_name]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].reason, "Forgot")
+        self.assertEqual(str(rows[0].date), str(y))
+
+        for user in (self.emp_user, self.sysmgr_user):
+            frappe.set_user(user)
+            with self.assertRaises(frappe.PermissionError):
+                get_late_checkout_requests()
+
+        frappe.set_user(self.hr_user)
+        with patch("frappe.sendmail"):
+            unlock_late_checkout(self.emp_name, y, "ok")
+        self.assertFalse([r for r in get_late_checkout_requests() if r.employee == self.emp_name])
+
+    def _render_management_page(self, is_hr_manager):
+        import os
+        context = frappe._dict()
+        management_dashboard_page.get_context(context)
+        context.is_hr_manager = is_hr_manager
+        path = os.path.join(os.path.dirname(management_dashboard_page.__file__), "management_dashboard.html")
+        with open(path) as f:
+            template = frappe.get_jenv().from_string(f.read())
+        return "".join(template.blocks["page_content"](template.new_context(dict(context))))
+
+    def test_management_dashboard_requests_panel_for_hr_manager(self):
+        frappe.set_user(self.hr_user)
+        context = frappe._dict()
+        management_dashboard_page.get_context(context)
+        self.assertTrue(context.is_hr_manager)
+        self.assertIn('id="lcr-panel"', self._render_management_page(True))
+
+    def test_management_dashboard_hides_requests_panel_without_hr_role(self):
+        frappe.set_user(self.hr_user)
+        self.assertNotIn('id="lcr-panel"', self._render_management_page(False))
+
+    # ── last-working-day window ──
+    def test_previous_working_date_skips_sunday(self):
+        monday = getdate("2026-10-05")
+        self.assertEqual(monday.weekday(), 0)
+        self.assertEqual(str(_get_previous_working_date(self.emp_name, monday)), "2026-10-03")
+        self.assertEqual(str(_get_previous_working_date(self.emp_name, getdate("2026-10-08"))), "2026-10-07")
+
+    def test_request_rejected_for_older_than_last_working_day(self):
+        old = add_days(today(), -4)
+        self._checked_in_log(old)
+        frappe.set_user(self.emp_user)
+        with patch("frappe.sendmail") as sendmail, \
+                patch("frappe.utils.now_datetime", return_value=self._at(today(), "09:00")):
+            with self.assertRaises(frappe.ValidationError):
+                request_late_checkout_approval(old, "too old")
+        sendmail.assert_not_called()
+
+    def test_page_context_ignores_older_open_logs(self):
+        self._checked_in_log(add_days(today(), -4))
+        frappe.set_user(self.emp_user)
+        context = frappe._dict()
+        with patch("frappe.utils.now_datetime", return_value=self._at(today(), "09:00")):
+            daily_checkin_page.get_context(context)
+        self.assertFalse(context.missed_checkout)

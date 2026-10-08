@@ -3,8 +3,9 @@ from frappe.utils import today, now_datetime, getdate, get_datetime
 from st_attendance_tracker.api import (
     _to_hhmm, _to_ampm, _format_hours, _is_half_day_leave_today, _is_team_leader,
     _attach_task_files, _resolve_active_checkin_date, _get_work_log, _task_entry_dict,
-    _get_attendance_settings,
+    _get_attendance_settings, _get_previous_working_date,
 )
+from st_attendance_tracker.time_utils import get_checkout_cutoff, is_checkout_locked
 
 
 def get_context(context):
@@ -192,6 +193,20 @@ def get_context(context):
 
     has_reset_today = bool(work_log and work_log.was_reset_today)
 
+    # Checkout window: today's log after the cutoff, or an older open log
+    # the resolver skipped (shown as a banner so the employee can ask HR).
+    checkout_locked = bool(
+        morning_log and not eod_log and is_checkout_locked(date, work_log.checkout_unlocked)
+    )
+    missed_checkout = frappe.db.get_value("Daily Work Log", {
+        "employee": employee.name,
+        "morning_submitted": 1,
+        "eod_submitted": 0,
+        "checkout_unlocked": 0,
+        "date": _get_previous_working_date(employee.name, actual_today),
+    }, ["date", "unlock_requested_at"], as_dict=True)
+    cutoff_minutes = get_checkout_cutoff()
+
     context.no_cache = 1
     context.employee = employee
     context.date = date
@@ -233,6 +248,11 @@ def get_context(context):
     context.working_hours = working_hours_val
     context.title = "Daily Check-In"
     context.is_late_checkout = is_late_checkout
+    context.checkout_locked = checkout_locked
+    context.checkout_unlock_requested = bool(checkout_locked and work_log.unlock_requested_at)
+    context.checkout_cutoff_label = _to_ampm("%02d:%02d:00" % divmod(cutoff_minutes, 60))
+    context.missed_checkout = missed_checkout
+    context.missed_checkout_label = getdate(missed_checkout.date).strftime("%A, %d %B %Y") if missed_checkout else ""
     context.checkout_date_label = date_obj.strftime("%A, %d %B %Y")
 
     tours_seen = frappe.db.get_value("ST Tour Seen", frappe.session.user, "tours_seen") or ""

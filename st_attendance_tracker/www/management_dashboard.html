@@ -602,6 +602,18 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.lcr-row { padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.lcr-row:last-child { border-bottom: 0; }
+.lcr-name { font-weight: 700; color: var(--text); }
+.lcr-meta { color: var(--text-light); margin-top: 2px; }
+.lcr-reason { margin-top: 4px; color: var(--text); overflow-wrap: anywhere; }
+.lcr-act { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.lcr-act input { flex: 1 1 140px; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 12px; }
+.lcr-act button { height: 32px; padding: 0 12px; border: 0; border-radius: var(--radius-md); background: #EE1C29; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; }
+.lcr-act button:disabled { opacity: .6; cursor: default; }
+.lcr-act input:focus-visible, .lcr-act button:focus-visible { outline: 2px solid #EE1C29; outline-offset: 1px; }
+.lcr-msg { text-align: center; color: var(--text-light); font-size: 12px; padding: 16px 0; }
+
 .dp-hero {
   background: linear-gradient(135deg, var(--dark) 0%, var(--dark-light) 100%);
   padding: 20px;
@@ -1087,6 +1099,21 @@ body {
       <div id="dept-list"><div id="loading"><i class="ti ti-loader" style="font-size:22px;animation:spin .7s linear infinite" aria-hidden="true"></i><br><br>Loading...</div></div>
     </div>
     <div style="position: sticky; top: 84px; display: flex; flex-direction: column; gap: 20px;">
+      {% if is_hr_manager %}
+      <div class="dp" id="lcr-panel" style="position: static;">
+        <div class="dp-hero" style="background: linear-gradient(135deg, #7f1d1d 0%, #b91c1c 100%);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <i class="ti ti-lock-open" style="font-size: 20px; color: #fecaca;" aria-hidden="true"></i>
+            <div class="dp-name" style="font-size: 15px;">Late Checkout Requests</div>
+          </div>
+          <div class="dp-dept" style="color: rgba(255, 255, 255, 0.7); margin-top: 4px;">Approve to let one employee check out for one date</div>
+        </div>
+        <div class="dp-body" id="lcr-body" style="max-height: 320px; overflow-y: auto; padding: 16px;" aria-live="polite">
+          <div class="lcr-msg">Loading...</div>
+        </div>
+      </div>
+      {% endif %}
+
       <div class="dp" id="leaderboard-panel" style="position: static;">
         <div class="dp-hero" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);">
           <div style="display: flex; align-items: center; gap: 8px;">
@@ -1316,9 +1343,57 @@ function resetDetailPanel(){
     '<div class="dp-body"><div class="empty-dp"><i class="ti ti-user-search" aria-hidden="true"></i><p>Click any employee to view their tasks and time details</p></div></div>';
 }
 
+
+function loadLateCheckoutRequests(){
+  var body = document.getElementById('lcr-body');
+  if(!body) return;
+  frappe.call({
+    method:'st_attendance_tracker.api.get_late_checkout_requests',
+    callback:function(r){ renderLateCheckoutRequests(r.message||[]); },
+    error:function(){ body.replaceChildren(lcrMsg('Could not load requests.')); }
+  });
+}
+function lcrMsg(text){
+  var d = document.createElement('div'); d.className = 'lcr-msg'; d.textContent = text; return d;
+}
+function renderLateCheckoutRequests(rows){
+  var body = document.getElementById('lcr-body');
+  if(!rows.length){ body.replaceChildren(lcrMsg('No pending requests.')); return; }
+  body.replaceChildren.apply(body, rows.map(function(row){
+    var el = document.createElement('div'); el.className = 'lcr-row';
+    var name = document.createElement('div'); name.className = 'lcr-name'; name.textContent = row.employee_name || row.employee;
+    var meta = document.createElement('div'); meta.className = 'lcr-meta';
+    meta.textContent = (row.department || '') + (row.department ? ' · ' : '') + 'Checkout for ' + row.date;
+    var reason = document.createElement('div'); reason.className = 'lcr-reason';
+    reason.textContent = row.reason ? 'Reason: ' + row.reason : 'No reason given';
+    var act = document.createElement('div'); act.className = 'lcr-act';
+    var input = document.createElement('input'); input.type = 'text'; input.maxLength = 200;
+    input.placeholder = 'Approval note (required)';
+    input.setAttribute('aria-label', 'Approval note for ' + (row.employee_name || row.employee));
+    var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Approve';
+    btn.onclick = function(){ approveLateCheckout(row, input, btn); };
+    act.append(input, btn);
+    el.append(name, meta, reason, act);
+    return el;
+  }));
+}
+function approveLateCheckout(row, input, btn){
+  var note = input.value.trim();
+  if(!note){ input.focus(); input.style.borderColor = '#dc2626'; return; }
+  btn.disabled = true;
+  frappe.call({
+    method:'st_attendance_tracker.api.unlock_late_checkout',
+    type:'POST',
+    args:{ employee: row.employee, date: row.date, reason: note },
+    callback:function(){ loadLateCheckoutRequests(); },
+    error:function(){ btn.disabled = false; btn.textContent = 'Retry'; }
+  });
+}
+
 var LOAD_ALL_GEN = 0;
 function loadAll(date){
   var gen = ++LOAD_ALL_GEN;
+  loadLateCheckoutRequests();
   resetDetailPanel();
   document.getElementById('dept-list').innerHTML='<div id="loading" style="text-align:center;padding:48px;color:#9ca3af;font-size:13px"><i class="ti ti-loader" style="font-size:22px;animation:spin .7s linear infinite" aria-hidden="true"></i><br><br>Loading...</div>';
   frappe.call({

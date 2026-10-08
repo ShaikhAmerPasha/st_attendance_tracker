@@ -28,6 +28,8 @@ def get_context(context):
     context.employee = employee
     context.date = today()
     context.title = "Management Dashboard"
+    # Only HR Manager can unlock late checkout, so only they get the requests panel.
+    context.is_hr_manager = "HR Manager" in user_roles
 
     tours_seen = frappe.db.get_value("ST Tour Seen", frappe.session.user, "tours_seen") or ""
     context.show_tour_management_dashboard = "management_dashboard_v1" not in tours_seen.split(",")

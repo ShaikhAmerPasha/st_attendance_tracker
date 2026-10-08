@@ -2567,6 +2567,22 @@ body {
   align-items: center;
   gap: 8px;
 }
+.lock-card {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  color: #991b1b;
+}
+.lock-card-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lock-card-row + .lock-card-row { margin-top: 8px; }
+.lock-card input[type=text] {
+  flex: 1 1 200px; min-width: 0; height: 34px; padding: 0 10px;
+  border: 1px solid #fecaca; border-radius: var(--radius-md); font-size: 12px;
+}
+.lock-card input[type=text]:focus-visible, .lock-card .fbtn:focus-visible { outline: 2px solid #dc2626; outline-offset: 1px; }
 .remark-toggle {
   display: flex;
   align-items: center;
@@ -3161,6 +3177,31 @@ body > .container { padding-top: 0 !important; }
 </div>
 {% elif is_checked_in %}
 <div class="body">
+  {% if checkout_locked %}
+  <div class="lock-card" role="alert">
+    <div class="lock-card-row"><i class="ti ti-lock" aria-hidden="true"></i><span>Checkout closed at {{ checkout_cutoff_label }} for <strong>{{ checkout_date_label }}</strong>. Get late checkout approval from HR.</span></div>
+    {% if checkout_unlock_requested %}
+    <div class="lock-card-row"><i class="ti ti-clock-check" aria-hidden="true"></i><span>Approval requested. HR has been notified.</span></div>
+    {% else %}
+    <div class="lock-card-row">
+      <input type="text" maxlength="200" aria-label="Reason for late checkout" placeholder="Reason (optional)" id="lock-reason-{{ date }}">
+      <button type="button" class="fbtn dk" onclick="requestLateCheckout('{{ date }}', this)">Request HR approval</button>
+    </div>
+    {% endif %}
+  </div>
+  {% elif missed_checkout %}
+  <div class="lock-card" role="alert">
+    <div class="lock-card-row"><i class="ti ti-lock" aria-hidden="true"></i><span>You did not check out on <strong>{{ missed_checkout_label }}</strong>. Get late checkout approval from HR.</span></div>
+    {% if missed_checkout.unlock_requested_at %}
+    <div class="lock-card-row"><i class="ti ti-clock-check" aria-hidden="true"></i><span>Approval requested. HR has been notified.</span></div>
+    {% else %}
+    <div class="lock-card-row">
+      <input type="text" maxlength="200" aria-label="Reason for late checkout" placeholder="Reason (optional)" id="lock-reason-{{ missed_checkout.date }}">
+      <button type="button" class="fbtn dk" onclick="requestLateCheckout('{{ missed_checkout.date }}', this)">Request HR approval</button>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
   {% if is_late_checkout %}
   <div class="late-checkout-banner">
     <i class="ti ti-alert-triangle" aria-hidden="true"></i>
@@ -3374,7 +3415,7 @@ body > .container { padding-top: 0 !important; }
   <div style="height:20px"></div>
 </div>
 <footer class="app-footer">
-  <button class="fbtn dk" id="btn-eod" onclick="confirmCheckout()"><i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit</button>
+  {% if not checkout_locked %}<button class="fbtn dk" id="btn-eod" onclick="confirmCheckout()"><i class="ti ti-logout" aria-hidden="true"></i>Check out &amp; submit</button>{% endif %}
   <button class="fbtn gh" onclick="addEodProject()" title="Add a new project (Shift+P)"><i class="ti ti-folder-plus" aria-hidden="true"></i>Project</button>
   <button class="fbtn gh" onclick="addAdhoc()" title="Add a task (Shift+T)"><i class="ti ti-plus" aria-hidden="true"></i>Task</button>
   <button class="fbtn grn" id="btn-save-adhoc" onclick="saveAllAdhocTasks()" title="Save newly added tasks now so your Team Leader sees them right away" style="display:none"><i class="ti ti-device-floppy" aria-hidden="true"></i>Save</button>
@@ -3384,6 +3425,19 @@ body > .container { padding-top: 0 !important; }
 </footer>
 {% else %}
 <div class="body">
+  {% if missed_checkout %}
+  <div class="lock-card" role="alert">
+    <div class="lock-card-row"><i class="ti ti-lock" aria-hidden="true"></i><span>You did not check out on <strong>{{ missed_checkout_label }}</strong>. Get late checkout approval from HR.</span></div>
+    {% if missed_checkout.unlock_requested_at %}
+    <div class="lock-card-row"><i class="ti ti-clock-check" aria-hidden="true"></i><span>Approval requested. HR has been notified.</span></div>
+    {% else %}
+    <div class="lock-card-row">
+      <input type="text" maxlength="200" aria-label="Reason for late checkout" placeholder="Reason (optional)" id="lock-reason-{{ missed_checkout.date }}">
+      <button type="button" class="fbtn dk" onclick="requestLateCheckout('{{ missed_checkout.date }}', this)">Request HR approval</button>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
   <div class="wl-wrap" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 12px; background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm);">
     <div>
       <label class="wl-lbl" style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;"><i class="ti ti-clock" aria-hidden="true"></i>Login time *</label>
@@ -4744,6 +4798,22 @@ document.addEventListener('input', function(e) {
   // recalc() + Pending->In Progress auto-promotion for .act-in/.adhoc-act
   // is handled by the single input listener defined earlier (see recalc()).
 });
+async function requestLateCheckout(date, btn) {
+  var reasonEl = document.getElementById('lock-reason-' + date);
+  btn.disabled = true;
+  try {
+    await frappe.call({
+      method: 'st_attendance_tracker.api.request_late_checkout_approval',
+      type: 'POST',
+      args: { date: date, reason: reasonEl ? reasonEl.value : '' }
+    });
+    toast('Request sent to HR', 'ok');
+    setTimeout(function(){ location.reload(); }, 800);
+  } catch (e) {
+    btn.disabled = false;
+    toast('Could not send request. Try again or contact HR.', 'err');
+  }
+}
 async function resetCheckin() {
   if (!confirm("Are you sure you want to reset today's check-in? This will delete today's check-in log and newly added morning tasks, restoring your state back to before check-in.")) return;
   var btn = document.getElementById('btn-reset-ci');
