@@ -541,6 +541,7 @@
     if (late) {
       html += '<div class="cal-banner"><b>You did not check out on ' + dayLabel(BOOT.active_date) + '.</b><div style="margin-top:4px">Check out for that day first. Your tasks from today stay as they are.</div></div>';
     }
+    html += lockCardHTML();
     if (!morningDone()) html += morningHTML();
     else if (!eodDone()) html += workingHTML();
     else html += summaryHTML();
@@ -548,6 +549,30 @@
     if (btn) side.appendChild(btn);
     side.insertAdjacentHTML('beforeend', html);
     bindSide(side);
+  }
+
+  /* Checkout closed after the cutoff: the employee asks an HR Manager to unlock it. */
+  function lockCardHTML() {
+    var date, text, requested;
+    if (BOOT.checkout_locked) {
+      date = BOOT.active_date; requested = BOOT.checkout_unlock_requested;
+      text = 'Checkout closed at ' + esc(BOOT.checkout_cutoff_label) + ' for <b>' + esc(dayLabel(date)) + '</b>. Get late checkout approval from HR.';
+    } else if (BOOT.missed_checkout) {
+      date = BOOT.missed_checkout.date; requested = BOOT.missed_checkout.requested;
+      text = 'You did not check out on <b>' + esc(dayLabel(date)) + '</b>. Get late checkout approval from HR.';
+    } else return '';
+    return '<div class="cal-banner" role="alert"><i class="ti ti-lock" aria-hidden="true"></i> ' + text +
+      (requested ? '<div style="margin-top:6px"><i class="ti ti-clock-check" aria-hidden="true"></i> Approval requested. HR has been notified.</div>'
+        : '<div class="cal-row" style="margin-top:8px"><input class="cal-input" id="lock-reason" maxlength="200" placeholder="Reason (optional)…" aria-label="Reason for late checkout" style="flex:1 1 160px">' +
+          '<button type="button" class="cal-btn primary" id="lock-request" data-date="' + esc(date) + '">Request HR approval</button></div>') + '</div>';
+  }
+  function requestLateCheckout(btn) {
+    var reason = $('#lock-reason');
+    btn.disabled = true;
+    api(API + 'request_late_checkout_approval', { date: btn.dataset.date, reason: reason ? reason.value : '' }, true).then(function () {
+      toast('Request sent to HR');
+      setTimeout(function () { window.location.reload(); }, 800);
+    }).catch(function (e) { btn.disabled = false; toast(e.message || 'Could not send request. Try again or contact HR.', null, true); });
   }
 
   function morningHTML() {
@@ -595,7 +620,7 @@
       '<form id="cal-af" class="cal-card" style="display:flex;flex-direction:column;gap:8px;margin-top:10px" novalidate><b>Add a task</b>' +
       '<textarea class="cal-ta" id="a-d" rows="1" placeholder="Task description" aria-label="Task description" required></textarea><div class="cal-pe" style="margin-top:0"><input class="cal-input" id="a-p" placeholder="Project" aria-label="Project"><input class="cal-input" id="a-e" placeholder="1h" aria-label="Estimated time"></div>' +
       '<p id="a-err" class="cal-err" role="alert"></p><button class="cal-btn" type="submit">Save task</button></form>' +
-      '<div class="cal-card" style="margin-top:14px"><b>End of day</b><p style="margin:4px 0 10px;color:var(--st-muted)">Set each task\'s status, enter lunch time, then check out.</p><button type="button" class="cal-btn dark block" id="cal-checkout">Check out</button></div>' +
+      '<div class="cal-card" style="margin-top:14px"><b>End of day</b><p style="margin:4px 0 10px;color:var(--st-muted)">Set each task\'s status, enter lunch time, then check out.</p><button type="button" class="cal-btn dark block" id="cal-checkout"' + (BOOT.checkout_locked ? ' disabled' : '') + '>Check out</button></div>' +
       (S.page && !BOOT.is_late_checkout ? (S.page.has_reset_today
         ? '<button type="button" class="cal-btn block" id="cal-reset" style="margin-top:12px" disabled aria-describedby="cal-reset-note">Reset check-in</button><p id="cal-reset-note" class="cal-hint" style="margin:6px 2px 0">Already reset once today. A check-in can be reset once a day.</p>'
         : '<button type="button" class="cal-btn block" id="cal-reset" style="margin-top:12px">Reset check-in</button>') : '') + trayHTML();
@@ -620,6 +645,7 @@
       tray.addEventListener('dragover', function (e) { e.preventDefault(); tray.classList.add('drop'); });
       tray.addEventListener('dragleave', function () { tray.classList.remove('drop'); });
     }
+    var lockBtn = $('#lock-request', side); if (lockBtn) lockBtn.onclick = function () { requestLateCheckout(lockBtn); };
     var reload = $('#cal-reload', side); if (reload) reload.onclick = function () { window.location.reload(); };
     side.onclick = function (e) {
       var seg = e.target.closest('.cal-seg[data-task] [data-s]');
@@ -800,10 +826,20 @@
       '<label class="cal-f">Start time<input id="et-start" type="time" value="' + (ev ? toT(ev.start) : '') + '"></label>' +
       '<label class="cal-f">Remarks<textarea id="et-rem" rows="2" class="cal-ta" placeholder="Optional">' + esc(t.remarks || '') + '</textarea></label>' +
       '<div class="cal-f">Attachments<div class="cal-row" id="et-files"></div><input type="file" id="et-file" multiple style="height:auto;padding:6px 10px"></div>' +
+      (rec || t.status !== 'Done' ? '' : '<div class="cal-f"><label class="cal-chk"><input type="checkbox" id="et-rep"' + (t.repeat_next_day ? ' checked' : '') + '><span>Repeat next day</span></label>' +
+        '<span class="cal-hint" style="margin:0">A copy comes back on your next working day, even after you finish it. It keeps coming back until you turn this off.</span></div>') +
       (rec ? '<p class="cal-hint" style="margin:0">This task comes from a recurring template. Change its description or project on the Recurring Tasks page.</p>' : '') +
       '<p id="et-err" class="cal-err" role="alert"></p><div class="cal-actions"><button type="button" class="cal-btn" id="et-x">Cancel</button><button type="submit" class="cal-btn primary" id="et-ok">Save</button></div></form>';
     d.showModal(); $('#et-x').onclick = function () { d.close(); };
     mountAttachments($('#et-files'), t.name, true);
+    var repeatChanged = false;
+    if ($('#et-rep')) $('#et-rep').onchange = function () {
+      var box = this, on = box.checked; box.disabled = true;
+      api(CAL + 'set_task_repeat', { name: t.name, repeat: on ? 1 : 0 }, true).then(function () {
+        repeatChanged = true; box.disabled = false; toast(on ? 'This task will come back on your next working day.' : 'This task will not repeat.');
+      }).catch(function (er) { box.checked = !on; box.disabled = false; $('#et-err').textContent = er.message; });
+    };
+    d.onclose = function () { d.onclose = null; if (repeatChanged) refresh(); };
     $('#et-file').onchange = function () { uploadFiles(this.files, t.name, $('#et-files'), $('#et-err')); this.value = ''; };
     $('form', d).onsubmit = function (e) {
       e.preventDefault();
@@ -917,19 +953,37 @@
       tasks.map(function (t) {
         return '<tr data-name="' + esc(t.name) + '"><td><b style="overflow-wrap:anywhere">' + esc(t.description) + '</b><div style="color:var(--st-muted);font-size:11px">' + esc(t.project_name || '') + '</div></td>' +
           '<td><select data-f="st" aria-label="Status">' + Object.keys(STATUS).map(function (k) { return '<option value="' + k + '"' + (k === t.status ? ' selected' : '') + '>' + STATUS[k].label + '</option>'; }).join('') + '</select></td>' +
-          '<td><input data-f="act" value="' + esc(hoursText(t.actual_time)) + '" placeholder="1h 30m" aria-label="Time taken"></td>' +
-          '<td><textarea data-f="rem" rows="1" class="cal-ta" placeholder="Optional" aria-label="Remarks">' + esc(t.remarks || '') + '</textarea></td>' +
-          '<td><label class="cal-chk"><input type="checkbox" data-f="carry" checked><span>Yes</span></label></td></tr>';
+          '<td><input data-f="act" value="' + esc(hoursText(t.actual_time)) + '" placeholder="45m or 1h 30m" aria-label="Time taken (a bare number means minutes)"></td>' +
+          '<td class="cal-rem"><button type="button" class="cal-link" data-f="rem-add" aria-label="Add a remark for ' + esc(t.description) + '" hidden>Add remark</button>' +
+            '<textarea data-f="rem" rows="1" class="cal-ta" placeholder="Add a remark…" aria-label="Remark" hidden></textarea></td>' +
+          '<td><label class="cal-chk"><input type="checkbox" data-f="carry" checked><span>Yes</span></label>' +
+          (t.task_type === 'Recurring' ? '' : '<label class="cal-chk" data-rep-cell style="display:none"' + '><input type="checkbox" data-f="repeat"' + (t.repeat_next_day ? ' checked' : '') + '><span>Repeat next day</span></label>') + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
       '<p id="c-note" style="margin:0;color:var(--st-muted)"></p><p id="c-err" class="cal-err" role="alert"></p>' +
       '<div class="cal-actions"><button type="button" class="cal-btn" id="c-x">Cancel</button><button type="submit" class="cal-btn primary" id="c-ok">Submit check-out</button></div></form>';
     var note = function () {
+      $$('tr[data-name]', d).forEach(function (tr) {
+        var st = $('[data-f=st]', tr).value, ta = $('[data-f=rem]', tr), add = $('[data-f=rem-add]', tr), eligible = st === 'Done' || st === 'In Progress';
+        if (!eligible) { ta.value = ''; }
+        add.hidden = !eligible || !ta.hidden;
+        if (!eligible) ta.hidden = true;
+      });
       var open = $$('tr[data-name]', d).filter(function (tr) { return $('[data-f=st]', tr).value !== 'Done'; });
-      $$('tr[data-name]', d).forEach(function (tr) { $('[data-f=carry]', tr).closest('label').style.visibility = $('[data-f=st]', tr).value === 'Done' ? 'hidden' : 'visible'; });
+      $$('tr[data-name]', d).forEach(function (tr) {
+        var isDone = $('[data-f=st]', tr).value === 'Done', rep = $('[data-rep-cell]', tr);
+        $('[data-f=carry]', tr).closest('label').style.display = isDone ? 'none' : '';
+        if (rep) { rep.style.display = isDone ? '' : 'none'; if (!isDone) $('[data-f=repeat]', tr).checked = false; }
+      });
       var carry = open.filter(function (tr) { return $('[data-f=carry]', tr).checked; }).length;
       $('#c-note', d).textContent = open.length ? carry + ' of ' + open.length + ' unfinished task' + (open.length > 1 ? 's' : '') + ' will carry over to the next working day.' : 'All tasks are done.';
     };
-    note(); d.onchange = note; d.showModal();
+    note(); d.onchange = note;
+    d.onclick = function (e) {
+      var add = e.target.closest('[data-f=rem-add]');
+      if (!add) return;
+      var ta = $('[data-f=rem]', add.closest('tr')); ta.hidden = false; add.hidden = true; ta.focus();
+    };
+    d.showModal();
     $('#c-x').onclick = function () { d.close(); };
     $('form', d).onsubmit = function (e) {
       e.preventDefault();
@@ -938,9 +992,9 @@
       if (ls && le && toMin(le) <= toMin(ls)) { err.textContent = 'Lunch end must be after lunch start.'; return; }
       var updates = [], bad = null;
       $$('tr[data-name]', d).forEach(function (tr) {
-        var st = $('[data-f=st]', tr).value, act = normDuration($('[data-f=act]', tr).value), t = tasks.filter(function (x) { return x.name === tr.dataset.name; })[0];
+        var st = $('[data-f=st]', tr).value, act = $('[data-f=act]', tr).value.trim(), t = tasks.filter(function (x) { return x.name === tr.dataset.name; })[0];
         if (st === 'Done' && !act && !bad) bad = 'Enter the time taken for "' + t.description + '".';
-        updates.push({ name: tr.dataset.name, status: st, actual_time: act, remarks: $('[data-f=rem]', tr).value.trim(), carry_forward: st === 'Done' ? true : $('[data-f=carry]', tr).checked });
+        updates.push({ name: tr.dataset.name, status: st, actual_time: act, remarks: $('[data-f=rem]', tr).value.trim() || t.remarks || '', carry_forward: st === 'Done' ? true : $('[data-f=carry]', tr).checked, repeat_next_day: st === 'Done' && $('[data-f=repeat]', tr) && $('[data-f=repeat]', tr).checked ? 1 : 0 });
       });
       if (bad) { err.textContent = bad; return; }
       var ok = $('#c-ok'); ok.disabled = true; ok.textContent = 'Checking out…';

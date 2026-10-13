@@ -281,7 +281,8 @@ class TestCheckinCalendarPage(FrappeTestCase):
         self.assertEqual(
             sorted(context.boot),
             sorted(["employee", "today", "active_date", "is_late_checkout", "location_config",
-                    "half_day_leave", "is_team_leader", "late_after"]),
+                    "half_day_leave", "is_team_leader", "late_after", "checkout_locked", "checkout_unlock_requested",
+                    "checkout_cutoff_label", "missed_checkout"]),
         )
         self.assertIn(context.boot["location_config"]["value"], context.boot["location_config"]["options"])
 

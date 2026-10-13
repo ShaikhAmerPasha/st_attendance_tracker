@@ -7,6 +7,7 @@
   "section_thresholds",
   "late_checkin_threshold",
   "standard_workday_hours",
+  "checkout_cutoff_time",
   "section_hybrid",
   "hybrid_office_days",
   "hybrid_days_note",
@@ -41,6 +42,13 @@
    "fieldname": "standard_workday_hours",
    "fieldtype": "Float",
    "label": "Standard Workday Hours"
+  },
+  {
+   "default": "22:00:00",
+   "description": "After this time employees cannot check out; an HR Manager must unlock late checkout for that employee and date.",
+   "fieldname": "checkout_cutoff_time",
+   "fieldtype": "Time",
+   "label": "Checkout Cutoff Time"
   },
   {
    "fieldname": "section_hybrid",

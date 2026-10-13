@@ -3,11 +3,15 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime, flt
 from st_attendance_tracker.time_utils import (
     parse_duration_to_hours, time_to_minutes, validate_lunch_hours, calculate_net_minutes,
+    is_checkout_locked,
 )
 from st_attendance_tracker.api import _get_attendance_settings
 
 
 _TIME_FIELDS = ("login_time", "logout_time", "lunch_from", "lunch_to")
+_UNLOCK_FIELDS = ("checkout_unlocked", "unlocked_by", "unlocked_at", "unlock_reason")
+_UNLOCK_REQUEST_FIELDS = ("unlock_requested_at", "unlock_request_reason")
+_UNLOCK_ROLES = {"HR Manager", "System Manager"}
 
 
 class DailyWorkLog(Document):
@@ -39,6 +43,8 @@ class DailyWorkLog(Document):
 
     def validate(self):
         self._check_locked()
+        self._guard_unlock_fields()
+        self._check_checkout_window()
         self._validate_no_duplicate()
         self._prepare_tasks()
         if self.eod_submitted and not self.login_time:
@@ -105,6 +111,42 @@ class DailyWorkLog(Document):
             frappe.throw(
                 "Cannot modify this log after End of Day has been submitted.",
                 frappe.ValidationError,
+            )
+
+    def _guard_unlock_fields(self):
+        """The late-checkout approval fields are read-only in the form, but
+        that does not stop a direct REST write — enforce it here. Only an HR
+        Manager/System Manager may unlock; an employee may only record their
+        own request, and only through request_late_checkout_approval."""
+        if frappe.session.user == "Administrator":
+            return
+        before = self.get_doc_before_save()
+
+        def changed(fieldnames):
+            return any(
+                (self.get(f) or None) != ((before.get(f) if before else None) or None)
+                for f in fieldnames
+            )
+
+        if changed(_UNLOCK_FIELDS) and not (_UNLOCK_ROLES & set(frappe.get_roles(frappe.session.user))):
+            frappe.throw("Only an HR Manager can unlock late checkout.", frappe.PermissionError)
+        if changed(_UNLOCK_REQUEST_FIELDS) and not frappe.flags.in_late_checkout_request \
+                and not (_UNLOCK_ROLES & set(frappe.get_roles(frappe.session.user))):
+            frappe.throw("Request late checkout approval from the check-in page.", frappe.PermissionError)
+
+    def _check_checkout_window(self):
+        """Checkout closes at the cutoff time unless HR unlocked this log.
+        Enforced on the document so REST/desk writes cannot bypass the
+        whitelisted checkout API's own gate."""
+        if not self.eod_submitted or frappe.session.user == "Administrator":
+            return
+        before = self.get_doc_before_save()
+        if before and before.eod_submitted:
+            return
+        if is_checkout_locked(self.date, self.checkout_unlocked):
+            frappe.throw(
+                "Checkout window is closed. Get late checkout approval from HR.",
+                frappe.PermissionError,
             )
 
     def _validate_no_duplicate(self):

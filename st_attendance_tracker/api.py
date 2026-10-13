@@ -32,7 +32,7 @@ from frappe.utils import today, now_datetime, getdate, add_days, cint
 from frappe.desk.form.load import get_attachments
 from frappe.rate_limiter import rate_limit
 from frappe.utils.user import get_users_with_role
-from st_attendance_tracker.time_utils import parse_duration_to_hours
+from st_attendance_tracker.time_utils import is_checkout_locked, parse_duration_to_hours
 
 
 # ── Employee helper ────────────────────────────────────────────────────────────
@@ -193,6 +193,7 @@ def _task_entry_dict(row, parent_date):
         "actual_time": get("actual_time"),
         "project_name": get("project_name"),
         "series_id": get("series_id"),
+        "repeat_next_day": cint(get("repeat_next_day")),
         "assigned_by": get("assigned_by"),
         "assigned_by_name": get("assigned_by_name"),
         "start_time": (_to_hhmm(get("start_time")) or None) if get("start_time") else None,
@@ -1143,14 +1144,16 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
 
 # ── Next working date ──────────────────────────────────────────────────────────
 
-def _get_next_working_date(employee, from_date):
+def _employee_holidays(employee):
     holiday_list = frappe.db.get_value("Employee", employee, "holiday_list")
-    holidays = set()
-    if holiday_list:
-        rows = frappe.get_all(
-            "Holiday", filters={"parent": holiday_list}, pluck="holiday_date"
-        )
-        holidays = {getdate(h) for h in rows}
+    if not holiday_list:
+        return set()
+    rows = frappe.get_all("Holiday", filters={"parent": holiday_list}, pluck="holiday_date")
+    return {getdate(h) for h in rows}
+
+
+def _get_next_working_date(employee, from_date):
+    holidays = _employee_holidays(employee)
 
     candidate = getdate(add_days(from_date, 1))
     while True:
@@ -1164,6 +1167,27 @@ def _get_next_working_date(employee, from_date):
     return candidate
 
 
+def _get_previous_working_date(employee, from_date):
+    """Last working day before `from_date`: skips Sundays and the employee's
+    holiday list, same rule as _get_next_working_date."""
+    holidays = _employee_holidays(employee)
+
+    candidate = getdate(add_days(from_date, -1))
+    while candidate.weekday() == 6 or candidate in holidays:
+        candidate = getdate(add_days(candidate, -1))
+    return candidate
+
+
+def _assert_checkout_allowed(work_log):
+    """Early, friendly gate for the whitelisted checkout paths. The Daily
+    Work Log controller enforces the same rule on every save (REST included)."""
+    if is_checkout_locked(work_log.date, work_log.checkout_unlocked):
+        frappe.throw(
+            "Checkout window is closed. Get late checkout approval from HR.",
+            frappe.PermissionError,
+        )
+
+
 def _resolve_active_checkin_date(employee_name):
     """Which date's check-in is still 'open' (checked in, no EOD submitted
     yet) — the date the checkin/checkout page and EOD submission should act
@@ -1175,18 +1199,71 @@ def _resolve_active_checkin_date(employee_name):
     "don't fabricate a real span past one legitimate day" rule already
     applied in resolve_zero_diff_minutes (time_utils.py).
     """
+    # An HR-approved late checkout (any past date) takes priority: the
+    # employee finishes that EOD before continuing with today.
+    unlocked_stale = frappe.db.get_value("Daily Work Log", {
+        "employee": employee_name,
+        "morning_submitted": 1,
+        "eod_submitted": 0,
+        "checkout_unlocked": 1,
+        "date": ["<", today()],
+    }, "date", order_by="date asc")
+    if unlocked_stale:
+        return unlocked_stale
+
     latest = frappe.db.get_value("Daily Work Log", {
         "employee": employee_name,
         "morning_submitted": 1,
         "date": [">=", add_days(today(), -1)],
-    }, ["date", "eod_submitted"], order_by="date desc", as_dict=True)
+    }, ["date", "eod_submitted", "checkout_unlocked"], order_by="date desc", as_dict=True)
 
-    if not latest:
+    if not latest or latest.eod_submitted:
         return today()
-    return latest.date if not latest.eod_submitted else today()
+    # A past-date log whose checkout window closed without HR approval must
+    # not hijack the page: the employee checks in for today instead.
+    if str(latest.date) != str(today()) and is_checkout_locked(latest.date, latest.checkout_unlocked):
+        return today()
+    return latest.date
 
 
 # ── Rollover on EOD ────────────────────────────────────────────────────────────
+
+def _repeat_copies(source_log, target_log, target_date, only_done=True):
+    """Fresh next-day copies of the tasks the employee marked "Repeat next day".
+
+    A copy gets its own series_id on purpose: sharing the source's would make _is_series_done /
+    _cascade_series_done treat the new copy as already finished. The flag is copied, so the task keeps
+    coming back until the employee turns it off. Idempotent: skips a copy that is already on the target
+    day (same text and project, created for that day).
+    Recurring-type tasks are excluded; they have their own schedule.
+    """
+    made = 0
+    for row in source_log.tasks:
+        if not cint(row.get("repeat_next_day")) or row.task_type == "Recurring" or row.status == "Dropped":
+            continue
+        if only_done and row.status != "Done":
+            continue
+        already = any(
+            cint(t.get("repeat_next_day")) and t.description == row.description
+            and (t.project_name or "") == (row.project_name or "") and str(t.origin_date) == str(target_date)
+            for t in target_log.tasks
+        )
+        if already:
+            continue
+        new_row = target_log.append("tasks", {})
+        new_row.series_id = frappe.generate_hash(length=32)
+        new_row.origin_date = target_date
+        new_row.description = row.description
+        new_row.task_type = "Planned"
+        new_row.status = "Pending"
+        new_row.estimated_time = row.estimated_time or ""
+        new_row.project_name = row.project_name or ""
+        new_row.repeat_next_day = 1
+        new_row.remarks = f"[Repeated from {source_log.date}]"
+        new_row.sequence = _next_sequence(target_log) + 1
+        made += 1
+    return made
+
 
 def _rollover_pending_tasks(employee, date):
     # Lock the employee record to serialize EOD rollovers and prevent duplicate entries
@@ -1200,11 +1277,14 @@ def _rollover_pending_tasks(employee, date):
 
     pending = [row for row in work_log.tasks
                if row.status in ("Pending", "In Progress") and row.task_type != "Recurring"]
-    if not pending:
+    has_repeaters = any(cint(row.get("repeat_next_day")) and row.status == "Done" and row.task_type != "Recurring"
+                        for row in work_log.tasks)
+    if not pending and not has_repeaters:
         return 0
 
     next_log = _get_or_new_work_log(employee, next_date)
     existing_series = {row.series_id for row in next_log.tasks}
+    repeated = _repeat_copies(work_log, next_log, next_date)
 
     # Source-row status changes below go through frappe.db.set_value, not
     # work_log.save() — this source day's Daily Work Log may already be
@@ -1233,12 +1313,13 @@ def _rollover_pending_tasks(employee, date):
         new_row.estimated_time = row.estimated_time or ""
         new_row.project_name = row.project_name or ""
         new_row.remarks = f"[Carried from {row.origin_date or date}]"
+        new_row.repeat_next_day = cint(row.get("repeat_next_day"))
         new_row.sequence = _next_sequence(next_log) + 1
         existing_series.add(row.series_id)
         frappe.db.set_value("Task Entry", row.name, "status", "Rolled Over")
         rolled += 1
 
-    if rolled:
+    if rolled or repeated:
         _save_work_log(next_log)
         frappe.db.commit()
     return rolled
@@ -1292,10 +1373,18 @@ def _safety_rollover(employee, today_date):
             new_row.estimated_time = row.estimated_time or ""
             new_row.project_name = row.project_name or ""
             new_row.remarks = f"[Auto-carried from {row.origin_date or source.date}]"
+            new_row.repeat_next_day = cint(row.get("repeat_next_day"))
             new_row.sequence = _next_sequence(today_log) + 1
             existing_series.add(row.series_id)
             frappe.db.set_value("Task Entry", row.name, "status", "Rolled Over")
             appended = True
+
+    # "Repeat next day" tasks finished on the last day worked: bring them to today if checkout
+    # (which normally does this) never ran. Only the latest day, so an old chain is not replayed.
+    latest_name = frappe.db.get_value("Daily Work Log", {"employee": employee, "date": ["<", today_date]},
+                                      "name", order_by="date desc")
+    if latest_name and _repeat_copies(frappe.get_doc("Daily Work Log", latest_name), today_log, today_date):
+        appended = True
 
     if appended:
         _save_work_log(today_log)
@@ -2204,6 +2293,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     work_log = _get_or_new_work_log(employee.name, date)
     if work_log.eod_submitted:
         frappe.throw(f"You have already checked out for {date}.")
+    _assert_checkout_allowed(work_log)
 
     updates = json.loads(task_updates) if isinstance(task_updates, str) else task_updates
     adhocs  = json.loads(adhoc_tasks)  if isinstance(adhoc_tasks, str)  else adhoc_tasks
@@ -2230,6 +2320,12 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
             status = "Dropped"
 
         row.status = status
+        # "Repeat next day" is only for finished tasks: take the checkout's choice for a Done task,
+        # and never leave the flag on one that is not Done. Recurring tasks have their own schedule.
+        if row.task_type == "Recurring" or status != "Done":
+            row.repeat_next_day = 0
+        elif "repeat_next_day" in t:
+            row.repeat_next_day = 1 if cint(t.get("repeat_next_day")) else 0
         # Raw text passed through as-is — see the matching comment above on
         # the carried-task estimated_time assignment: Daily Work Log's own
         # validate() parses every row's actual_time exactly once on save,
@@ -2327,6 +2423,7 @@ def autosave_eod_progress(task_updates=None, lunch_from=None, lunch_to=None):
         frappe.throw("Please check in before saving progress.")
     if work_log.eod_submitted:
         frappe.throw(f"You have already checked out for {date}.")
+    _assert_checkout_allowed(work_log)
 
     updates = json.loads(task_updates) if isinstance(task_updates, str) else (task_updates or [])
     rows_by_name = {row.name: row for row in work_log.tasks if row.name}
@@ -3248,3 +3345,100 @@ def get_credentials_by_telegram_id(telegram_id):
         "employee": employee.name,
         "employee_name": employee.employee_name,
     }
+
+
+# ── Late checkout approval ─────────────────────────────────────────────────────
+
+@frappe.whitelist(methods=["POST"])
+def request_late_checkout_approval(date, reason=None):
+    """Employee asks HR to unlock checkout for one of their own locked dates.
+    Identity comes from the session; only the caller's own log is touched."""
+    employee = _get_employee()
+    work_log = _get_work_log(employee.name, getdate(date).strftime("%Y-%m-%d"))
+    if not work_log or not work_log.morning_submitted or work_log.eod_submitted:
+        frappe.throw("There is no open check-in to request checkout approval for.")
+    # Only the most recent working day can be requested; older forgotten
+    # checkouts are an HR correction in Desk, not an employee request.
+    if getdate(work_log.date) not in (getdate(today()), _get_previous_working_date(employee.name, today())):
+        frappe.throw("Late checkout approval can only be requested for your last working day.")
+    if not is_checkout_locked(work_log.date, work_log.checkout_unlocked):
+        frappe.throw("Checkout is still open for this date; no approval is needed.")
+    if work_log.unlock_requested_at:
+        return {"status": "already_requested"}
+
+    work_log.unlock_requested_at = now_datetime()
+    work_log.unlock_request_reason = (reason or "").strip()[:500] or None
+    # Lets the controller accept this write to otherwise HR-only fields.
+    frappe.flags.in_late_checkout_request = True
+    try:
+        _save_work_log(work_log)
+    finally:
+        frappe.flags.in_late_checkout_request = False
+
+    hr_emails = [u for u in _get_hr_manager_emails() if u not in ("Administrator", "Guest")]
+    if hr_emails:
+        frappe.sendmail(
+            recipients=hr_emails,
+            subject=f"Late checkout approval requested — {employee.employee_name} ({work_log.date})",
+            message=(
+                f"<p>{html_escape(employee.employee_name)} could not check out for "
+                f"{work_log.date} because the checkout window is closed.</p>"
+                f"<p>Reason: {html_escape(work_log.unlock_request_reason or '—')}</p>"
+                f"<p>Open Daily Work Log <b>{html_escape(work_log.name)}</b> and use "
+                "Actions &rarr; Unlock Late Checkout.</p>"
+            ),
+        )
+    return {"status": "requested"}
+
+
+@frappe.whitelist(methods=["POST"])
+def unlock_late_checkout(employee, date, reason):
+    """HR Manager unlocks checkout for exactly one employee and date."""
+    if "HR Manager" not in frappe.get_roles(frappe.session.user):
+        frappe.throw("Only an HR Manager can unlock late checkout.", frappe.PermissionError)
+    reason = (reason or "").strip()
+    if not reason:
+        frappe.throw("A reason is required to unlock late checkout.")
+
+    work_log = _get_work_log(employee, getdate(date).strftime("%Y-%m-%d"))
+    if not work_log or not work_log.morning_submitted or work_log.eod_submitted:
+        frappe.throw("No open check-in found for this employee and date.")
+
+    work_log.checkout_unlocked = 1
+    work_log.unlocked_by = frappe.session.user
+    work_log.unlocked_at = now_datetime()
+    work_log.unlock_reason = reason[:500]
+    # HR Manager role is enforced above. Employee-scoped User Permissions
+    # (auto-created per Employee) would otherwise stop HR saving another
+    # employee's log, so bypass only the document permission check.
+    work_log.save(ignore_permissions=True)
+
+    user_id = frappe.db.get_value("Employee", employee, "user_id")
+    if user_id:
+        frappe.sendmail(
+            recipients=[user_id],
+            subject=f"Late checkout approved for {work_log.date}",
+            message=f"<p>HR approved your late checkout for {work_log.date}. Open Daily Check-in to complete it.</p>",
+        )
+    return {"status": "unlocked"}
+
+
+@frappe.whitelist()
+def get_late_checkout_requests():
+    """Open late-checkout requests awaiting HR, oldest first. HR Manager only,
+    because only that role can act on them."""
+    if "HR Manager" not in frappe.get_roles(frappe.session.user):
+        frappe.throw("Only an HR Manager can view late checkout requests.", frappe.PermissionError)
+    return frappe.get_all(
+        "Daily Work Log",
+        filters={
+            "morning_submitted": 1,
+            "eod_submitted": 0,
+            "checkout_unlocked": 0,
+            "unlock_requested_at": ["is", "set"],
+        },
+        fields=["employee", "employee_name", "department", "date",
+                "unlock_request_reason as reason", "unlock_requested_at as requested_at"],
+        order_by="unlock_requested_at asc",
+        limit=100,
+    )

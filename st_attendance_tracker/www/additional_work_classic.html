@@ -2752,51 +2752,15 @@ body {
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 </style>
-<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic.css?v=7">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic_layout.css?v=5">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic.css?v=19">
 {% endblock %}
 {% block page_content %}
 <div class="app">
-<nav class="tnav">
-  <div class="tnav-con">
-    <span class="tnav-logo"><b>Standard</b><i>Touch</i></span>
-    <span class="tnav-sep"></span>
-    <span class="tnav-bc">Additional Work</span>
-    <div class="tnav-r">
-      <span class="tnav-date">{{ date }}</span>
-      <a href="/my-history-classic" class="tnav-btn tnav-btn-history"><i class="ti ti-history" aria-hidden="true"></i>History</a>
-      <a href="/daily-checkin-classic" class="tnav-btn"><i class="ti ti-check" aria-hidden="true"></i>My check-in</a>
-      <button type="button" class="tnav-btn" onclick="STTour.start('additional_work_v1', ADDITIONAL_WORK_TOUR_STEPS)"><i class="ti ti-map-2" aria-hidden="true"></i>Tour</button>
-      <div class="wn-bell-wrap" id="wn-mount"></div>
-      <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
-      <div class="profile-dropdown" id="profile-dropdown">
-        <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
-        <a href="/app" class="pd-item"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Switch to Desk</a>
-        <a href="/?cmd=web_logout" class="pd-item"><i class="ti ti-logout" aria-hidden="true"></i>Logout</a>
-      </div>
-    </div>
-  </div>
-</nav>
-<div id="wn-banner-mount"></div>
+{% from "st_attendance_tracker/templates/macros/classic_shell.html" import classic_nav, classic_sidebar, classic_mobnav %}
+{{ classic_nav(employee, 'Additional Work', "STTour.start('additional_work_v1', ADDITIONAL_WORK_TOUR_STEPS)", '/docs', date) }}
 <div class="cols">
-<aside class="sidebar">
-  <div class="sb-top">
-    <div class="sb-card" style="align-items: flex-start;">
-      <div class="sb-av" style="margin-top: 2px;">{{ employee.employee_name[:2].upper() }}</div>
-      <div style="flex: 1; min-width: 0;">
-        <div class="sb-name" style="word-break: break-word; font-size: 13px; font-weight: 700; color: var(--text-main); line-height: 1.35;">{{ employee.employee_name }}</div>
-        <div class="sb-dept" style="word-break: break-word; font-size: 11px; color: var(--text-muted); margin-top: 2px; margin-bottom: 8px;">{{ employee.department or 'No department' }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="sb-sec">
-    <div class="sb-lbl">Navigation</div>
-    <a href="/daily-checkin-classic" class="sb-link"><i class="ti ti-check" aria-hidden="true"></i>Today</a>
-    <a href="/my-history-classic" class="sb-link"><i class="ti ti-history" aria-hidden="true"></i>My history</a>
-    <a href="/recurring-tasks-classic" class="sb-link"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
-    <a href="/task-backlog-classic" class="sb-link"><i class="ti ti-list-details" aria-hidden="true"></i>Task Backlog</a>
-    <a href="/additional-work-classic" class="sb-link on"><i class="ti ti-briefcase" aria-hidden="true"></i>Additional work</a>
-  </div>
-</aside>
+{{ classic_sidebar(st_shell, employee, 'additional', {'recurring': recurring_count|default(0), 'backlog': backlog_count|default(0)}) }}
 <main class="main">
 <div class="body">
   <div class="wl-wrap" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 12px; background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm);">
@@ -2885,6 +2849,7 @@ body {
 </div>
 </div>
 
+{{ classic_mobnav(st_shell, 'additional') }}
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script src="/assets/st_attendance_tracker/js/whats_new.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
@@ -3316,6 +3281,6 @@ document.addEventListener('click', function(e) {
   }
 });
 </script>
-<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic.css?v=7">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic.css?v=19">
 <script src="/assets/st_attendance_tracker/js/st_classic.js?v=8" data-new="/additional-work"></script>
 {% endblock %}

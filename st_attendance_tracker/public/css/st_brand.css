@@ -260,10 +260,10 @@ html[data-theme="light"] body:has(.st-app) { background: #F3F3F4 !important; }
   .st-top { gap: 4px; padding: 0 8px 0 4px; }
   .st-logo { display: none; }
   .st-top .wn-bell-wrap { display: none; }
-  .st-title { font-size: 15px; margin-left: 2px; flex: 1 1 auto; }
+  .st-title { font-size: 15px; margin-left: 2px; flex: 1 1 0; }
   .st-sp { display: none; }
   .st-seg button { padding: 0 7px; font-size: 11.5px; }
-  .st-title { max-width: 30vw; }
+  .st-title { max-width: none; }
   .st-icon-btn { width: 34px; height: 34px; }
 }
 @media (max-width: 600px) { .st-top .st-seg { flex: none; } }
@@ -287,3 +287,95 @@ html[data-theme="light"] body:has(.st-app) { background: #F3F3F4 !important; }
 :root[data-theme="dark"] .st-app .sbb-out, :root[data-theme="dark"] .st-app .pg-head, :root[data-theme="dark"] .st-app .gstats { background: var(--st-panel2) !important; border-color: var(--st-line) !important; color: var(--st-ink); }
 :root[data-theme="dark"] .st-app .day-badge { border-color: var(--st-line); }
 
+
+/* ═══ Dark theme for legacy page styles: pages hard-code light colours with !important, so re-assert theme tokens here ═══ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .st-app .hero-info .title, :root:not([data-theme="light"]) .st-app .ph-title, :root:not([data-theme="light"]) .st-app .ph-time { color: var(--st-ink) !important; }
+  :root:not([data-theme="light"]) .st-app .hero-info .sub, :root:not([data-theme="light"]) .st-app .ph-sub, :root:not([data-theme="light"]) .st-app .ph-date, :root:not([data-theme="light"]) .st-app .hero-info .eye { color: var(--st-accent-text) !important; }
+  :root:not([data-theme="light"]) .st-app .ph-av, :root:not([data-theme="light"]) .st-app .sb-av, :root:not([data-theme="light"]) .st-app .tnav-av { background: var(--st-red-soft) !important; color: var(--st-accent-text) !important; border-color: var(--st-line) !important; }
+  :root:not([data-theme="light"]) .st-app .btn:not(.red), :root:not([data-theme="light"]) .st-app .tnav-btn, :root:not([data-theme="light"]) .st-app .fbtn:not(.red), :root:not([data-theme="light"]) .st-app .ctrl-btn { background: var(--st-panel2) !important; color: var(--st-ink) !important; border-color: var(--st-line) !important; }
+  :root:not([data-theme="light"]) .st-app .btn:not(.red):hover, :root:not([data-theme="light"]) .st-app .tnav-btn:hover, :root:not([data-theme="light"]) .st-app .fbtn:not(.red):hover, :root:not([data-theme="light"]) .st-app .ctrl-btn:hover { background: var(--st-hover) !important; color: var(--st-ink) !important; border-color: var(--st-muted) !important; }
+  :root:not([data-theme="light"]) .st-app .tinp, :root:not([data-theme="light"]) .st-app .tsel, :root:not([data-theme="light"]) .st-app .date-inp, :root:not([data-theme="light"]) .st-app .wl-sel { background: var(--st-panel2) !important; color: var(--st-ink) !important; border-color: var(--st-line) !important; color-scheme: dark; }
+  :root:not([data-theme="light"]) .st-app .trow, :root:not([data-theme="light"]) .st-app .ec { background: var(--st-panel) !important; border-color: var(--st-line) !important; }
+  :root:not([data-theme="light"]) .st-app .trow:hover, :root:not([data-theme="light"]) .st-app .ec:hover { background: var(--st-hover) !important; }
+  :root:not([data-theme="light"]) .st-app .sb-lbl, :root:not([data-theme="light"]) .st-app .ch, :root:not([data-theme="light"]) .st-app .tbar-t, :root:not([data-theme="light"]) .st-app .dp-lbl, :root:not([data-theme="light"]) .st-app .tc-l, :root:not([data-theme="light"]) .st-app .hl, :root:not([data-theme="light"]) .st-app .gs-l { color: var(--st-muted) !important; }
+  :root:not([data-theme="light"]) .st-app .hv, :root:not([data-theme="light"]) .st-app .sb-name, :root:not([data-theme="light"]) .st-app .dept-name, :root:not([data-theme="light"]) .st-app .dp-name, :root:not([data-theme="light"]) .st-app .ec-name, :root:not([data-theme="light"]) .st-app .gs-n { color: var(--st-ink) !important; }
+  :root:not([data-theme="light"]) .st-app .sb-link { color: var(--st-muted) !important; }
+  :root:not([data-theme="light"]) .st-app .sb-link.on { background: var(--st-red-soft) !important; color: var(--st-accent-text) !important; }
+  :root:not([data-theme="light"]) .st-app .pc-in, :root:not([data-theme="light"]) .st-app .sbb-in { background: #0F2A1E !important; color: #34D399 !important; border-color: #14532D !important; }
+  :root:not([data-theme="light"]) .st-app .pc-ca { background: #33270A !important; color: #FBBF24 !important; border-color: #6B4E0E !important; }
+  :root:not([data-theme="light"]) .st-app .pc-eo, :root:not([data-theme="light"]) .st-app .sbb-eod { background: #10223F !important; color: #60A5FA !important; border-color: #1E3A8A !important; }
+  :root:not([data-theme="light"]) .st-app .sbb-out, :root:not([data-theme="light"]) .st-app .ttag, :root:not([data-theme="light"]) .st-app .tp, :root:not([data-theme="light"]) .st-app .tc, :root:not([data-theme="light"]) .st-app .pg-head { background: var(--st-panel2) !important; color: var(--st-muted) !important; border-color: var(--st-line) !important; }
+  :root:not([data-theme="light"]) .st-app .gstats { background: var(--st-panel) !important; border-color: var(--st-line) !important; }
+  :root:not([data-theme="light"]) .st-app .gs { border-color: var(--st-line) !important; }
+  :root:not([data-theme="light"]) .st-app .gs-n.g { color: #34D399 !important; }
+  :root:not([data-theme="light"]) .st-app .gs-n.r { color: #F87171 !important; }
+  :root:not([data-theme="light"]) .st-app .gs-n.a { color: #FBBF24 !important; }
+  :root:not([data-theme="light"]) .st-app .gs-n.b { color: #60A5FA !important; }
+  :root:not([data-theme="light"]) .st-app .fc { background: var(--st-panel) !important; color: var(--st-muted); border-color: var(--st-line); }
+  :root:not([data-theme="light"]) .st-app .fc:hover { background: var(--st-hover) !important; color: var(--st-ink); }
+  :root:not([data-theme="light"]) .st-app .fc.on { background: var(--st-red) !important; color: #fff; border-color: var(--st-red); }
+  :root:not([data-theme="light"]) .st-app .task-row { border-color: var(--st-line) !important; }
+  :root:not([data-theme="light"]) .st-app .dp-trk, :root:not([data-theme="light"]) .st-app .ecp-t { background: var(--st-line) !important; }
+  :root:not([data-theme="light"]) .st-app .profile-dropdown { background: var(--st-panel) !important; border-color: var(--st-line) !important; }
+  :root:not([data-theme="light"]) .st-app .pd-item { color: var(--st-ink) !important; }
+  :root:not([data-theme="light"]) .st-app .pd-item:hover { background: var(--st-hover) !important; }
+  :root:not([data-theme="light"]) .st-app .lcr-name, :root:not([data-theme="light"]) .st-app .lcr-reason { color: var(--st-ink); }
+  :root:not([data-theme="light"]) .st-app .lcr-meta, :root:not([data-theme="light"]) .st-app .lcr-msg { color: var(--st-muted); }
+  :root:not([data-theme="light"]) .st-app .lcr-act input { background: var(--st-panel2); color: var(--st-ink); border-color: var(--st-line); }
+  :root:not([data-theme="light"]) .st-app ::-webkit-scrollbar-thumb { background: var(--st-line) !important; }
+}
+:root[data-theme="dark"] .st-app .hero-info .title, :root[data-theme="dark"] .st-app .ph-title, :root[data-theme="dark"] .st-app .ph-time { color: var(--st-ink) !important; }
+:root[data-theme="dark"] .st-app .hero-info .sub, :root[data-theme="dark"] .st-app .ph-sub, :root[data-theme="dark"] .st-app .ph-date, :root[data-theme="dark"] .st-app .hero-info .eye { color: var(--st-accent-text) !important; }
+:root[data-theme="dark"] .st-app .ph-av, :root[data-theme="dark"] .st-app .sb-av, :root[data-theme="dark"] .st-app .tnav-av { background: var(--st-red-soft) !important; color: var(--st-accent-text) !important; border-color: var(--st-line) !important; }
+:root[data-theme="dark"] .st-app .btn:not(.red), :root[data-theme="dark"] .st-app .tnav-btn, :root[data-theme="dark"] .st-app .fbtn:not(.red), :root[data-theme="dark"] .st-app .ctrl-btn { background: var(--st-panel2) !important; color: var(--st-ink) !important; border-color: var(--st-line) !important; }
+:root[data-theme="dark"] .st-app .btn:not(.red):hover, :root[data-theme="dark"] .st-app .tnav-btn:hover, :root[data-theme="dark"] .st-app .fbtn:not(.red):hover, :root[data-theme="dark"] .st-app .ctrl-btn:hover { background: var(--st-hover) !important; color: var(--st-ink) !important; border-color: var(--st-muted) !important; }
+:root[data-theme="dark"] .st-app .tinp, :root[data-theme="dark"] .st-app .tsel, :root[data-theme="dark"] .st-app .date-inp, :root[data-theme="dark"] .st-app .wl-sel { background: var(--st-panel2) !important; color: var(--st-ink) !important; border-color: var(--st-line) !important; color-scheme: dark; }
+:root[data-theme="dark"] .st-app .trow, :root[data-theme="dark"] .st-app .ec { background: var(--st-panel) !important; border-color: var(--st-line) !important; }
+:root[data-theme="dark"] .st-app .trow:hover, :root[data-theme="dark"] .st-app .ec:hover { background: var(--st-hover) !important; }
+:root[data-theme="dark"] .st-app .sb-lbl, :root[data-theme="dark"] .st-app .ch, :root[data-theme="dark"] .st-app .tbar-t, :root[data-theme="dark"] .st-app .dp-lbl, :root[data-theme="dark"] .st-app .tc-l, :root[data-theme="dark"] .st-app .hl, :root[data-theme="dark"] .st-app .gs-l { color: var(--st-muted) !important; }
+:root[data-theme="dark"] .st-app .hv, :root[data-theme="dark"] .st-app .sb-name, :root[data-theme="dark"] .st-app .dept-name, :root[data-theme="dark"] .st-app .dp-name, :root[data-theme="dark"] .st-app .ec-name, :root[data-theme="dark"] .st-app .gs-n { color: var(--st-ink) !important; }
+:root[data-theme="dark"] .st-app .sb-link { color: var(--st-muted) !important; }
+:root[data-theme="dark"] .st-app .sb-link.on { background: var(--st-red-soft) !important; color: var(--st-accent-text) !important; }
+:root[data-theme="dark"] .st-app .pc-in, :root[data-theme="dark"] .st-app .sbb-in { background: #0F2A1E !important; color: #34D399 !important; border-color: #14532D !important; }
+:root[data-theme="dark"] .st-app .pc-ca { background: #33270A !important; color: #FBBF24 !important; border-color: #6B4E0E !important; }
+:root[data-theme="dark"] .st-app .pc-eo, :root[data-theme="dark"] .st-app .sbb-eod { background: #10223F !important; color: #60A5FA !important; border-color: #1E3A8A !important; }
+:root[data-theme="dark"] .st-app .sbb-out, :root[data-theme="dark"] .st-app .ttag, :root[data-theme="dark"] .st-app .tp, :root[data-theme="dark"] .st-app .tc, :root[data-theme="dark"] .st-app .pg-head { background: var(--st-panel2) !important; color: var(--st-muted) !important; border-color: var(--st-line) !important; }
+:root[data-theme="dark"] .st-app .gstats { background: var(--st-panel) !important; border-color: var(--st-line) !important; }
+:root[data-theme="dark"] .st-app .gs { border-color: var(--st-line) !important; }
+:root[data-theme="dark"] .st-app .gs-n.g { color: #34D399 !important; }
+:root[data-theme="dark"] .st-app .gs-n.r { color: #F87171 !important; }
+:root[data-theme="dark"] .st-app .gs-n.a { color: #FBBF24 !important; }
+:root[data-theme="dark"] .st-app .gs-n.b { color: #60A5FA !important; }
+:root[data-theme="dark"] .st-app .fc { background: var(--st-panel) !important; color: var(--st-muted); border-color: var(--st-line); }
+:root[data-theme="dark"] .st-app .fc:hover { background: var(--st-hover) !important; color: var(--st-ink); }
+:root[data-theme="dark"] .st-app .fc.on { background: var(--st-red) !important; color: #fff; border-color: var(--st-red); }
+:root[data-theme="dark"] .st-app .task-row { border-color: var(--st-line) !important; }
+:root[data-theme="dark"] .st-app .dp-trk, :root[data-theme="dark"] .st-app .ecp-t { background: var(--st-line) !important; }
+:root[data-theme="dark"] .st-app .profile-dropdown { background: var(--st-panel) !important; border-color: var(--st-line) !important; }
+:root[data-theme="dark"] .st-app .pd-item { color: var(--st-ink) !important; }
+:root[data-theme="dark"] .st-app .pd-item:hover { background: var(--st-hover) !important; }
+:root[data-theme="dark"] .st-app .lcr-name, :root[data-theme="dark"] .st-app .lcr-reason { color: var(--st-ink); }
+:root[data-theme="dark"] .st-app .lcr-meta, :root[data-theme="dark"] .st-app .lcr-msg { color: var(--st-muted); }
+:root[data-theme="dark"] .st-app .lcr-act input { background: var(--st-panel2); color: var(--st-ink); border-color: var(--st-line); }
+:root[data-theme="dark"] .st-app ::-webkit-scrollbar-thumb { background: var(--st-line) !important; }
+
+/* management dashboard: card surfaces hard-coded white */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .st-app .tnav, :root:not([data-theme="light"]) .st-app .sidebar, :root:not([data-theme="light"]) .st-app .pg, :root:not([data-theme="light"]) .st-app .dept-card, :root:not([data-theme="light"]) .st-app .dp, :root:not([data-theme="light"]) .st-app .wl-wrap, :root:not([data-theme="light"]) .st-app .sb-card, :root:not([data-theme="light"]) .st-app .hcell { background: var(--st-panel) !important; border-color: var(--st-line) !important; }
+  :root:not([data-theme="light"]) .st-app .ec-status span:not(.dot) { color: var(--st-muted) !important; }
+  :root:not([data-theme="light"]) .st-app .dept-head { border-color: var(--st-line) !important; }
+  :root:not([data-theme="light"]) .st-app .tnav { border-bottom-color: var(--st-line) !important; }
+}
+:root[data-theme="dark"] .st-app .tnav, :root[data-theme="dark"] .st-app .sidebar, :root[data-theme="dark"] .st-app .pg, :root[data-theme="dark"] .st-app .dept-card, :root[data-theme="dark"] .st-app .dp, :root[data-theme="dark"] .st-app .wl-wrap, :root[data-theme="dark"] .st-app .sb-card, :root[data-theme="dark"] .st-app .hcell { background: var(--st-panel) !important; border-color: var(--st-line) !important; }
+:root[data-theme="dark"] .st-app .ec-status span:not(.dot) { color: var(--st-muted) !important; }
+:root[data-theme="dark"] .st-app .dept-head { border-color: var(--st-line) !important; }
+:root[data-theme="dark"] .st-app .tnav { border-bottom-color: var(--st-line) !important; }
+
+/* Phones: give the date title room next to the Day/Week/Month switch */
+@media (max-width: 600px) {
+  .st-top { gap: 2px; }
+  .st-top .st-icon-btn { width: 30px; }
+  .st-seg button { padding: 0 5px; }
+  .st-title { margin-left: 0; min-width: 52px; }
+}

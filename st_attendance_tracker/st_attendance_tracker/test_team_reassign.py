@@ -2,6 +2,7 @@
 import json
 
 import frappe
+from unittest.mock import patch
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import today
 
@@ -47,6 +48,10 @@ class TestTeamReassign(FrappeTestCase):
 
     def setUp(self):
         frappe.set_user("Administrator")
+        # These flows run on the real clock; pin the site's checkout cutoff so the lock does not interfere.
+        patcher = patch("st_attendance_tracker.time_utils.get_checkout_cutoff", return_value=24 * 60 - 1)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self._cleanup()
 
     def tearDown(self):

@@ -139,6 +139,8 @@ dialog.cal-dlg form { padding: 20px 24px; display: flex; flex-direction: column;
 dialog.cal-dlg h3 { font-size: 18px; margin: 0; }
 .cal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .cal-xs { overflow-x: auto; }
+.cal-link { background: none; border: 0; padding: 4px 0; color: var(--st-red); font: 600 12px var(--st-font-body); cursor: pointer; text-decoration: underline; }
+.cal-link:focus-visible { outline: 2px solid var(--st-red); outline-offset: 2px; }
 .cal-xs table { border-collapse: collapse; width: 100%; }
 .cal-xs th { font: 600 11px var(--st-font-body); letter-spacing: .8px; text-transform: uppercase; color: var(--st-muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--st-line); white-space: nowrap; }
 .cal-xs td { padding: 8px 10px; border-bottom: 1px solid var(--st-line); vertical-align: top; }

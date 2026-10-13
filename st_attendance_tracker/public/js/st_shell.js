@@ -31,7 +31,16 @@
 
   var api = window.STShell = {
     selected: parse(window.ST_SHELL_DATE) || new Date(),
-    setTitle: function (text) { var t = document.getElementById('st-title'); if (t) t.textContent = text; },
+    // On a phone the top bar is crowded: shorten month names and a trailing ", 2026" so a date title is not cut off.
+    setTitle: function (text) {
+      var t = document.getElementById('st-title'); if (!t) return;
+      var shown = text;
+      if (window.innerWidth <= 600) {
+        shown = String(text).replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/g, function (m) { return m.slice(0, 3); })
+          .replace(/,\s*\d{4}$/, '');
+      }
+      t.textContent = shown; t.title = text;
+    },
     setView: function (view) {
       document.querySelectorAll('[data-st-view]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.stView === view ? 'true' : 'false'); });
     },

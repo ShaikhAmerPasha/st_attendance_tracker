@@ -119,6 +119,10 @@
         btns.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
       });
     });
+    // The table needs sideways scrolling on a phone; start on the card view there.
+    if (window.matchMedia('(max-width: 700px)').matches) {
+      var cardBtn = document.querySelector('[data-bl-view="cards"]'); if (cardBtn) cardBtn.click();
+    }
     if (window.location.hash === '#new') openDialog(null);
   }
 

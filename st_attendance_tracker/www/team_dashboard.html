@@ -1000,8 +1000,25 @@ body {
   max-width: 100% !important;
   margin: 0 !important;
 }
+/* ── Phones and tablets: single column, wrapping stats, detail panel below the list (was hidden or squeezed) ── */
+@media (max-width: 900px) {
+  .mgrid, .grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .mgrid > *, .grid > * { min-width: 0; }
+  .gstats, .stat-strip { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important; }
+  .rp { display: block !important; position: static !important; width: auto !important; max-height: none !important; }
+  .dp { position: static !important; }
+  .hero-top { flex-wrap: wrap; gap: 12px; }
+  .hero-controls { flex-wrap: wrap; width: 100%; }
+}
+@media (max-width: 600px) {
+  .gstats, .stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .emp-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .dp-stats, .tg, .sg { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .assign-row { grid-template-columns: 1fr !important; }
+  .fc { flex: 0 0 auto; }
+}
 </style>
-<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_brand.css?v=14">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_brand.css?v=22">
 <link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_calendar.css?v=19">
 {% endblock %}
 {% block page_content %}
@@ -1346,7 +1363,7 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8 !important; }
 
 </style>
-<script src="/assets/st_attendance_tracker/js/st_shell.js?v=10"></script>
+<script src="/assets/st_attendance_tracker/js/st_shell.js?v=11"></script>
 <script src="/assets/st_attendance_tracker/js/st_employee_drawer.js?v=5"></script>
 <script src="/assets/st_attendance_tracker/js/st_team_week.js?v=5"></script>
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>

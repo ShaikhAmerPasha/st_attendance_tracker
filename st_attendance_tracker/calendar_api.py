@@ -68,7 +68,7 @@ def get_calendar_range(from_date, to_date):
             fields=[
                 "name", "parent", "description", "status", "task_type", "project_name",
                 "remarks", "estimated_time", "actual_time", "start_time", "sequence",
-                "origin_date", "series_id",
+                "origin_date", "series_id", "repeat_next_day",
             ],
             order_by="parent asc, sequence asc, idx asc",
         )
@@ -368,6 +368,18 @@ def bulk_move_to_backlog(names):
             frappe.db.rollback()
             skipped.append({"name": name, "reason": str(exc).strip() or "Not allowed."})
     return {"moved": moved, "skipped": skipped}
+
+
+@frappe.whitelist(methods=["POST"])
+def set_task_repeat(name, repeat):
+    """Turn "Repeat next day" on or off for one of my ordinary tasks (before checkout)."""
+    from st_attendance_tracker.task_repeat import set_task_repeat as _set_task_repeat
+
+    employee = _get_employee()
+    on = str(repeat).strip().lower() in ("1", "true", "yes")
+    result = _set_task_repeat(employee.name, name, on)
+    frappe.db.commit()
+    return result
 
 
 @frappe.whitelist(methods=["POST"])

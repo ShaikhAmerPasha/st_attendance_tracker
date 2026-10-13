@@ -999,32 +999,33 @@ body {
   max-width: 100% !important;
   margin: 0 !important;
 }
+/* ── Phones and tablets: single column, wrapping stats, detail panel below the list (was hidden or squeezed) ── */
+@media (max-width: 900px) {
+  .mgrid, .grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .mgrid > *, .grid > * { min-width: 0; }
+  .gstats, .stat-strip { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important; }
+  .rp { display: block !important; position: static !important; width: auto !important; max-height: none !important; }
+  .dp { position: static !important; }
+  .hero-top { flex-wrap: wrap; gap: 12px; }
+  .hero-controls { flex-wrap: wrap; width: 100%; }
+}
+@media (max-width: 600px) {
+  .gstats, .stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .emp-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .dp-stats, .tg, .sg { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .assign-row { grid-template-columns: 1fr !important; }
+  .fc { flex: 0 0 auto; }
+}
 </style>
-<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic.css?v=7">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic_layout.css?v=5">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic.css?v=19">
 {% endblock %}
 {% block page_content %}
-<nav class="tnav">
-  <div class="tnav-con">
-    <a href="/daily-checkin-classic" class="tnav-logo" style="text-decoration:none;cursor:pointer"><b>Standard</b><i>Touch</i></a>
-    <span class="tnav-sep"></span>
-    <span class="tnav-bc">Team Dashboard</span>
-    <div class="tnav-r">
-      <a href="/daily-checkin-classic" class="tnav-btn"><i class="ti ti-check" aria-hidden="true"></i>My check-in</a>
-      <a href="/team-leader-guide" target="_blank" class="tnav-btn"><i class="ti ti-book-2" aria-hidden="true"></i>Docs</a>
-      <a href="/my-history-classic" class="tnav-btn"><i class="ti ti-history" aria-hidden="true"></i>History</a>
-      <a href="/recurring-tasks-classic" class="tnav-btn"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring</a>
-      <button type="button" class="tnav-btn" onclick="STTour.start('team_dashboard_v1', TEAM_DASHBOARD_TOUR_STEPS)"><i class="ti ti-map-2" aria-hidden="true"></i>Tour</button>
-      <div class="wn-bell-wrap" id="wn-mount"></div>
-      <div class="tnav-av" onclick="toggleProfileDropdown(event)" style="cursor:pointer;" title="Account Options">{{ employee.employee_name[:2].upper() }}</div>
-      <div class="profile-dropdown" id="profile-dropdown">
-        <a href="/app/employee/{{ employee.name }}" class="pd-item"><i class="ti ti-user" aria-hidden="true"></i>My Profile</a>
-        <a href="/app" class="pd-item"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Switch to Desk</a>
-        <a href="/?cmd=web_logout" class="pd-item"><i class="ti ti-logout" aria-hidden="true"></i>Logout</a>
-      </div>
-    </div>
-  </div>
-</nav>
-<div id="wn-banner-mount"></div>
+{% from "st_attendance_tracker/templates/macros/classic_shell.html" import classic_nav, classic_sidebar, classic_mobnav %}
+{{ classic_nav(employee, 'Team Dashboard', "STTour.start('team_dashboard_v1', TEAM_DASHBOARD_TOUR_STEPS)", '/team-leader-guide', None) }}
+<div class="cols cols-2">
+{{ classic_sidebar(st_shell, employee, 'team', {'recurring': recurring_count|default(0), 'backlog': backlog_count|default(0)}) }}
+<main class="main">
 <div class="wrap">
   <div class="hero">
     <div class="hero-top">
@@ -1339,6 +1340,9 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8 !important; }
 
 </style>
+</main>
+</div>
+{{ classic_mobnav(st_shell, 'team') }}
 <script src="/assets/st_attendance_tracker/js/dashboard_utils.js"></script>
 <script src="/assets/st_attendance_tracker/js/whats_new.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
@@ -1625,6 +1629,6 @@ document.addEventListener('click', function(e) {
   }
 });
 </script>
-<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic.css?v=7">
+<link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic.css?v=19">
 <script src="/assets/st_attendance_tracker/js/st_classic.js?v=8" data-new="/team-dashboard"></script>
 {% endblock %}
