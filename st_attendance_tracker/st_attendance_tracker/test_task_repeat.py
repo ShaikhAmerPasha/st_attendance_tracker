@@ -245,6 +245,43 @@ class TestTaskRepeat(FrappeTestCase):
                        adhoc_tasks="[]")
         self.assertEqual(len(self._rows(self.emp_a, self._next_day(), "Flagged earlier")), 1)
 
+    # ad-hoc tasks added after check-in -----------------------------------------
+    def test_new_adhoc_task_done_with_repeat_comes_back_next_day(self):
+        self._check_in(self.user_a, "Morning plan")
+        submit_eod_log(lunch_from="", lunch_to="", logout_time="18:00", task_updates="[]",
+                       adhoc_tasks=json.dumps([{"description": "Added after check-in", "status": "Done",
+                                                "actual_time": "1h", "project_name": "New proj", "repeat_next_day": 1}]))
+        today_row = self._rows(self.emp_a, today(), "Added after check-in")[0]
+        self.assertEqual(today_row.repeat_next_day, 1)
+        copies = self._rows(self.emp_a, self._next_day(), "Added after check-in")
+        self.assertEqual(len(copies), 1)
+        self.assertEqual(copies[0].project_name, "New proj")
+
+    def test_saved_adhoc_task_keeps_repeat_choice_made_at_checkout(self):
+        from st_attendance_tracker.api import add_adhoc_tasks
+
+        self._check_in(self.user_a, "Morning plan")
+        created = add_adhoc_tasks(json.dumps([{"client_id": "c1", "description": "Saved mid-day", "project_name": "P"}]))["created"][0]
+        submit_eod_log(lunch_from="", lunch_to="", logout_time="18:00", task_updates="[]",
+                       adhoc_tasks=json.dumps([{"description": "Saved mid-day", "status": "Done", "actual_time": "30m",
+                                                "project_name": "P", "series_id": created["series_id"], "repeat_next_day": 1}]))
+        self.assertEqual(len(self._rows(self.emp_a, today(), "Saved mid-day")), 1)
+        self.assertEqual(len(self._rows(self.emp_a, self._next_day(), "Saved mid-day")), 1)
+
+    def test_adhoc_repeat_is_ignored_when_not_done(self):
+        self._check_in(self.user_a, "Morning plan")
+        submit_eod_log(lunch_from="", lunch_to="", logout_time="18:00", task_updates="[]",
+                       adhoc_tasks=json.dumps([{"description": "Unfinished extra", "status": "In Progress",
+                                                "actual_time": "10m", "repeat_next_day": 1}]))
+        self.assertEqual(self._rows(self.emp_a, today(), "Unfinished extra")[0].repeat_next_day, 0)
+
+    def test_adhoc_without_the_choice_does_not_repeat(self):
+        self._check_in(self.user_a, "Morning plan")
+        submit_eod_log(lunch_from="", lunch_to="", logout_time="18:00", task_updates="[]",
+                       adhoc_tasks=json.dumps([{"description": "No choice", "status": "Done", "actual_time": "1h"}]))
+        self.assertEqual(self._rows(self.emp_a, today(), "No choice")[0].repeat_next_day, 0)
+        self.assertEqual(len(self._rows(self.emp_a, self._next_day(), "No choice")), 0)
+
     def test_checkout_clears_the_flag_on_a_task_that_is_not_done(self):
         task = self._check_in(self.user_a, "Not finished")["Not finished"]
         set_task_repeat(task["name"], 1)

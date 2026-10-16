@@ -508,8 +508,48 @@
   }
 
   /* ── side panel ── */
-  function taskRowHTML() {
-    return '<div class="cal-trow mc-new"><textarea name="d" rows="1" class="cal-ta mc-d" placeholder="What will you work on?" aria-label="Task description"></textarea><input name="p" class="mc-p" placeholder="Project" aria-label="Project"><input name="e" class="mc-e" placeholder="1h" aria-label="Estimated time" title="Estimated time, e.g. 1h 30m"></div>';
+  function taskRowHTML(v) {
+    v = v || {};
+    return '<div class="cal-trow mc-new"><textarea name="d" rows="1" class="cal-ta mc-d" placeholder="What will you work on?" aria-label="Task description">' + esc(v.d || '') + '</textarea><input name="p" class="mc-p" placeholder="Project" aria-label="Project" value="' + esc(v.p || '') + '"><input name="e" class="mc-e" placeholder="1h" aria-label="Estimated time" title="Estimated time, e.g. 1h 30m" value="' + esc(v.e || '') + '"></div>';
+  }
+  // ── unsent check-in plan, kept on the server so another device (or a reopened laptop) shows it ──
+  function savedPlanRows() {
+    var d = S.page && S.page.morning_draft;
+    return d && d.kind === 'calendar' && d.data && Array.isArray(d.data.rows) ? d.data.rows : [];
+  }
+  function planRowsHTML() {
+    var rows = savedPlanRows();
+    return rows.length ? rows.map(taskRowHTML).join('') : taskRowHTML();
+  }
+  function collectPlanRows() {
+    return $$('#m-rows .cal-trow').map(function (r) {
+      return { d: $('[name=d]', r).value.trim(), p: $('[name=p]', r).value.trim(), e: $('[name=e]', r).value.trim() };
+    }).filter(function (r) { return r.d || r.p || r.e; });
+  }
+  var planTimer = null;
+  function planPayload() {
+    var rows = collectPlanRows();
+    if (S.page) S.page.morning_draft = rows.length ? { kind: 'calendar', data: { rows: rows } } : null;  // a re-render restores this
+    return { kind: 'calendar', data: rows.length ? JSON.stringify({ rows: rows }) : '' };
+  }
+  function schedulePlanSave() {
+    if (!$('#m-rows')) return;
+    planPayload();
+    clearTimeout(planTimer);
+    planTimer = setTimeout(function () { planTimer = null; api(API + 'save_morning_draft', planPayload(), true).catch(function () { /* the next edit saves again */ }); }, 800);
+  }
+  // Closing the tab or laptop inside the debounce window would lose the last edit: send it now,
+  // with keepalive so the browser finishes the request after the page is gone.
+  function flushPlanSave() {
+    if (planTimer === null || !$('#m-rows')) return;
+    clearTimeout(planTimer); planTimer = null;
+    try {
+      fetch('/api/method/' + API + 'save_morning_draft', {
+        method: 'POST', keepalive: true, credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-Frappe-CSRF-Token': frappe.csrf_token },
+        body: JSON.stringify(planPayload())
+      });
+    } catch (e) { /* best effort */ }
   }
   function statusSeg(t) {
     var can = canChangeStatus(t);
@@ -545,10 +585,29 @@
     if (!morningDone()) html += morningHTML();
     else if (!eodDone()) html += workingHTML();
     else html += summaryHTML();
+    var draft = addFormDraft();
     side.innerHTML = '';
     if (btn) side.appendChild(btn);
     side.insertAdjacentHTML('beforeend', html);
     bindSide(side);
+    restoreAddFormDraft(draft);
+  }
+  // The side panel is rebuilt on every refresh. Without this, a task typed into "Add a task" was wiped
+  // (and the Save button replaced under the pointer) whenever a refresh landed before Save was pressed.
+  var ADD_FIELDS = ['a-d', 'a-p', 'a-e'];
+  function addFormDraft() {
+    var draft = { values: {}, focus: null }, any = false;
+    ADD_FIELDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && el.value) { draft.values[id] = el.value; if (id === 'a-d' || id === 'a-p') any = true; }
+      if (el && el === document.activeElement) draft.focus = id;
+    });
+    return any || draft.focus ? draft : null;
+  }
+  function restoreAddFormDraft(draft) {
+    if (!draft) return;
+    Object.keys(draft.values).forEach(function (id) { var el = document.getElementById(id); if (el) el.value = draft.values[id]; });
+    var f = draft.focus && document.getElementById(draft.focus); if (f) f.focus();
   }
 
   /* Checkout closed after the cutoff: the employee asks an HR Manager to unlock it. */
@@ -599,7 +658,7 @@
       (page.leave_today && !BOOT.half_day_leave ? '<div class="cal-tag dash">On approved leave today: ' + esc(page.leave_today) + '</div>' : '') + '</section>' +
       (carried ? '<section class="mc-sec"><div class="mc-h"><span>Your list today <b>' + tasks.length + '</b></span>' + bulk + '</div>' + carried + '</section>' : '') +
       (backlog ? '<section class="mc-sec mc-fold"><button type="button" class="mc-h mc-toggle" id="mc-bk-toggle" aria-expanded="' + bkOpen + '" aria-controls="mc-bks"><span>From your backlog <b>' + S.backlog.length + '</b><b class="mc-picked" id="mc-bk-picked" hidden></b></span><i class="ti ti-chevron-down" aria-hidden="true"></i></button><div class="mc-bks" id="mc-bks"' + (bkOpen ? '' : ' hidden') + '>' + backlog + '</div></section>' : '') +
-      '<section class="mc-sec"><div class="mc-h"><span>Add tasks</span></div><div id="m-rows">' + taskRowHTML() + '</div><button type="button" class="mc-add" id="m-add"><i class="ti ti-plus" aria-hidden="true"></i>Add another task</button></section>' +
+      '<section class="mc-sec"><div class="mc-h"><span>Add tasks</span></div><div id="m-rows">' + planRowsHTML() + '</div><button type="button" class="mc-add" id="m-add"><i class="ti ti-plus" aria-hidden="true"></i>Add another task</button></section>' +
       '<div class="mc-bar"><p id="m-err" class="cal-err" role="alert"></p><button class="cal-btn primary block" type="submit" id="m-submit">Submit check-in</button></div></form>';
   }
   function workingHTML() {
@@ -673,6 +732,8 @@
       mf.onsubmit = function (e) { e.preventDefault(); submitMorning(); };
       mf.addEventListener('input', renderDrafts); mf.addEventListener('change', renderDrafts);
       $('#m-add').addEventListener('click', renderDrafts);
+      mf.addEventListener('input', schedulePlanSave); mf.addEventListener('change', schedulePlanSave);
+      $('#m-add').addEventListener('click', schedulePlanSave);
       if (window.location.hash === '#new-task') { var first = $('#m-rows input'); if (first) first.focus(); }
     }
     var af = $('#cal-af', side); if (af) af.onsubmit = function (e) { e.preventDefault(); addAdhoc(); };
@@ -770,6 +831,8 @@
       .then(function (r) {
         var created = r.created && r.created[0];
         if (!created) return null;
+        // Saved: empty the form now, or the draft kept across re-renders would put the same task back.
+        ['a-d', 'a-p', 'a-e'].forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
         var ends = openDayTasks().filter(function (t) { return t.start_time; }).map(function (t) { return toMin(t.start_time) + Math.round(durationHours(t) * 60); });
         var start = Math.min(Math.max(Math.ceil(nowMin() / 15) * 15, H0 * 60, Math.max.apply(null, ends.concat([0]))), H1 * 60 - 60);
         return api(CAL + 'set_task_schedule', { name: created.task_name, start_time: toT(start) }, true);
@@ -911,6 +974,7 @@
         var first = rows.querySelector('.cal-trow'), empty = first && !$('[name=d]', first).value;
         if (!empty) { rows.insertAdjacentHTML('beforeend', taskRowHTML()); first = rows.lastElementChild; }
         $('[name=d]', first).value = desc; $('[name=p]', first).value = proj; $('[name=e]', first).value = est;
+        schedulePlanSave();
       }
       run = Promise.resolve().then(function () { renderDrafts(); toast('Added to today\'s plan. Check in to place it at ' + fm(toMin(s0)) + '.'); });
     } else if (type === 'sched') {
@@ -1026,7 +1090,8 @@
   function busy() {
     var d = dlg(), a = document.activeElement;
     return document.hidden || (d && d.open) || $('.cal-ev.drag, .cal-ev.resizing') ||
-      (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest('#cal-side'));
+      (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest('#cal-side')) ||
+      !!(document.getElementById('a-d') && document.getElementById('a-d').value.trim());
   }
   function liveRefresh() {
     if (busy() || Date.now() - lastLoad < 55000) return;
@@ -1042,7 +1107,8 @@
     }).catch(function () { /* next tick retries */ });
   }
   setInterval(function () { tickNowLine(); liveRefresh(); }, 30000);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) { tickNowLine(); liveRefresh(); } });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) flushPlanSave(); else { tickNowLine(); liveRefresh(); } });
+  window.addEventListener('pagehide', flushPlanSave);
   window.addEventListener('focus', function () { tickNowLine(); });
 
   /* ── shell events ── */

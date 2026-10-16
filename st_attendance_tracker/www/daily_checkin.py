@@ -4,7 +4,7 @@ from st_attendance_tracker.ui_shell import get_shell_context, redirect_for_desig
 from frappe.utils import today, now_datetime, getdate, get_datetime
 from st_attendance_tracker.api import (
     _to_hhmm, _to_ampm, _format_hours, _is_half_day_leave_today, _is_team_leader,
-    _attach_task_files, _resolve_active_checkin_date, _get_work_log, _task_entry_dict,
+    _attach_task_files, _resolve_active_checkin_date, _get_work_log, _task_entry_dict, _get_morning_draft,
     _get_attendance_settings, _get_previous_working_date,
 )
 from st_attendance_tracker.time_utils import get_checkout_cutoff, is_checkout_locked
@@ -232,6 +232,9 @@ def get_context(context):
     context.recurring_tasks = recurring_tasks
     context.carried_count = sum(1 for t in tasks if t.get("is_carried"))
     context.login_time = login_time_val
+    # Unsent check-in plan saved from another device (or an earlier visit); only the classic page's own kind.
+    draft = None if morning_log else _get_morning_draft()
+    context.morning_draft = draft if draft and draft.get("kind") == "classic" else None
     context.logout_time = logout_time_val
     context.net_hours = net_hours_val
     context.lunch_from = lunch_from_val

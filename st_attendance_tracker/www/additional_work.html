@@ -3260,7 +3260,7 @@ window.addEventListener('keydown', function(e){
 var AW_HIST_PAGE = 0;
 var AW_HIST_LOADING = false;
 
-function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
 function _statusCls(s){
   if (s==='Done') return 'aw-s-done';
@@ -3362,11 +3362,11 @@ function refreshAWSummary(){
   // Hours tiles: sum this month's entries (own rows only, via the normal permission-checked list call).
   frappe.call({
     method: 'frappe.client.get_list',
-    args: { doctype: 'Additional Work', filters: { employee: '{{ employee.name }}', work_date: ['>=', '{{ month_start }}'] }, fields: ['work_date', 'hours_spent'], limit_page_length: 0 },
+    args: { doctype: 'Additional Work', filters: { employee: {{ employee.name|tojson }}, work_date: ['>=', {{ month_start|tojson }}] }, fields: ['work_date', 'hours_spent'], limit_page_length: 0 },
     callback: function(r){
       if (!r || !r.message) return;
       var wk = 0, mo = 0;
-      r.message.forEach(function(x){ var h = +x.hours_spent || 0; mo += h; if (x.work_date >= '{{ week_start }}') wk += h; });
+      r.message.forEach(function(x){ var h = +x.hours_spent || 0; mo += h; if (x.work_date >= {{ week_start|tojson }}) wk += h; });
       var a = document.getElementById('sum-week'), b = document.getElementById('sum-month');
       if (a) a.textContent = (Math.round(wk * 10) / 10) + 'h';
       if (b) b.textContent = (Math.round(mo * 10) / 10) + 'h';
@@ -3374,7 +3374,7 @@ function refreshAWSummary(){
   });
   frappe.call({
     method: 'frappe.client.get_count',
-    args: { doctype: 'Additional Work', filters: { employee: '{{ employee.name }}' } },
+    args: { doctype: 'Additional Work', filters: { employee: {{ employee.name|tojson }} } },
     callback: function(r){
       var el = document.getElementById('sum-total');
       if (el && r && r.message !== undefined) el.textContent = r.message;
@@ -3382,7 +3382,7 @@ function refreshAWSummary(){
   });
   frappe.call({
     method: 'frappe.client.get_count',
-    args: { doctype: 'Additional Work', filters: { employee: '{{ employee.name }}', status: 'Done' } },
+    args: { doctype: 'Additional Work', filters: { employee: {{ employee.name|tojson }}, status: 'Done' } },
     callback: function(r){
       var el = document.getElementById('sum-done');
       if (el && r && r.message !== undefined) el.textContent = r.message;
@@ -3390,7 +3390,7 @@ function refreshAWSummary(){
   });
   frappe.call({
     method: 'frappe.client.get_count',
-    args: { doctype: 'Additional Work', filters: { employee: '{{ employee.name }}', status: ['in', ['Pending', 'In Progress']] } },
+    args: { doctype: 'Additional Work', filters: { employee: {{ employee.name|tojson }}, status: ['in', ['Pending', 'In Progress']] } },
     callback: function(r){
       var el = document.getElementById('sum-pend');
       if (el && r && r.message !== undefined) el.textContent = r.message;

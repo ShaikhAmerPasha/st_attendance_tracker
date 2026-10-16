@@ -953,7 +953,9 @@ function loadDayDetail(date) {
     },
     error: function() {
       DAY_DETAIL_LOADING[date] = false;
-      container.innerHTML = '<div style="font-size:12px;color:#b91c1c;padding:8px">Could not load details. <a href="#" onclick="loadDayDetail(\'' + esc(date) + '\');return false;">Retry</a></div>';
+      container.innerHTML = '<div style="font-size:12px;color:#b91c1c;padding:8px">Could not load details. <a href="#" class="retry-day">Retry</a></div>';
+      // Listener, not an inline onclick: `date` must never be spliced into JS source.
+      container.querySelector('.retry-day').addEventListener('click', function(e) { e.preventDefault(); loadDayDetail(date); });
     }
   });
 }

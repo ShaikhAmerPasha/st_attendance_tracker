@@ -17,9 +17,19 @@ def additional_work_allowed(employee, work_date):
         return True, "checked_out"
     from st_attendance_tracker.api import _get_employees_on_leave
 
-    if employee in _get_employees_on_leave([employee], day):
+    if employee in _get_employees_on_leave([employee], day) and not _has_half_day_leave(employee, day):
         return True, "on_leave"
     return False, ""
+
+
+def _has_half_day_leave(employee, day):
+    """A half-day leave still has a working half, so it must be checked out like a normal day.
+    _get_employees_on_leave counts a half-day application as leave (dashboards and reminders rely
+    on that), so this rule has to exclude it itself."""
+    return bool(frappe.db.exists("Leave Application", {
+        "employee": employee, "status": "Approved", "docstatus": 1,
+        "half_day": 1, "half_day_date": day,
+    }))
 
 
 class AdditionalWork(Document):

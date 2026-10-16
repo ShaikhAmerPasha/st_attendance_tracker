@@ -1532,7 +1532,7 @@ def get_recurring_tasks():
     return rows
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_recurring_task(name=None, description="", project_name="", estimated_time="", recurring_days=None, is_active=1):
     """Create or update (upsert by `name`) a self-service Recurring Task Template.
     `recurring_days` arrives as a JSON-encoded list of day names (or a plain list)."""
@@ -1564,7 +1564,7 @@ def save_recurring_task(name=None, description="", project_name="", estimated_ti
     return {"success": True, "name": doc.name}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_recurring_task(name):
     employee = _get_employee()
     task_employee = frappe.db.get_value("Recurring Task Template", name, "employee")
@@ -1614,7 +1614,7 @@ def get_task_backlog():
     return rows
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_backlog_item(name=None, description="", project_name="", estimated_time="", remarks=""):
     """Create or update (upsert by `name`) a self-service backlog item."""
     employee = _get_employee()
@@ -1637,7 +1637,7 @@ def save_backlog_item(name=None, description="", project_name="", estimated_time
     return {"success": True, "name": doc.name}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_backlog_items(items):
     """Persist every not-yet-saved Project/Task row from the /task-backlog
     footer's Project/Task buttons in one batch — same "type several rows,
@@ -1669,7 +1669,7 @@ def save_backlog_items(items):
     return {"success": True, "created": created}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_backlog_item(name):
     employee = _get_employee()
     item_employee = frappe.db.get_value("Task Backlog Item", name, "employee")
@@ -1679,7 +1679,7 @@ def delete_backlog_item(name):
     return {"success": True}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def push_task_to_backlog(assignee_employee, description, project_name=None, estimated_time=None):
     """A Team Leader captures a future task for a team member's backlog —
     the no-date counterpart to assign_task_to_employee. Re-verifies team
@@ -1713,7 +1713,7 @@ def push_task_to_backlog(assignee_employee, description, project_name=None, esti
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def pull_backlog_item_to_today(name):
     """"Add to today" / drag-onto-Today — turns a backlog item into a real
     Task Entry on today's Daily Work Log, then removes the backlog row.
@@ -1972,6 +1972,7 @@ def get_page_state():
         "shift_info":     shift_info,
         "leave_today":    leave_today,
         "has_reset_today": has_reset_today,
+        "morning_draft":  None if morning_done else _get_morning_draft(),
     }
 
 
@@ -2142,9 +2143,75 @@ def _send_external_checkin_notifications(employee_name, log_type, action_time):
 
 
 
+# ── Morning plan draft ─────────────────────────────────────────────────────────
+# Tasks typed into the check-in form exist only in that browser until "Check in" is pressed, so a
+# second device (or a closed laptop) shows nothing. The page saves its unsent plan here instead.
+# Stored per user in Frappe's user defaults, like the design preference (ui_shell.py): durable, no
+# schema change. The client owns the shape of `data`; the server only bounds and scopes it.
+
+MORNING_DRAFT_KEY = "st_morning_draft"
+MORNING_DRAFT_KINDS = ("calendar", "classic")
+MORNING_DRAFT_MAX_CHARS = 20000
+
+
+def _get_morning_draft(user=None):
+    """Today's saved plan draft as {"kind", "data"}, or None (also None for a draft from another day)."""
+    raw = frappe.defaults.get_user_default(MORNING_DRAFT_KEY, user or frappe.session.user)
+    if not raw:
+        return None
+    try:
+        draft = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(draft, dict) or draft.get("date") != today():
+        return None
+    return {"kind": draft.get("kind"), "data": draft.get("data")}
+
+
+def _clear_morning_draft(user=None):
+    frappe.defaults.clear_default(MORNING_DRAFT_KEY, parent=user or frappe.session.user)
+
+
+@frappe.whitelist(methods=["POST"])
+def save_morning_draft(kind, data=None):
+    """Save (or, with empty `data`, clear) the caller's unsent check-in plan for today.
+
+    kind: "calendar" or "classic", which page wrote it; a page only restores its own kind.
+    data: JSON text the page can read back. Ignored once the employee has checked in.
+    """
+    employee = _get_employee()
+    if kind not in MORNING_DRAFT_KINDS:
+        frappe.throw("Unknown draft type.", frappe.ValidationError)
+
+    work_log = _get_work_log(employee.name, today())
+    if work_log and work_log.morning_submitted:
+        return {"saved": False}
+
+    if data in (None, "", "null"):
+        _clear_morning_draft()
+        frappe.db.commit()
+        return {"saved": False}
+
+    text = data if isinstance(data, str) else json.dumps(data)
+    if len(text) > MORNING_DRAFT_MAX_CHARS:
+        frappe.throw("That plan is too long to save as a draft.", frappe.ValidationError)
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        frappe.throw("Draft is not valid JSON.", frappe.ValidationError)
+    if not isinstance(parsed, (dict, list)):
+        frappe.throw("Draft is not valid JSON.", frappe.ValidationError)
+
+    frappe.defaults.set_user_default(
+        MORNING_DRAFT_KEY, json.dumps({"date": today(), "kind": kind, "data": parsed}), frappe.session.user
+    )
+    frappe.db.commit()
+    return {"saved": True}
+
+
 # ── Morning submit ─────────────────────────────────────────────────────────────
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_location=None, half_day_session=None):
     """
     new_tasks:        JSON list of {description, estimated_time}
@@ -2267,12 +2334,15 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
         checkin_action_time=checkin_action_time,
     )
 
+    _clear_morning_draft()
+    frappe.db.commit()
+
     return {"success": True, "login_time": _to_ampm(actual_login)}
 
 
 # ── EOD submit ─────────────────────────────────────────────────────────────────
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks):
     checkout_action_time = now_datetime()
     employee = _get_employee()
@@ -2366,6 +2436,12 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
         row.actual_time = t.get("actual_time", "")
         row.remarks = t.get("remarks", "")
         row.project_name = (t.get("project_name") or "").strip()
+        # "Repeat next day" for a task added after check-in: same rule as the task updates above
+        # (Done only; a missing key leaves a flag set earlier, e.g. from the calendar page).
+        if row.status != "Done":
+            row.repeat_next_day = 0
+        elif "repeat_next_day" in t:
+            row.repeat_next_day = 1 if cint(t.get("repeat_next_day")) else 0
 
     login_time_raw = work_log.login_time or ""
     half_day_session = work_log.half_day_session or ""
@@ -2397,7 +2473,7 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def autosave_eod_progress(task_updates=None, lunch_from=None, lunch_to=None):
     """Periodic draft save of in-progress checkout edits (status, actual
     time, remarks, lunch) so they survive a refresh or a switch to another
@@ -2456,7 +2532,7 @@ def autosave_eod_progress(task_updates=None, lunch_from=None, lunch_to=None):
     return {"success": True, "server_time": now_datetime().isoformat()}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def add_adhoc_tasks(tasks):
     """Persist every not-yet-saved mid-day ad-hoc task/project in one batch
     (the single "Save" button in the /daily-checkin footer), instead of
@@ -2806,7 +2882,7 @@ def get_history_day_detail(date):
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_carried_task(name):
     """Delete a carried task. Employee can only delete their own tasks."""
     employee = _get_employee()
@@ -2837,7 +2913,7 @@ def delete_carried_task(name):
     return {"success": True}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def move_task_to_backlog(name):
     """Move an already-existing Task Entry — today's or a carried-forward
     one — into the backlog. The reverse of pull_backlog_item_to_today, for
@@ -2971,7 +3047,7 @@ def delete_task_attachment(file_name, task_name):
     return {"success": True}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_carried_project(project_name, task_date):
     """Delete all tasks belonging to a project for a specific date."""
     employee = _get_employee()
@@ -3000,7 +3076,7 @@ def delete_carried_project(project_name, task_date):
     return {"success": True}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def reset_morning_checkin():
     """Reset morning check-in: revert today's Daily Work Log to its
     pre-checkin state and preserve its Task Entry rows as Pending for
@@ -3045,7 +3121,7 @@ def reset_morning_checkin():
     return {"success": True}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_half_day_session(session):
     """
     Retroactively apply a half-day session to an already-submitted Morning
@@ -3306,6 +3382,12 @@ def get_credentials_by_telegram_id(telegram_id):
         )
         frappe.throw("Not authorised.", frappe.PermissionError)
 
+    # A None/blank id would make the filter below match an Employee that has no
+    # telegram_id set (NULL/'') and hand out that person's credentials.
+    telegram_id = telegram_id.strip() if isinstance(telegram_id, str) else ""
+    if not telegram_id:
+        frappe.throw("telegram_id is required.", frappe.ValidationError)
+
     employee = frappe.db.get_value(
         "Employee", {"telegram_id": telegram_id, "status": "Active"},
         ["name", "user_id", "employee_name"], as_dict=True,
@@ -3319,18 +3401,24 @@ def get_credentials_by_telegram_id(telegram_id):
                      frappe.DoesNotExistError)
 
     user_doc = frappe.get_doc("User", employee.user_id)
+    needs_save = False
     if not user_doc.api_key:
         user_doc.api_key = frappe.generate_hash(length=15)
-    api_secret = user_doc.api_secret or frappe.generate_hash(length=15)
-    if not user_doc.api_secret:
-        user_doc.api_secret = api_secret
-        user_doc.save(ignore_permissions=True)
-        frappe.db.commit()
-    else:
+        needs_save = True
+    if user_doc.api_secret:
         # reuse existing secret - fetch decrypted
         api_secret = frappe.utils.password.get_decrypted_password(
             "User", user_doc.name, "api_secret"
         )
+    else:
+        api_secret = frappe.generate_hash(length=15)
+        user_doc.api_secret = api_secret
+        needs_save = True
+    # Persist whenever either half was generated, otherwise the returned key
+    # would never authenticate and would change on every call.
+    if needs_save:
+        user_doc.save(ignore_permissions=True)
+        frappe.db.commit()
 
     logger.info(
         f"Issued API credentials for employee={employee.name} "

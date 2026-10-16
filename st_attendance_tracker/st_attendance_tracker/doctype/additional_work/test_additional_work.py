@@ -322,6 +322,33 @@ class TestAdditionalWork(FrappeTestCase):
         with patch("st_attendance_tracker.api._get_employees_on_leave", return_value={self.emp_name}):
             self.assertTrue(self._entry().insert(ignore_permissions=True).name)
 
+    def test_half_day_leave_does_not_open_the_day(self):
+        """A half-day leave still has a working half, so check-out is still required."""
+        from st_attendance_tracker.st_attendance_tracker.doctype.daily_work_log.test_daily_work_log import (
+            _make_approved_half_day_leave,
+        )
+
+        self.day_rule.stop()
+        leave = _make_approved_half_day_leave(self.emp_name, today())
+        try:
+            with self.assertRaises(frappe.ValidationError):
+                self._entry().insert(ignore_permissions=True)
+        finally:
+            frappe.db.delete("Leave Application", {"name": leave})
+
+    def test_full_day_leave_application_opens_the_day(self):
+        from st_attendance_tracker.st_attendance_tracker.doctype.daily_work_log.test_daily_work_log import (
+            _make_approved_half_day_leave,
+        )
+
+        self.day_rule.stop()
+        leave = _make_approved_half_day_leave(self.emp_name, today())
+        frappe.db.set_value("Leave Application", leave, "half_day", 0)
+        try:
+            self.assertTrue(self._entry().insert(ignore_permissions=True).name)
+        finally:
+            frappe.db.delete("Leave Application", {"name": leave})
+
     def test_editing_an_existing_entry_is_not_blocked(self):
         self.day_rule.stop()
         doc = self._entry()

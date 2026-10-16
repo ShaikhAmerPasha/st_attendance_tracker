@@ -8,10 +8,12 @@ from frappe.utils import getdate
 from frappe.utils import escape_html
 
 from st_attendance_tracker.api import (
-    EMAIL_HEADING_STYLE, EMAIL_SUBHEADING_STYLE, EMAIL_WRAPPER_STYLE,
-    _employee_mail_identity, _format_email_date, _format_hours, _get_employee_email,
-    _get_hr_manager_emails, _get_team_leader_emails, _render_detail_table, _to_ampm,
+    EMAIL_ACCENT_COLOR, EMAIL_HEADING_STYLE, EMAIL_SUBHEADING_STYLE, EMAIL_WRAPPER_STYLE,
+    _employee_mail_identity, _format_action_timestamp, _format_email_date, _format_hours,
+    _get_employee_email, _get_hr_manager_emails, _get_team_leader_emails, _get_work_log,
+    _render_detail_table, _to_ampm,
 )
+from st_attendance_tracker.time_utils import time_to_minutes
 
 # Entries saved within this many seconds of the first one share its email.
 BATCH_WINDOW_SECONDS = 8
@@ -46,53 +48,93 @@ def send_additional_work_emails(employee_name, work_date, wait=BATCH_WINDOW_SECO
         entries = frappe.get_all(
             "Additional Work",
             filters={"employee": employee_name, "work_date": work_date},
-            fields=["login_time", "logout_time", "project_name", "hours_spent", "status", "description", "remarks"],
+            fields=["login_time", "logout_time", "project_name", "hours_spent", "status", "description", "remarks", "creation"],
             order_by="login_time asc, creation asc",
         )
         if not employee or not entries:
             return
-        html = _render(employee, work_date, entries)
+        work_log = _get_work_log(employee_name, work_date)
         label = getdate(work_date).strftime("%d-%m-%Y")
         subject = f"{employee.employee_name} - Additional Work - {label}"
         sender, reply_to = _employee_mail_identity(employee.name, employee.employee_name)
 
+        # Same layout as the check-out email: heading, detail card, summary table.
         recipients = list(dict.fromkeys(_get_hr_manager_emails() + _get_team_leader_emails(employee.name)))
         if recipients:
+            html = _render(employee, work_date, entries, work_log, heading=subject)
             frappe.sendmail(recipients=recipients, subject=subject, message=html, now=False, sender=sender, reply_to=reply_to)
         own = _get_employee_email(employee.name)
         if own:
+            html = _render(employee, work_date, entries, work_log, heading="Additional Work Logged")
             frappe.sendmail(recipients=[own], subject=subject, message=html, now=False, sender=sender, reply_to=reply_to)
     except Exception as e:
         frappe.log_error(f"Additional work email failed for {employee_name} ({work_date}): {e}", "ST Attendance Tracker")
 
 
-def _render(employee, work_date, entries):
+def _render(employee, work_date, entries, work_log, heading):
     total = sum(float(e.hours_spent or 0) for e in entries)
+    starts = [e.login_time for e in entries if e.login_time]
+    ends = [e.logout_time for e in entries if e.logout_time]
+    window = (
+        f"{_to_ampm(min(starts, key=time_to_minutes))} - {_to_ampm(max(ends, key=time_to_minutes))}"
+        if starts and ends else None
+    )
+    on_leave = not (work_log and work_log.eod_submitted)
     detail = _render_detail_table([
         ("Employee", employee.employee_name),
         ("Date", _format_email_date(work_date)),
+        ("Day Type", "On leave" if on_leave else "Worked, checked out"),
+        ("Login Time", _to_ampm(work_log.login_time) if work_log and work_log.login_time else None),
+        ("Logout Time", _to_ampm(work_log.logout_time) if work_log and work_log.logout_time else None),
+        ("Work Location", work_log.work_location if work_log else None),
+        ("Net Working Hours", work_log.net_hours if work_log else None),
+        ("Additional Work Window", window),
         ("Entries", str(len(entries))),
         ("Total Additional Hours", _format_hours(total) or "0h"),
+        ("Logged At", _format_action_timestamp(max(e.creation for e in entries)) if all(e.get("creation") for e in entries) else None),
     ])
-    cell = "padding:8px 10px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:13px"
-    head = "padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #d1d5db"
-    rows = "".join(
-        f"<tr><td style=\"{cell}\">{escape_html(_window(e))}</td>"
-        f"<td style=\"{cell}\"><b>{escape_html(e.description or '')}</b>"
-        + (f"<div style=\"color:#6b7280\">{escape_html(e.remarks)}</div>" if e.remarks else "")
-        + f"</td><td style=\"{cell}\">{escape_html(e.project_name or '-')}</td>"
-        f"<td style=\"{cell}\">{escape_html(_format_hours(e.hours_spent) or '-')}</td>"
-        f"<td style=\"{cell}\">{escape_html(e.status or '')}</td></tr>"
-        for e in entries
-    )
-    table = (
-        '<table style="width:100%;border-collapse:collapse"><thead><tr>'
-        + "".join(f'<th style="{head}">{h}</th>' for h in ("Time", "Work", "Project", "Hours", "Status"))
-        + f"</tr></thead><tbody>{rows}</tbody></table>"
-    )
     return (
-        f'<div style="{EMAIL_WRAPPER_STYLE}"><div style="{EMAIL_HEADING_STYLE}">Additional Work</div>{detail}'
-        f'<div style="{EMAIL_SUBHEADING_STYLE}">What was done</div>{table}</div>'
+        f'<div style="{EMAIL_WRAPPER_STYLE}"><div style="{EMAIL_HEADING_STYLE}">{escape_html(heading)}</div>{detail}'
+        f'<div style="{EMAIL_SUBHEADING_STYLE}">Additional Work Summary</div>{_render_table(entries)}</div>'
+    )
+
+
+def _render_table(entries):
+    """Same look as the task table in the check-out email: accent header row, bordered cells,
+    project name shown once at the start of each project's rows."""
+    border = "1px solid #e2e8f0"
+    head = (
+        f"padding:12px 10px;text-align:{{align}};border:{border};background-color:{EMAIL_ACCENT_COLOR};"
+        "color:#ffffff;font-size:12.5px;font-weight:bold"
+    )
+    cell = f"padding:10px 12px;font-size:13px;color:#334155;border:{border};vertical-align:top;word-wrap:break-word"
+    centred = f"padding:10px 12px;font-size:12px;color:#475569;border:{border};text-align:center;vertical-align:middle"
+    columns = (("Client", "left", "20%"), ("Task / Work", "left", "36%"), ("Time", "center", "20%"),
+               ("Hours", "center", "12%"), ("Status", "center", "12%"))
+    header = "".join(
+        f'<th style="{head.format(align=align)};width:{width}">{label}</th>' for label, align, width in columns
+    )
+    rows, seen = [], set()
+    for e in entries:
+        project = (e.project_name or "").strip() or "General"
+        first = project not in seen
+        seen.add(project)
+        project_cell = (
+            f'<td style="{cell};font-weight:bold;color:{EMAIL_ACCENT_COLOR}">{escape_html(project) if first else ""}</td>'
+        )
+        work = f"{escape_html(e.description or '')}"
+        if e.remarks:
+            work += f'<div style="color:#6b7280;font-size:12px;margin-top:4px">{escape_html(e.remarks)}</div>'
+        rows.append(
+            f"<tr>{project_cell}<td style=\"{cell}\">{work}</td>"
+            f"<td style=\"{centred}\">{escape_html(_window(e))}</td>"
+            f"<td style=\"{centred}\">{escape_html(_format_hours(e.hours_spent) or '-')}</td>"
+            f"<td style=\"{centred}\">{escape_html(e.status or '')}</td></tr>"
+        )
+    return (
+        '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px;'
+        f"font-family:'Segoe UI', Arial, sans-serif;border:{border};table-layout:fixed\">"
+        f"<thead><tr>{header}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
     )
 
 

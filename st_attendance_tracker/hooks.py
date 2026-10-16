@@ -33,6 +33,15 @@ doc_events = {
 }
 
 
+has_permission = {
+    "Daily Work Log": "st_attendance_tracker.permissions.has_permission_daily_work_log",
+}
+
+permission_query_conditions = {
+    "Daily Work Log": "st_attendance_tracker.permissions.daily_work_log_query_conditions",
+}
+
+
 # ── Scheduled Jobs ─────────────────────────────────────────────────────────────
 scheduler_events = {
     "cron": {
