@@ -32,7 +32,7 @@
   function ask(opts) {
     opts = opts || {};
     if (document.getElementById('st-design-dlg')) return;
-    var choice = current || (isClassic() ? 'classic' : 'new');
+    var choice = current || 'classic'; // matches DEFAULT_DESIGN in ui_shell.py
     var dlg = document.createElement('dialog'); dlg.id = 'st-design-dlg'; dlg.className = 'st-dsg';
     function paint() {
       dlg.innerHTML = '<form method="dialog"><h3>' + (opts.first ? 'Which design do you want to start with?' : 'Default design') + '</h3>' +

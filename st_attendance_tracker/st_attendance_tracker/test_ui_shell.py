@@ -18,6 +18,14 @@ def _keys(ctx):
     return [item["key"] for item in ctx["nav"]]
 
 
+def _page_request(path):
+    """Request for a page route. Classic is the default design now, so new-design routes ask for it via the session cookie."""
+    from werkzeug.wrappers import Request
+
+    cookie = {} if path.endswith(ui_shell.CLASSIC_SUFFIX) else {"Cookie": "st_view=new"}
+    return Request.from_values(path, headers=cookie)
+
+
 class TestShellNavigation(FrappeTestCase):
     def _ctx(self, roles, is_team_leader=False, employee=EMPLOYEE):
         with patch.object(ui_shell.frappe, "get_roles", return_value=roles), \
@@ -104,7 +112,7 @@ class TestShellPagesRendered(FrappeTestCase):
             self.skipTest("no active employee with a user on this site")
         frappe.set_user(user)
         self.addCleanup(frappe.set_user, "Administrator")
-        frappe.local.request = Request.from_values("/" + route)
+        frappe.local.request = _page_request("/" + route)
         frappe.local.path = route
         return get_response(route).get_data(as_text=True)
 
@@ -149,7 +157,7 @@ class TestDashboardsKeepAccessRules(FrappeTestCase):
 
         frappe.set_user(user)
         self.addCleanup(frappe.set_user, "Administrator")
-        frappe.local.request = Request.from_values("/" + route)
+        frappe.local.request = _page_request("/" + route)
         frappe.local.path = route
         return get_response(route)
 
@@ -235,7 +243,7 @@ class TestCheckinCalendarPage(FrappeTestCase):
             self.skipTest("no active employee with a user on this site")
         frappe.set_user(user)
         self.addCleanup(frappe.set_user, "Administrator")
-        frappe.local.request = Request.from_values("/" + route)
+        frappe.local.request = _page_request("/" + route)
         frappe.local.path = route
         return get_response(route).get_data(as_text=True)
 
@@ -278,12 +286,13 @@ class TestCheckinCalendarPage(FrappeTestCase):
         self.addCleanup(frappe.set_user, "Administrator")
         context = frappe._dict()
         page.get_context(context)
-        self.assertEqual(
-            sorted(context.boot),
-            sorted(["employee", "today", "active_date", "is_late_checkout", "location_config",
+        # Frappe's own web boot keys (e.g. assets_json) must survive: frappe.require()
+        # on the page needs assets_json to resolve bundles such as the file uploader.
+        self.assertIn("assets_json", context.boot)
+        app_keys = ["employee", "today", "active_date", "is_late_checkout", "location_config",
                     "half_day_leave", "is_team_leader", "late_after", "checkout_locked", "checkout_unlock_requested",
-                    "checkout_cutoff_label", "missed_checkout"]),
-        )
+                    "checkout_cutoff_label", "missed_checkout"]
+        self.assertTrue(set(app_keys) <= set(context.boot))
         self.assertIn(context.boot["location_config"]["value"], context.boot["location_config"]["options"])
 
 
@@ -299,7 +308,7 @@ class TestRebuiltPagesKeepEverything(FrappeTestCase):
             self.skipTest("no active employee with a user on this site")
         frappe.set_user(user)
         self.addCleanup(frappe.set_user, "Administrator")
-        frappe.local.request = Request.from_values("/" + route)
+        frappe.local.request = _page_request("/" + route)
         frappe.local.path = route
         return get_response(route).get_data(as_text=True)
 
@@ -363,3 +372,33 @@ class TestClassicPages(FrappeTestCase):
         ctx = ui_shell.get_shell_context("history", EMPLOYEE)
         self.assertEqual(ctx["menu_links"][0]["href"], "/my-history-classic")
         self.assertEqual(ui_shell.get_shell_context("nope", EMPLOYEE)["menu_links"], [])
+
+
+class TestDefaultDesign(FrappeTestCase):
+    """A user who never chose a design starts on the classic layout."""
+
+    def _redirect_target(self, path, cookie=None, saved=None):
+        from werkzeug.wrappers import Request
+
+        frappe.set_user("Administrator")
+        frappe.local.flags.redirect_location = None
+        headers = {"Cookie": f"st_view={cookie}"} if cookie else {}
+        frappe.local.request = Request.from_values(path, headers=headers)
+        with patch.object(ui_shell, "get_design_preference", return_value=saved):
+            try:
+                ui_shell.redirect_for_design()
+            except frappe.Redirect:
+                return frappe.local.flags.redirect_location
+        return None
+
+    def test_no_choice_goes_to_classic(self):
+        self.assertEqual(self._redirect_target("/daily-checkin"), "/daily-checkin-classic")
+
+    def test_saved_new_design_is_respected(self):
+        self.assertIsNone(self._redirect_target("/daily-checkin", saved="new"))
+
+    def test_session_cookie_overrides_default(self):
+        self.assertIsNone(self._redirect_target("/daily-checkin", cookie="new"))
+
+    def test_classic_page_stays_for_default_user(self):
+        self.assertIsNone(self._redirect_target("/daily-checkin-classic"))

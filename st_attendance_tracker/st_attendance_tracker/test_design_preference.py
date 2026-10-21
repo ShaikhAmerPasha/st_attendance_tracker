@@ -67,8 +67,8 @@ class TestDesignPreference(FrappeTestCase):
         self.assertIsNone(self._visit("/my-history", "new"))
         self.assertIsNone(self._visit("/my-history-classic", "classic"))
 
-    def test_no_preference_never_redirects(self):
-        self.assertIsNone(self._visit("/my-history"))
+    def test_no_preference_defaults_to_classic(self):
+        self.assertEqual(self._visit("/my-history"), "/my-history-classic")
         self.assertIsNone(self._visit("/my-history-classic"))
 
     def test_session_switch_cookie_overrides_the_default(self):

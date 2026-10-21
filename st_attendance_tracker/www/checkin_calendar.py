@@ -1,6 +1,7 @@
 """Daily Check-in, calendar layout. Served at /daily-checkin (the previous page stays at /daily-checkin-classic)."""
 import frappe
 from frappe.utils import getdate, today
+from frappe.website.utils import get_boot_data
 
 from st_attendance_tracker.api import (
     _get_attendance_settings,
@@ -71,7 +72,9 @@ def get_context(context):
     context.st_shell["menu_links"] = [
         {"label": "Classic check-in", "href": "/daily-checkin-classic", "icon": "ti-layout-list", "switch": "classic"},
     ]
+    # Keep Frappe's own web boot (it carries assets_json, which frappe.require needs for file uploads).
     context.boot = {
+        **get_boot_data(),
         "employee": {"name": employee.name, "employee_name": employee.employee_name},
         "today": todays_date,
         "active_date": active_date,

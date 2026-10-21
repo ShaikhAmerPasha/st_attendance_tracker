@@ -70,6 +70,8 @@ def get_shell_context(active, employee):
 # "New design" / "Classic design" switch links overrides it until the browser closes.
 DESIGN_KEY = "st_design_preference"
 DESIGN_CHOICES = ("new", "classic")
+# Design for users who have not chosen one yet (no saved default, no session cookie).
+DEFAULT_DESIGN = "classic"
 VIEW_COOKIE = "st_view"
 
 
@@ -98,7 +100,7 @@ def redirect_for_design():
     is_classic = path.endswith(CLASSIC_SUFFIX)
     wanted = request.cookies.get(VIEW_COOKIE)
     if wanted not in DESIGN_CHOICES:
-        wanted = get_design_preference()
+        wanted = get_design_preference() or DEFAULT_DESIGN
     if wanted == "classic" and not is_classic and path in {r for _k, _l, r, _i, _a in NAV_ITEMS}:
         target = path + CLASSIC_SUFFIX
     elif wanted == "new" and is_classic:
