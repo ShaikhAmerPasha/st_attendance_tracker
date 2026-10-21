@@ -15,11 +15,13 @@ If the panel shows *No pending requests*, nothing is waiting.
 
 ## Rules
 
+- Until the missed checkout is completed, the employee **cannot check in** on the next working day. Approving quickly unblocks them.
+
 - Only the employee's most recent working day can be requested.
 - A note is mandatory and is kept for audit.
 - If saving fails, the button changes to **Retry**.
 
 ## Tips
 
-- Approve promptly. The employee cannot finish their day, and their hours cannot be calculated, until you do.
+- Approve promptly. The employee cannot check in for the new day until the missed day is closed.
 - Write meaningful notes such as *Verified with team leader*.

@@ -79,7 +79,7 @@ class DailyWorkLog(Document):
             _cascade_series_done(series_id, self.date)
             
         # Check out
-        _make_checkin(self.employee, "OUT", self.logout_time)
+        _make_checkin(self.employee, "OUT", self.logout_time, on_date=self.date)
         
         # Rollover
         _rollover_pending_tasks(self.employee, self.date)

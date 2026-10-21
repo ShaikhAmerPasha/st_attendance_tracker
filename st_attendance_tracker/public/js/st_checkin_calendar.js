@@ -618,7 +618,7 @@
       text = 'Checkout closed at ' + esc(BOOT.checkout_cutoff_label) + ' for <b>' + esc(dayLabel(date)) + '</b>. Get late checkout approval from HR.';
     } else if (BOOT.missed_checkout) {
       date = BOOT.missed_checkout.date; requested = BOOT.missed_checkout.requested;
-      text = 'You did not check out on <b>' + esc(dayLabel(date)) + '</b>. Get late checkout approval from HR.';
+      text = 'You did not check out on <b>' + esc(dayLabel(date)) + '</b>. Get late checkout approval from HR.' + (BOOT.checkin_blocked ? ' You cannot check in until that checkout is completed.' : '');
     } else return '';
     return '<div class="cal-banner" role="alert"><i class="ti ti-lock" aria-hidden="true"></i> ' + text +
       (requested ? '<div style="margin-top:6px"><i class="ti ti-clock-check" aria-hidden="true"></i> Approval requested. HR has been notified.</div>'
@@ -1011,6 +1011,7 @@
     var log = openLog(), tasks = openDayTasks(), d = dlg();
     d.className = 'cal-dlg wide';
     d.innerHTML = '<form method="dialog"><h3>End of day check-out' + (BOOT.is_late_checkout ? ' · ' + esc(dayLabel(BOOT.active_date)) : '') + '</h3>' +
+      (BOOT.is_late_checkout ? '<label class="cal-f">Time you actually logged out<input id="c-lo" type="time" required></label>' : '') +
       '<div class="cal-two"><label class="cal-f">Lunch from<input id="c-ls" type="time" value="' + esc(log.lunch_from || '') + '"></label><label class="cal-f">Lunch to<input id="c-le" type="time" value="' + esc(log.lunch_to || '') + '"></label></div>' +
       '<div class="cal-card cal-row cal-between"><span>Logout time, recorded when you submit</span><b>' + fmFull(nowMin()) + '</b></div>' +
       '<div class="cal-xs"><table><thead><tr><th>Task</th><th style="width:150px">Status</th><th style="width:110px">Time taken</th><th>Remarks</th><th style="width:90px">Carry on</th></tr></thead><tbody>' +
@@ -1052,6 +1053,8 @@
     $('form', d).onsubmit = function (e) {
       e.preventDefault();
       var err = $('#c-err'), ls = $('#c-ls').value, le = $('#c-le').value; err.textContent = '';
+      var lo = BOOT.is_late_checkout ? $('#c-lo').value : toT(nowMin());
+      if (!lo) { err.textContent = 'Enter the time you actually logged out.'; return; }
       if ((ls && !le) || (!ls && le)) { err.textContent = 'Enter both lunch start and end, or leave both empty.'; return; }
       if (ls && le && toMin(le) <= toMin(ls)) { err.textContent = 'Lunch end must be after lunch start.'; return; }
       var updates = [], bad = null;
@@ -1062,7 +1065,7 @@
       });
       if (bad) { err.textContent = bad; return; }
       var ok = $('#c-ok'); ok.disabled = true; ok.textContent = 'Checking out…';
-      api(API + 'submit_eod_log', { lunch_from: ls, lunch_to: le, logout_time: toT(nowMin()), task_updates: JSON.stringify(updates), adhoc_tasks: '[]' }, true).then(function (r) {
+      api(API + 'submit_eod_log', { lunch_from: ls, lunch_to: le, logout_time: lo, task_updates: JSON.stringify(updates), adhoc_tasks: '[]' }, true).then(function (r) {
         d.close(); toast('Checked out at ' + r.logout_time + (r.pending_count ? '. ' + r.pending_count + ' unfinished task(s) carry over.' : '.'));
         if (BOOT.is_late_checkout) { setTimeout(function () { window.location.reload(); }, 1200); } else { S.page = null; loadAll(true); }
       }).catch(function (e2) { err.textContent = e2.message; ok.disabled = false; ok.textContent = 'Submit check-out'; });

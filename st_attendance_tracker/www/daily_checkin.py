@@ -5,7 +5,7 @@ from frappe.utils import today, now_datetime, getdate, get_datetime
 from st_attendance_tracker.api import (
     _to_hhmm, _to_ampm, _format_hours, _is_half_day_leave_today, _is_team_leader,
     _attach_task_files, _resolve_active_checkin_date, _get_work_log, _task_entry_dict, _get_morning_draft,
-    _get_attendance_settings, _get_previous_working_date,
+    _get_attendance_settings, _get_previous_working_date, _get_unclosed_previous_day,
 )
 from st_attendance_tracker.time_utils import get_checkout_cutoff, is_checkout_locked
 
@@ -212,6 +212,7 @@ def get_context(context):
     }, ["date", "unlock_requested_at"], as_dict=True)
     cutoff_minutes = get_checkout_cutoff()
 
+    context.checkin_blocked = bool(missed_checkout and _get_unclosed_previous_day(employee.name, actual_today))
     context.no_cache = 1
     context.employee = employee
     context.date = date

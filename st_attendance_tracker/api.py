@@ -28,11 +28,11 @@ import html
 import re
 from html import escape as html_escape
 import json
-from frappe.utils import today, now_datetime, getdate, add_days, cint
+from frappe.utils import today, now_datetime, getdate, add_days, cint, formatdate
 from frappe.desk.form.load import get_attachments
 from frappe.rate_limiter import rate_limit
 from frappe.utils.user import get_users_with_role
-from st_attendance_tracker.time_utils import is_checkout_locked, parse_duration_to_hours
+from st_attendance_tracker.time_utils import is_checkout_locked, parse_duration_to_hours, time_to_minutes
 
 
 # ── Employee helper ────────────────────────────────────────────────────────────
@@ -380,7 +380,9 @@ def _get_hr_manager_emails():
 
 # ── Checkin helper ─────────────────────────────────────────────────────────────
 
-def _make_checkin(employee, log_type, time_value=None):
+def _make_checkin(employee, log_type, time_value=None, on_date=None):
+    """on_date: the work date the log belongs to. A late checkout is recorded days after
+    the fact, so its OUT must land on the work date, not on today."""
     try:
         checkin = frappe.new_doc("Employee Checkin")
         checkin.employee = employee
@@ -391,7 +393,7 @@ def _make_checkin(employee, log_type, time_value=None):
                 t = datetime.time(int(parts[0]), int(parts[1]), int(parts[2]))
             else:
                 t = time_value
-            checkin.time = datetime.datetime.combine(datetime.date.today(), t)
+            checkin.time = datetime.datetime.combine(getdate(on_date or today()), t)
         else:
             checkin.time = now_datetime()
         checkin.device_id = "ST Daily Checkin"
@@ -403,14 +405,16 @@ def _make_checkin(employee, log_type, time_value=None):
             if shift:
                 checkin.shift = shift.shift_type.name
         except Exception:
-            frappe.log_error(frappe.get_traceback(), "ST Attendance Tracker — checkin shift lookup failed")
+            frappe.log_error(title="ST Attendance Tracker — checkin shift lookup failed", message=frappe.get_traceback())
 
         checkin.insert(ignore_permissions=True)
         frappe.db.commit()
     except Exception as e:
+        # log_error(title, message): a swapped call put the long text in the 140-char title,
+        # so the handler itself raised and aborted check-in/checkout.
         frappe.log_error(
-            f"Checkin failed for {employee} ({log_type}): {e}",
-            "ST Attendance Tracker"
+            title="ST Attendance Tracker — Employee Checkin failed",
+            message=f"Checkin failed for {employee} ({log_type}): {e}",
         )
 
 
@@ -1145,6 +1149,9 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
 # ── Next working date ──────────────────────────────────────────────────────────
 
 def _employee_holidays(employee):
+    """Every date in the Holiday List assigned to this employee in the Employee master,
+    weekly offs and public holidays alike. No Company default and no weekday is assumed:
+    an employee without a list has no days off."""
     holiday_list = frappe.db.get_value("Employee", employee, "holiday_list")
     if not holiday_list:
         return set()
@@ -1156,26 +1163,57 @@ def _get_next_working_date(employee, from_date):
     holidays = _employee_holidays(employee)
 
     candidate = getdate(add_days(from_date, 1))
-    while True:
-        if candidate.weekday() == 6:
-            candidate = getdate(add_days(candidate, 1))
-            continue
-        if candidate in holidays:
-            candidate = getdate(add_days(candidate, 1))
-            continue
-        break
+    while candidate in holidays:
+        candidate = getdate(add_days(candidate, 1))
     return candidate
 
 
 def _get_previous_working_date(employee, from_date):
-    """Last working day before `from_date`: skips Sundays and the employee's
-    holiday list, same rule as _get_next_working_date."""
+    """Last working day before `from_date`: skips every date in the employee's Holiday List
+    (weekly offs and public holidays), same rule as _get_next_working_date."""
     holidays = _employee_holidays(employee)
 
     candidate = getdate(add_days(from_date, -1))
-    while candidate.weekday() == 6 or candidate in holidays:
+    while candidate in holidays:
         candidate = getdate(add_days(candidate, -1))
     return candidate
+
+
+def _get_unclosed_previous_day(employee_name, on_date):
+    """The employee's last working day before `on_date` if they checked in then and never
+    checked out, else None. Drives the "no new check-in until yesterday is closed" rule.
+    Everything is read from ST Attendance Settings (switch + start date); days before the
+    start date are never held against anyone."""
+    settings = _get_attendance_settings()
+    effective_from = settings.get("checkin_block_effective_from")
+    if not cint(settings.get("block_checkin_until_checkout_done")) or not effective_from:
+        return None
+    previous_day = _get_previous_working_date(employee_name, on_date)
+    if previous_day < getdate(effective_from):
+        return None
+    return frappe.db.get_value(
+        "Daily Work Log",
+        {"employee": employee_name, "date": previous_day, "morning_submitted": 1, "eod_submitted": 0},
+        ["name", "date", "checkout_unlocked", "unlock_requested_at"],
+        as_dict=True,
+    )
+
+
+def _resolve_late_logout_time(raw_value, work_log):
+    """Logout time the employee typed for a day whose checkout was approved late: it must be
+    a real clock time on that work date, after their login."""
+    import re
+
+    value = (raw_value or "").strip()
+    if not re.fullmatch(r"\d{1,2}:\d{2}(:\d{2})?", value):
+        frappe.throw("Enter the time you actually logged out on {0}.".format(formatdate(work_log.date)))
+    hours, minutes = (int(part) for part in value.split(":")[:2])
+    if hours > 23 or minutes > 59:
+        frappe.throw("Logout time is not a valid time.")
+    login_minutes = time_to_minutes(work_log.login_time) if work_log.login_time else 0
+    if hours * 60 + minutes <= login_minutes:
+        frappe.throw("Logout time must be after your login time.")
+    return "%02d:%02d:00" % (hours, minutes)
 
 
 def _assert_checkout_allowed(work_log):
@@ -2236,6 +2274,16 @@ def submit_morning_log(new_tasks, login_time=None, carried_updates=None, work_lo
     if work_log.morning_submitted:
         frappe.throw("You have already checked in today.")
 
+    unclosed_day = _get_unclosed_previous_day(employee.name, date)
+    if unclosed_day:
+        frappe.throw(
+            "You did not check out on {0}. Complete that checkout before you check in today. "
+            "If the checkout window has closed, request HR approval from the Today page.".format(
+                formatdate(unclosed_day.date)
+            ),
+            title="Checkout pending",
+        )
+
     # ── WFH Validation ──────────────────────────────────────────────────
     work_location = (work_location or "Office").strip()
     weekday_num = getdate(date).weekday()
@@ -2355,15 +2403,18 @@ def submit_eod_log(lunch_from, lunch_to, logout_time, task_updates, adhoc_tasks)
     if not isinstance(date, str):
         date = frappe.utils.getdate(date).strftime("%Y-%m-%d")
 
-    if not frappe.flags.in_test:
-        logout_time = now_datetime().strftime("%H:%M:%S")
-    elif not logout_time:
-        frappe.throw("Logout time is required.")
-
     work_log = _get_or_new_work_log(employee.name, date)
     if work_log.eod_submitted:
         frappe.throw(f"You have already checked out for {date}.")
     _assert_checkout_allowed(work_log)
+
+    if is_late_checkout:
+        # Approved late checkout: "now" is days after the fact, so the employee states the real time.
+        logout_time = _resolve_late_logout_time(logout_time, work_log)
+    elif not frappe.flags.in_test:
+        logout_time = now_datetime().strftime("%H:%M:%S")
+    elif not logout_time:
+        frappe.throw("Logout time is required.")
 
     updates = json.loads(task_updates) if isinstance(task_updates, str) else task_updates
     adhocs  = json.loads(adhoc_tasks)  if isinstance(adhoc_tasks, str)  else adhoc_tasks

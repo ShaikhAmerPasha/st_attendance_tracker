@@ -25,6 +25,7 @@ from st_attendance_tracker.api import (
     _get_attendance_settings, clear_attendance_settings_cache,
     _get_team_members,
     request_late_checkout_approval, unlock_late_checkout, get_late_checkout_requests, _get_previous_working_date, _resolve_active_checkin_date,
+    _get_unclosed_previous_day, _resolve_late_logout_time,
 )
 from st_attendance_tracker.time_utils import is_checkout_locked
 from st_attendance_tracker import tasks as tasks_module
@@ -2583,11 +2584,36 @@ class TestCheckoutCutoff(FrappeTestCase):
         self.assertNotIn('id="lcr-panel"', self._render_management_page(False))
 
     # ── last-working-day window ──
-    def test_previous_working_date_skips_sunday(self):
+    def test_previous_working_date_skips_dates_in_the_holiday_list(self):
+        # Weekly offs and public holidays are rows of the Holiday List; no weekday is special.
         monday = getdate("2026-10-05")
         self.assertEqual(monday.weekday(), 0)
-        self.assertEqual(str(_get_previous_working_date(self.emp_name, monday)), "2026-10-03")
-        self.assertEqual(str(_get_previous_working_date(self.emp_name, getdate("2026-10-08"))), "2026-10-07")
+        holidays = {getdate("2026-10-04"), getdate("2026-10-03")}  # Sunday weekly off + Saturday public holiday
+        with patch("st_attendance_tracker.api._employee_holidays", return_value=holidays):
+            self.assertEqual(str(_get_previous_working_date(self.emp_name, monday)), "2026-10-02")
+            self.assertEqual(str(_get_next_working_date(self.emp_name, getdate("2026-10-02"))), "2026-10-05")
+
+    def test_sunday_is_a_working_day_unless_the_holiday_list_says_otherwise(self):
+        monday = getdate("2026-10-05")
+        with patch("st_attendance_tracker.api._employee_holidays", return_value=set()):
+            self.assertEqual(str(_get_previous_working_date(self.emp_name, monday)), "2026-10-04")
+
+    def test_holidays_come_from_the_list_assigned_to_the_employee(self):
+        from st_attendance_tracker.api import _employee_holidays
+
+        frappe.db.set_value("Employee", self.emp_name, "holiday_list", None)
+        self.assertEqual(_employee_holidays(self.emp_name), set())  # no list, no days off (no Company fallback)
+        lst = frappe.get_doc({
+            "doctype": "Holiday List", "holiday_list_name": "ST Test Own List",
+            "from_date": "2026-10-01", "to_date": "2026-10-31",
+            "holidays": [{"holiday_date": "2026-10-04", "description": "Sunday", "weekly_off": 1},
+                         {"holiday_date": "2026-10-20", "description": "Public holiday"}],
+        }).insert(ignore_permissions=True)
+        self.addCleanup(frappe.delete_doc, "Holiday List", lst.name, force=True)
+        frappe.db.set_value("Employee", self.emp_name, "holiday_list", lst.name)
+        self.assertEqual(_employee_holidays(self.emp_name), {getdate("2026-10-04"), getdate("2026-10-20")})
+        self.assertEqual(str(_get_previous_working_date(self.emp_name, getdate("2026-10-05"))), "2026-10-03")
+        self.assertEqual(str(_get_previous_working_date(self.emp_name, getdate("2026-10-21"))), "2026-10-19")
 
     def test_request_rejected_for_older_than_last_working_day(self):
         old = add_days(today(), -4)
@@ -2606,3 +2632,138 @@ class TestCheckoutCutoff(FrappeTestCase):
         with patch("frappe.utils.now_datetime", return_value=self._at(today(), "09:00")):
             daily_checkin_page.get_context(context)
         self.assertFalse(context.missed_checkout)
+
+
+class TestCheckinBlockedUntilCheckout(FrappeTestCase):
+    """An employee who did not check out on their last working day cannot check in
+    until that checkout is completed. Switch and start date live in ST Attendance Settings."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        frappe.set_user("Administrator")
+        company = frappe.db.get_single_value("Global Defaults", "default_company") or "_Test Company"
+        cls.dept = (
+            frappe.db.get_value("Department", {"department_name": "_QA Dept", "company": company}, "name")
+            or f"_QA Dept - {company}"
+        )
+        cls.emp_user = "blk_emp@test.example.com"
+        cls.emp_name = _make_employee("BLK001", cls.dept, cls.emp_user, ["Employee"])
+        frappe.db.commit()
+
+    @classmethod
+    def tearDownClass(cls):
+        frappe.set_user("Administrator")
+        frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
+                      "(SELECT name FROM `tabDaily Work Log` WHERE employee=%s)", (cls.emp_name,))
+        frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee=%s", (cls.emp_name,))
+        frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee=%s", (cls.emp_name,))
+        frappe.db.sql("DELETE FROM `tabEmployee` WHERE name=%s", (cls.emp_name,))
+        frappe.db.sql("DELETE FROM `tabUser Permission` WHERE user=%s", (cls.emp_user,))
+        frappe.db.sql("DELETE FROM `tabUser` WHERE email=%s", (cls.emp_user,))
+        frappe.db.commit()
+
+    def setUp(self):
+        frappe.set_user("Administrator")
+        self.previous_day = _get_previous_working_date(self.emp_name, today())
+
+    def tearDown(self):
+        frappe.set_user("Administrator")
+        frappe.db.sql("DELETE FROM `tabTask Entry` WHERE parent IN "
+                      "(SELECT name FROM `tabDaily Work Log` WHERE employee=%s)", (self.emp_name,))
+        frappe.db.sql("DELETE FROM `tabDaily Work Log` WHERE employee=%s", (self.emp_name,))
+        frappe.db.sql("DELETE FROM `tabEmployee Checkin` WHERE employee=%s", (self.emp_name,))
+        frappe.db.commit()
+
+    def _settings(self, enabled=1, effective_from=None):
+        values = dict(_get_attendance_settings())
+        values["block_checkin_until_checkout_done"] = enabled
+        values["checkin_block_effective_from"] = effective_from or add_days(today(), -30)
+        return patch("st_attendance_tracker.api._get_attendance_settings", return_value=values)
+
+    def _open_log(self, date, **extra):
+        log = frappe.get_doc({
+            "doctype": "Daily Work Log", "employee": self.emp_name, "date": date,
+            "morning_submitted": 1, "login_time": "09:00:00", "work_location": "Office", **extra,
+        })
+        log.insert(ignore_permissions=True)
+        return log
+
+    def _check_in(self):
+        frappe.set_user(self.emp_user)
+        return submit_morning_log(
+            new_tasks=json.dumps([{"description": "Plan the day", "estimated_time": ""}]),
+            work_location="Office",
+        )
+
+    def test_unclosed_last_working_day_blocks_checkin(self):
+        self._open_log(self.previous_day)
+        with self._settings(), self.assertRaises(frappe.ValidationError) as ctx:
+            self._check_in()
+        self.assertIn("did not check out", str(ctx.exception))
+        self.assertFalse(_get_work_log(self.emp_name, today()))
+
+    def test_checked_out_last_working_day_allows_checkin(self):
+        self._open_log(self.previous_day, eod_submitted=1, logout_time="18:00:00")
+        with self._settings():
+            self._check_in()
+        self.assertTrue(_get_work_log(self.emp_name, today()).morning_submitted)
+
+    def test_hr_approved_but_not_yet_checked_out_still_blocks(self):
+        self._open_log(self.previous_day, checkout_unlocked=1)
+        with self._settings(), self.assertRaises(frappe.ValidationError):
+            self._check_in()
+
+    def test_days_before_the_start_date_are_ignored(self):
+        self._open_log(self.previous_day)
+        with self._settings(effective_from=today()):
+            self._check_in()
+        self.assertTrue(_get_work_log(self.emp_name, today()).morning_submitted)
+
+    def test_switch_off_or_no_start_date_disables_the_block(self):
+        self._open_log(self.previous_day)
+        with self._settings(enabled=0):
+            self.assertIsNone(_get_unclosed_previous_day(self.emp_name, today()))
+        values = dict(_get_attendance_settings(), block_checkin_until_checkout_done=1, checkin_block_effective_from=None)
+        with patch("st_attendance_tracker.api._get_attendance_settings", return_value=values):
+            self.assertIsNone(_get_unclosed_previous_day(self.emp_name, today()))
+
+    def test_only_the_last_working_day_is_considered(self):
+        older = _get_previous_working_date(self.emp_name, self.previous_day)
+        self._open_log(older)
+        with self._settings():
+            self.assertIsNone(_get_unclosed_previous_day(self.emp_name, today()))
+
+    def test_no_log_on_last_working_day_does_not_block(self):
+        with self._settings():
+            self.assertIsNone(_get_unclosed_previous_day(self.emp_name, today()))
+
+    # ── real logout time for an approved late checkout ──
+    def test_failed_employee_checkin_does_not_abort_the_caller(self):
+        from st_attendance_tracker.api import _make_checkin
+
+        from unittest.mock import MagicMock
+
+        broken = MagicMock()
+        broken.insert.side_effect = frappe.ValidationError("x" * 400)  # long enough to overflow an Error Log title
+        with patch("frappe.new_doc", return_value=broken):
+            _make_checkin(self.emp_name, "OUT", "18:00:00", on_date=self.previous_day)  # must not raise
+
+    def test_late_checkout_requires_a_real_logout_time(self):
+        log = self._open_log(self.previous_day)
+        for bad in ("", "abc", "25:10", "08:30"):
+            with self.assertRaises(frappe.ValidationError):
+                _resolve_late_logout_time(bad, log)
+        self.assertEqual(_resolve_late_logout_time("18:15", log), "18:15:00")
+
+    def test_late_checkout_saves_the_typed_time_on_the_work_date(self):
+        self._open_log(self.previous_day, checkout_unlocked=1)
+        frappe.set_user(self.emp_user)
+        submit_eod_log(lunch_from="", lunch_to="", logout_time="18:15", task_updates="[]", adhoc_tasks="[]")
+        log = _get_work_log(self.emp_name, self.previous_day)
+        self.assertTrue(log.eod_submitted)
+        self.assertEqual(_to_hhmm(log.logout_time), "18:15")
+        out_log = frappe.db.get_value(
+            "Employee Checkin", {"employee": self.emp_name, "log_type": "OUT"}, "time", order_by="creation desc"
+        )
+        self.assertEqual(str(getdate(out_log)), str(self.previous_day))

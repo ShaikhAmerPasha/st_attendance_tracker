@@ -12,3 +12,4 @@ st_attendance_tracker.patches.create_management_role
 st_attendance_tracker.patches.setup_whats_new_announcements
 st_attendance_tracker.patches.add_task_backlog_announcements
 st_attendance_tracker.patches.setup_role_based_docs
+st_attendance_tracker.patches.set_checkin_block_start_date

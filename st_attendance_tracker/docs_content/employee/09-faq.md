@@ -10,7 +10,10 @@ Saturdays are WFH for everyone, and Remote employees are fixed to Remote.
 You logged in after the company late threshold. Set the real login time and add a remark if needed.
 
 **I forgot to check out.**
-Request HR approval from the Today page. Only your last working day can be requested.
+Request HR approval from the Today page. Only your last working day can be requested. Until that checkout is completed you cannot check in for the new day. After HR approves, type the real time you logged out.
+
+**It says Checkout pending when I check in.**
+You did not check out on your last working day. Request HR approval, then complete that checkout first.
 
 **I cannot edit a task.**
 Tasks on past days and after checkout are locked.

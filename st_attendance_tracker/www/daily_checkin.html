@@ -3175,7 +3175,7 @@ body > .container { padding-top: 0 !important; }
   </div>
   {% elif missed_checkout %}
   <div class="lock-card" role="alert">
-    <div class="lock-card-row"><i class="ti ti-lock" aria-hidden="true"></i><span>You did not check out on <strong>{{ missed_checkout_label }}</strong>. Get late checkout approval from HR.</span></div>
+    <div class="lock-card-row"><i class="ti ti-lock" aria-hidden="true"></i><span>You did not check out on <strong>{{ missed_checkout_label }}</strong>. Get late checkout approval from HR.{% if checkin_blocked %} You cannot check in until that checkout is completed.{% endif %}</span></div>
     {% if missed_checkout.unlock_requested_at %}
     <div class="lock-card-row"><i class="ti ti-clock-check" aria-hidden="true"></i><span>Approval requested. HR has been notified.</span></div>
     {% else %}
@@ -3189,7 +3189,7 @@ body > .container { padding-top: 0 !important; }
   {% if is_late_checkout %}
   <div class="late-checkout-banner">
     <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-    <span>You're completing checkout for <strong>{{ checkout_date_label }}</strong> — check-in was left open from that day. Today's attendance is tracked separately.</span>
+    <span>You're completing checkout for <strong>{{ checkout_date_label }}</strong> — check-in was left open from that day. Enter the time you actually logged out. Today's attendance is tracked separately.</span>
   </div>
   {% endif %}
   <div class="eod-f">
@@ -3198,7 +3198,7 @@ body > .container { padding-top: 0 !important; }
       <div class="ef-sep"></div>
       <div class="ef-field">
         <span class="ef-field-label">Logout</span>
-        <input type="time" id="logout_time" value="{{ current_time }}" readonly>
+        {% if is_late_checkout %}<input type="time" id="logout_time" value="" required aria-label="Time you actually logged out on {{ checkout_date_label }}" title="Enter the time you actually logged out on {{ checkout_date_label }}">{% else %}<input type="time" id="logout_time" value="{{ current_time }}" readonly>{% endif %}
       </div>
       <label class="ef-lunch-toggle">
         <input type="checkbox" id="include_lunch" onchange="toggleLunchFields()" {% if include_lunch %}checked{% endif %}>
@@ -3413,7 +3413,7 @@ body > .container { padding-top: 0 !important; }
 <div class="body">
   {% if missed_checkout %}
   <div class="lock-card" role="alert">
-    <div class="lock-card-row"><i class="ti ti-lock" aria-hidden="true"></i><span>You did not check out on <strong>{{ missed_checkout_label }}</strong>. Get late checkout approval from HR.</span></div>
+    <div class="lock-card-row"><i class="ti ti-lock" aria-hidden="true"></i><span>You did not check out on <strong>{{ missed_checkout_label }}</strong>. Get late checkout approval from HR.{% if checkin_blocked %} You cannot check in until that checkout is completed.{% endif %}</span></div>
     {% if missed_checkout.unlock_requested_at %}
     <div class="lock-card-row"><i class="ti ti-clock-check" aria-hidden="true"></i><span>Approval requested. HR has been notified.</span></div>
     {% else %}
@@ -3776,6 +3776,7 @@ function updateClockAndLogoutTime() {
     clk.textContent = hStr + ':' + mStr + ' ' + ampm;
   }
   var lo = document.getElementById('logout_time');
+  if (lo && !lo.readOnly) return; // late checkout: the employee types the real logout time
   if (lo && lo.value !== newVal) {
     lo.value = newVal;
     recalc();
