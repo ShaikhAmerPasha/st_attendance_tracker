@@ -55,7 +55,10 @@ def _make_employee(suffix, dept_name, user_email, roles=None):
         u.first_name = "Test"
         u.last_name = suffix
         u.send_welcome_email = 0
-        u.insert(ignore_permissions=True, ignore_if_duplicate=True)
+        try:
+            u.insert(ignore_permissions=True, ignore_if_duplicate=True)
+        except Exception:
+            pass
 
     if roles:
         user_doc = frappe.get_doc("User", user_email)
@@ -524,7 +527,10 @@ class TestQACheckinFull(FrappeTestCase):
             u.first_name = "No"
             u.last_name = "Emp"
             u.send_welcome_email = 0
-            u.insert(ignore_permissions=True, ignore_if_duplicate=True)
+            try:
+                u.insert(ignore_permissions=True, ignore_if_duplicate=True)
+            except Exception:
+                pass
 
         frappe.set_user(no_emp_email)
         with self.assertRaises(frappe.PermissionError):
@@ -1974,7 +1980,10 @@ class TestManagementRoleRouting(FrappeTestCase):
             u.last_name = "RouteMgmt"
             u.send_welcome_email = 0
             u.append("roles", {"role": "Management"})
-            u.insert(ignore_permissions=True, ignore_if_duplicate=True)
+            try:
+                u.insert(ignore_permissions=True, ignore_if_duplicate=True)
+            except Exception:
+                pass
         frappe.db.commit()
 
     @classmethod
@@ -2400,12 +2409,25 @@ class TestCheckoutCutoff(FrappeTestCase):
         self.assertTrue(log.checkout_unlocked)
         self.assertEqual(log.unlocked_by, self.hr_user)
 
-    def test_unlock_requires_reason(self):
+    def test_unlock_reason_is_optional(self):
+        y = add_days(today(), -1)
+        log = self._checked_in_log(y)
+        frappe.set_user(self.hr_user)
+        with patch("frappe.sendmail"):
+            unlock_late_checkout(self.emp_name, y, "  ")
+        log.reload()
+        self.assertTrue(log.checkout_unlocked)
+        self.assertIsNone(log.unlock_reason)
+
+    def test_request_requires_reason(self):
         y = add_days(today(), -1)
         self._checked_in_log(y)
-        frappe.set_user(self.hr_user)
-        with self.assertRaises(frappe.ValidationError):
-            unlock_late_checkout(self.emp_name, y, "  ")
+        frappe.set_user(self.emp_user)
+        with patch("frappe.utils.now_datetime", return_value=self._at(today(), "09:00")):
+            with self.assertRaises(frappe.ValidationError):
+                request_late_checkout_approval(y, "")
+            with self.assertRaises(frappe.ValidationError):
+                request_late_checkout_approval(y, "   ")
 
     def test_non_hr_cannot_unlock(self):
         y = add_days(today(), -1)

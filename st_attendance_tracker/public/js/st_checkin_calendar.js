@@ -622,13 +622,22 @@
     } else return '';
     return '<div class="cal-banner" role="alert"><i class="ti ti-lock" aria-hidden="true"></i> ' + text +
       (requested ? '<div style="margin-top:6px"><i class="ti ti-clock-check" aria-hidden="true"></i> Approval requested. HR has been notified.</div>'
-        : '<div class="cal-row" style="margin-top:8px"><input class="cal-input" id="lock-reason" maxlength="200" placeholder="Reason (optional)…" aria-label="Reason for late checkout" style="flex:1 1 160px">' +
+        : '<div class="cal-row" style="margin-top:8px"><input class="cal-input" id="lock-reason" maxlength="200" placeholder="Reason (required)…" aria-label="Reason for late checkout" style="flex:1 1 160px">' +
           '<button type="button" class="cal-btn primary" id="lock-request" data-date="' + esc(date) + '">Request HR approval</button></div>') + '</div>';
   }
   function requestLateCheckout(btn) {
     var reason = $('#lock-reason');
+    var reasonVal = reason ? reason.value.trim() : '';
+    if (!reasonVal) {
+      if (reason) {
+        reason.focus();
+        reason.style.borderColor = '#dc2626';
+      }
+      toast('Please enter a reason for late checkout.', null, true);
+      return;
+    }
     btn.disabled = true;
-    api(API + 'request_late_checkout_approval', { date: btn.dataset.date, reason: reason ? reason.value : '' }, true).then(function () {
+    api(API + 'request_late_checkout_approval', { date: btn.dataset.date, reason: reasonVal }, true).then(function () {
       toast('Request sent to HR');
       setTimeout(function () { window.location.reload(); }, 800);
     }).catch(function (e) { btn.disabled = false; toast(e.message || 'Could not send request. Try again or contact HR.', null, true); });

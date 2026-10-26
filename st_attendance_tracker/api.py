@@ -102,8 +102,8 @@ def _attach_task_files(tasks):
         t["attachments"] = files_by_task.get(t.name, [])
 
 
-def _reparent_attachments(file_names, task_name):
-    """Point orphan-uploaded Files (no doctype/docname yet) at the now-saved task.
+def _reparent_attachments(file_names, target_name, target_doctype="Task Entry"):
+    """Point orphan-uploaded Files (no doctype/docname yet) at the now-saved task or document.
 
     `file_names` is client-supplied. Only reparent a File that is (a) still
     genuinely unattached and (b) owned by the calling user — otherwise any
@@ -123,8 +123,8 @@ def _reparent_attachments(file_names, task_name):
         if f.attached_to_doctype or f.owner != frappe.session.user:
             continue
         frappe.db.set_value("File", f.name, {
-            "attached_to_doctype": "Task Entry",
-            "attached_to_name": task_name,
+            "attached_to_doctype": target_doctype,
+            "attached_to_name": target_name,
         })
 
 
@@ -3056,7 +3056,20 @@ def upload_task_attachment(task_name):
     })
     doc.insert(ignore_permissions=True)
     return doc
-
+@frappe.whitelist(methods=["POST"])
+def reparent_additional_work_attachments(additional_work_name, attachment_names):
+    """Link uploaded orphan files to the newly inserted Additional Work entry."""
+    import json
+    if isinstance(attachment_names, str):
+        try:
+            attachment_names = json.loads(attachment_names)
+        except Exception:
+            attachment_names = [attachment_names]
+    # Check that current user is the owner of this Additional Work entry
+    aw = frappe.get_doc("Additional Work", additional_work_name)
+    aw._check_ownership()
+    _reparent_attachments(attachment_names, additional_work_name, target_doctype="Additional Work")
+    return {"status": "ok"}
 
 @frappe.whitelist()
 def get_task_attachments(task_name):
@@ -3496,6 +3509,10 @@ def request_late_checkout_approval(date, reason=None):
     work_log = _get_work_log(employee.name, getdate(date).strftime("%Y-%m-%d"))
     if not work_log or not work_log.morning_submitted or work_log.eod_submitted:
         frappe.throw("There is no open check-in to request checkout approval for.")
+    # Reason from the employee is strictly mandatory.
+    reason = (reason or "").strip()
+    if not reason:
+        frappe.throw("A reason is required to request late checkout approval.")
     # Only the most recent working day can be requested; older forgotten
     # checkouts are an HR correction in Desk, not an employee request.
     if getdate(work_log.date) not in (getdate(today()), _get_previous_working_date(employee.name, today())):
@@ -3506,7 +3523,7 @@ def request_late_checkout_approval(date, reason=None):
         return {"status": "already_requested"}
 
     work_log.unlock_requested_at = now_datetime()
-    work_log.unlock_request_reason = (reason or "").strip()[:500] or None
+    work_log.unlock_request_reason = reason[:500]
     # Lets the controller accept this write to otherwise HR-only fields.
     frappe.flags.in_late_checkout_request = True
     try:
@@ -3530,23 +3547,37 @@ def request_late_checkout_approval(date, reason=None):
     return {"status": "requested"}
 
 
+def _is_allowed_late_checkout_approval_date(employee, log_date):
+    """Only the previous working day OR today (only if today is locked past cutoff)
+    can be approved by HR."""
+    ld = getdate(log_date)
+    td = getdate(today())
+    if ld == td:
+        # Allowed for today only if checkout is locked (e.g. past 10 PM)
+        return is_checkout_locked(td, 0)
+    prev_work_date = _get_previous_working_date(employee, td)
+    return ld == prev_work_date
+
+
 @frappe.whitelist(methods=["POST"])
-def unlock_late_checkout(employee, date, reason):
+def unlock_late_checkout(employee, date, reason=None):
     """HR Manager unlocks checkout for exactly one employee and date."""
     if "HR Manager" not in frappe.get_roles(frappe.session.user):
         frappe.throw("Only an HR Manager can unlock late checkout.", frappe.PermissionError)
     reason = (reason or "").strip()
-    if not reason:
-        frappe.throw("A reason is required to unlock late checkout.")
 
-    work_log = _get_work_log(employee, getdate(date).strftime("%Y-%m-%d"))
+    target_date = getdate(date)
+    if not _is_allowed_late_checkout_approval_date(employee, target_date):
+        frappe.throw("Only the previous working day (or today if locked past cutoff) can be approved.")
+
+    work_log = _get_work_log(employee, target_date.strftime("%Y-%m-%d"))
     if not work_log or not work_log.morning_submitted or work_log.eod_submitted:
         frappe.throw("No open check-in found for this employee and date.")
 
     work_log.checkout_unlocked = 1
     work_log.unlocked_by = frappe.session.user
     work_log.unlocked_at = now_datetime()
-    work_log.unlock_reason = reason[:500]
+    work_log.unlock_reason = reason[:500] if reason else None
     # HR Manager role is enforced above. Employee-scoped User Permissions
     # (auto-created per Employee) would otherwise stop HR saving another
     # employee's log, so bypass only the document permission check.
@@ -3565,10 +3596,11 @@ def unlock_late_checkout(employee, date, reason):
 @frappe.whitelist()
 def get_late_checkout_requests():
     """Open late-checkout requests awaiting HR, oldest first. HR Manager only,
-    because only that role can act on them."""
+    because only that role can act on them. Only shows requests for the employee's
+    previous working day or today if locked."""
     if "HR Manager" not in frappe.get_roles(frappe.session.user):
         frappe.throw("Only an HR Manager can view late checkout requests.", frappe.PermissionError)
-    return frappe.get_all(
+    raw_requests = frappe.get_all(
         "Daily Work Log",
         filters={
             "morning_submitted": 1,
@@ -3581,3 +3613,9 @@ def get_late_checkout_requests():
         order_by="unlock_requested_at asc",
         limit=100,
     )
+    # Filter to only previous working day or locked today
+    valid_requests = []
+    for row in raw_requests:
+        if _is_allowed_late_checkout_approval_date(row.employee, row.date):
+            valid_requests.append(row)
+    return valid_requests

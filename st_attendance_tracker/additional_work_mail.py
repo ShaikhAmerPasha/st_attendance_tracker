@@ -48,30 +48,49 @@ def send_additional_work_emails(employee_name, work_date, wait=BATCH_WINDOW_SECO
         entries = frappe.get_all(
             "Additional Work",
             filters={"employee": employee_name, "work_date": work_date},
-            fields=["login_time", "logout_time", "project_name", "hours_spent", "status", "description", "remarks", "creation"],
+            fields=["name", "login_time", "logout_time", "project_name", "hours_spent", "status", "description", "remarks", "creation"],
             order_by="login_time asc, creation asc",
         )
         if not employee or not entries:
             return
+
+        # Fetch attachments for all entries
+        entry_names = [e.name for e in entries if e.name]
+        files_by_entry = {}
+        if entry_names:
+            files = frappe.get_all(
+                "File",
+                filters={"attached_to_doctype": "Additional Work", "attached_to_name": ["in", entry_names]},
+                fields=["name", "file_name", "file_url", "attached_to_name"],
+            )
+            for f in files:
+                files_by_entry.setdefault(f.attached_to_name, []).append(f)
+        for e in entries:
+            e["attachments"] = files_by_entry.get(e.name, [])
+
+        # Attachment specs for MIME attachments
+        attachment_specs = [{"fid": f["name"]} for e in entries for f in e.get("attachments", [])]
+
         work_log = _get_work_log(employee_name, work_date)
         label = getdate(work_date).strftime("%d-%m-%Y")
         subject = f"{employee.employee_name} - Additional Work - {label}"
         sender, reply_to = _employee_mail_identity(employee.name, employee.employee_name)
 
-        # Same layout as the check-out email: heading, detail card, summary table.
+        dept_format = frappe.db.get_value("Department", employee.department, "task_summary_email_format") if employee.department else None
+
         recipients = list(dict.fromkeys(_get_hr_manager_emails() + _get_team_leader_emails(employee.name)))
         if recipients:
-            html = _render(employee, work_date, entries, work_log, heading=subject)
-            frappe.sendmail(recipients=recipients, subject=subject, message=html, now=False, sender=sender, reply_to=reply_to)
+            html = _render(employee, work_date, entries, work_log, heading=subject, dept_format=dept_format)
+            frappe.sendmail(recipients=recipients, subject=subject, message=html, now=False, sender=sender, reply_to=reply_to, attachments=attachment_specs)
         own = _get_employee_email(employee.name)
         if own:
-            html = _render(employee, work_date, entries, work_log, heading="Additional Work Logged")
-            frappe.sendmail(recipients=[own], subject=subject, message=html, now=False, sender=sender, reply_to=reply_to)
+            html = _render(employee, work_date, entries, work_log, heading="Additional Work Logged", dept_format=dept_format)
+            frappe.sendmail(recipients=[own], subject=subject, message=html, now=False, sender=sender, reply_to=reply_to, attachments=attachment_specs)
     except Exception as e:
         frappe.log_error(f"Additional work email failed for {employee_name} ({work_date}): {e}", "ST Attendance Tracker")
 
 
-def _render(employee, work_date, entries, work_log, heading):
+def _render(employee, work_date, entries, work_log, heading, dept_format=None):
     total = sum(float(e.hours_spent or 0) for e in entries)
     starts = [e.login_time for e in entries if e.login_time]
     ends = [e.logout_time for e in entries if e.logout_time]
@@ -93,9 +112,15 @@ def _render(employee, work_date, entries, work_log, heading):
         ("Total Additional Hours", _format_hours(total) or "0h"),
         ("Logged At", _format_action_timestamp(max(e.creation for e in entries)) if all(e.get("creation") for e in entries) else None),
     ])
+
+    if dept_format == "Grouped List":
+        body_html = _render_grouped_list(entries)
+    else:
+        body_html = _render_table(entries)
+
     return (
         f'<div style="{EMAIL_WRAPPER_STYLE}"><div style="{EMAIL_HEADING_STYLE}">{escape_html(heading)}</div>{detail}'
-        f'<div style="{EMAIL_SUBHEADING_STYLE}">Additional Work Summary</div>{_render_table(entries)}</div>'
+        f'<div style="{EMAIL_SUBHEADING_STYLE}">Additional Work Summary</div>{body_html}</div>'
     )
 
 
@@ -124,7 +149,11 @@ def _render_table(entries):
         )
         work = f"{escape_html(e.description or '')}"
         if e.remarks:
-            work += f'<div style="color:#6b7280;font-size:12px;margin-top:4px">{escape_html(e.remarks)}</div>'
+            work += f'<div style="color:#6b7280;font-size:12px;margin-top:4px">Remark: {escape_html(e.remarks)}</div>'
+        att_names = [escape_html(f["file_name"]) for f in (e.get("attachments") or [])]
+        if att_names:
+            work += f'<div style="font-size:11.5px;color:#64748b;margin-top:4px">📎 {", ".join(att_names)}</div>'
+
         rows.append(
             f"<tr>{project_cell}<td style=\"{cell}\">{work}</td>"
             f"<td style=\"{centred}\">{escape_html(_window(e))}</td>"
@@ -136,6 +165,74 @@ def _render_table(entries):
         f"font-family:'Segoe UI', Arial, sans-serif;border:{border};table-layout:fixed\">"
         f"<thead><tr>{header}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
     )
+
+
+def _render_grouped_list(entries):
+    """Grouped List layout matching department view for Grouped List email format."""
+    groups = {}
+    for e in entries:
+        pname = (e.project_name or "").strip() or "General"
+        groups.setdefault(pname, []).append(e)
+
+    sorted_group_names = list(groups.keys())
+    FONT = "font-family:'Segoe UI',Arial,sans-serif"
+    WRAP = f"{FONT};line-height:1.6;color:#1f2937;margin-top:16px"
+    PROJ_HEAD = (
+        f"{FONT};font-size:15px;font-weight:700;color:#1e293b;"
+        "padding:0 0 5px 0;margin:0 0 8px 0;"
+        "border-bottom:1px solid #e2e8f0"
+    )
+    TASK_LINE = f"{FONT};font-size:14px;color:#334155;margin:0;padding:0;white-space:pre-wrap"
+    META_LINE = f"{FONT};font-size:12px;color:#64748b;margin:2px 0 0 18px;padding:0"
+
+    group_blocks = []
+    for pname in sorted_group_names:
+        lines = []
+        for idx, e in enumerate(groups[pname]):
+            desc = escape_html(e.description or "").replace('\n', '<br>')
+            num = idx + 1
+            task_html = f'<p style="{TASK_LINE}">&nbsp;&nbsp;{num}. {desc}</p>'
+
+            meta_parts = []
+            if e.status:
+                if e.status == "Done":
+                    meta_parts.append("✔ Done")
+                else:
+                    meta_parts.append(f"○ {escape_html(e.status)}")
+
+            win = _window(e)
+            if win and win != "-":
+                meta_parts.append(f"Time: {escape_html(win)}")
+
+            hrs = _format_hours(e.hours_spent)
+            if hrs:
+                meta_parts.append(f"Hours: {escape_html(hrs)}")
+
+            if e.remarks:
+                meta_parts.append(f"Remark: {escape_html(e.remarks)}")
+
+            att_names = [escape_html(f["file_name"]) for f in (e.get("attachments") or [])]
+            if att_names:
+                meta_parts.append(f'📎 {", ".join(att_names)}')
+
+            if meta_parts:
+                task_html += f'<p style="{META_LINE}">{" · ".join(meta_parts)}</p>'
+
+            lines.append(task_html)
+
+        task_count = len(groups[pname])
+        count_note = f' — {task_count} task{"s" if task_count != 1 else ""}'
+        project_block = (
+            f'<div style="margin:0 0 18px 0">'
+            f'<p style="{PROJ_HEAD}">'
+            f'{escape_html(pname)}'
+            f'<span style="font-weight:400;font-size:12px;color:#94a3b8">{count_note}</span></p>'
+            f'{"".join(lines)}'
+            f'</div>'
+        )
+        group_blocks.append(project_block)
+
+    return f'<div style="{WRAP}">{"".join(group_blocks)}</div>'
 
 
 def _window(entry):

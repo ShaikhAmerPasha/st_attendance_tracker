@@ -1406,7 +1406,7 @@ function renderLateCheckoutRequests(rows){
     reason.textContent = row.reason ? 'Reason: ' + row.reason : 'No reason given';
     var act = document.createElement('div'); act.className = 'lcr-act';
     var input = document.createElement('input'); input.type = 'text'; input.maxLength = 200;
-    input.placeholder = 'Approval note (required)';
+    input.placeholder = 'Approval note (optional)';
     input.setAttribute('aria-label', 'Approval note for ' + (row.employee_name || row.employee));
     var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Approve';
     btn.onclick = function(){ approveLateCheckout(row, input, btn); };
@@ -1417,7 +1417,6 @@ function renderLateCheckoutRequests(rows){
 }
 function approveLateCheckout(row, input, btn){
   var note = input.value.trim();
-  if(!note){ input.focus(); input.style.borderColor = '#dc2626'; return; }
   btn.disabled = true;
   frappe.call({
     method:'st_attendance_tracker.api.unlock_late_checkout',

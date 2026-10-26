@@ -2751,6 +2751,91 @@ body {
 .aw-hist-full .aw-hf-del:hover { color: var(--danger); background: var(--danger-bg); }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+/* ── ATTACHMENTS & REMARKS ── */
+.attach-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: hsl(210, 40%, 99%);
+  transition: all 0.2s ease;
+}
+.attach-wrap.attach-drag {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(237, 29, 36, 0.15);
+}
+.attach-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  user-select: none;
+  transition: all 0.15s ease;
+}
+.attach-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: #ffffff;
+}
+.attach-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-main);
+  max-width: 180px;
+}
+.attach-chip i {
+  cursor: pointer;
+  color: var(--text-light);
+  font-size: 12px;
+}
+.attach-chip i:hover { color: var(--danger); }
+.remark-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.remark-in {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-main);
+  background: #ffffff;
+  outline: none;
+  box-sizing: border-box;
+}
+.hidden { display: none !important; }
 </style>
 <link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic_layout.css?v=5">
 <link rel="stylesheet" href="/assets/st_attendance_tracker/css/st_classic.css?v=19">
@@ -2872,6 +2957,75 @@ function autoResizeTextarea(ta){
   ta.style.height = ta.scrollHeight + 'px';
 }
 
+function uploadAWFiles(files, containerEl) {
+  if (!files || !files.length || !containerEl) return;
+  Array.prototype.forEach.call(files, function(file) {
+    var fd = new FormData();
+    fd.append('file', file);
+    fd.append('is_private', '1');
+    fetch('/api/method/upload_file', {
+      method: 'POST',
+      headers: { 'X-Frappe-CSRF-Token': frappe.csrf_token },
+      body: fd
+    }).then(function(r){ return r.json(); }).then(function(r){
+      if (!r.message) { toast('Upload failed for ' + file.name, 'err'); return; }
+      addAWAttachChip(containerEl, r.message);
+    }).catch(function(){ toast('Upload failed for ' + file.name, 'err'); });
+  });
+}
+
+function addAWAttachChip(containerEl, f) {
+  var chip = document.createElement('span');
+  chip.className = 'attach-chip';
+  chip.dataset.file = f.name;
+  chip.textContent = f.file_name + ' ';
+  var x = document.createElement('i');
+  x.className = 'ti ti-x';
+  x.setAttribute('aria-hidden', 'true');
+  x.onclick = function(){ removeAWAttachment(f.name, chip); };
+  chip.appendChild(x);
+  containerEl.appendChild(chip);
+
+  var list = JSON.parse(containerEl.dataset.files || '[]');
+  list.push({ name: f.name, file_name: f.file_name, file_url: f.file_url });
+  containerEl.dataset.files = JSON.stringify(list);
+  saveAWDraft();
+}
+
+function getAWRowAttachments(el) {
+  var list = el.querySelector('.attach-list');
+  if (!list || !list.dataset.files) return [];
+  try { return JSON.parse(list.dataset.files); } catch(e) { return []; }
+}
+
+function removeAWAttachment(fileName, chipEl) {
+  var containerEl = chipEl ? chipEl.closest('.attach-list') : null;
+  frappe.call({ method: 'frappe.client.delete', args: { doctype: 'File', name: fileName } }).then(function(){
+    if (chipEl) chipEl.remove();
+    if (containerEl) {
+      var list = JSON.parse(containerEl.dataset.files || '[]').filter(function(x){ return x.name !== fileName; });
+      containerEl.dataset.files = JSON.stringify(list);
+      saveAWDraft();
+    }
+  }).catch(function(e){ toast(e.message || 'Failed to remove attachment.', 'err'); });
+}
+
+function toggleAWRemark(chk) {
+  var row = chk.closest('.npg-row, .ns');
+  var ta = row ? row.querySelector('.remark-in') : null;
+  if (ta) {
+    if (chk.checked) {
+      ta.classList.remove('hidden');
+      ta.focus();
+    } else {
+      ta.classList.add('hidden');
+      ta.value = '';
+      autoResizeTextarea(ta);
+    }
+    saveAWDraft();
+  }
+}
+
 function addAWPG(){
   pgC++; var gid = 'awpg' + pgC;
   var d = document.createElement('div'); d.className = 'npg'; d.dataset.pgid = gid;
@@ -2891,7 +3045,17 @@ function addAWTaskToPG(gid){
   var c = document.querySelector('[data-tc="' + gid + '"]'); if (!c) return;
   var r = document.createElement('div'); r.className = 'npg-row'; r.dataset.tid = tid;
   r.innerHTML =
-    '<textarea class="npg-ti npg-desc" data-tid="' + tid + '" placeholder="Task description..." rows="1" style="resize:none;min-height:34px;line-height:1.45;font-family:inherit"></textarea>' +
+    '<div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0;">' +
+      '<textarea class="npg-ti npg-desc" data-tid="' + tid + '" placeholder="Task description..." rows="1" style="resize:none;min-height:34px;line-height:1.45;font-family:inherit"></textarea>' +
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+        '<div class="attach-wrap">' +
+          '<label class="attach-btn"><i class="ti ti-paperclip" aria-hidden="true"></i>Attach<input type="file" multiple hidden onchange="uploadAWFiles(this.files,this.closest(\'.attach-wrap\').querySelector(\'.attach-list\'));this.value=\'\'"></label>' +
+          '<div class="attach-list"></div>' +
+        '</div>' +
+        '<label class="remark-toggle"><input type="checkbox" onchange="toggleAWRemark(this)"> Add remark</label>' +
+      '</div>' +
+      '<textarea class="remark-in hidden" placeholder="Remark / notes..." rows="1" oninput="autoResizeTextarea(this)"></textarea>' +
+    '</div>' +
     '<select class="npg-status" data-tid="' + tid + '" style="width:120px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;font-family:inherit;background:var(--bg-card);color:var(--text-muted);outline:none">' +
       '<option value="Done">Completed</option><option value="In Progress">In Progress</option><option value="Pending">Pending</option>' +
     '</select>' +
@@ -2909,9 +3073,17 @@ function addAWTask(){
   tkC++; var tid = 'awst' + tkC;
   var d = document.createElement('div'); d.className = 'ns'; d.dataset.stid = tid;
   d.innerHTML =
-    '<div style="flex:1;display:flex;flex-direction:column;gap:8px;">' +
+    '<div style="flex:1;display:flex;flex-direction:column;gap:8px;min-width:0;">' +
       '<input class="ns-head" data-tid="' + tid + '" placeholder="Task Name / Project..." style="border:none;border-bottom:1px solid #e2e8f0;border-radius:0;padding:4px 0;font-size:14px;font-weight:600;font-family:inherit;width:100%;background:transparent;outline:none">' +
       '<textarea class="ns-ti ns-desc" data-tid="' + tid + '" placeholder="Task description..." rows="1" style="resize:none;min-height:34px;line-height:1.45;font-family:inherit;width:100%"></textarea>' +
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+        '<div class="attach-wrap">' +
+          '<label class="attach-btn"><i class="ti ti-paperclip" aria-hidden="true"></i>Attach<input type="file" multiple hidden onchange="uploadAWFiles(this.files,this.closest(\'.attach-wrap\').querySelector(\'.attach-list\'));this.value=\'\'"></label>' +
+          '<div class="attach-list"></div>' +
+        '</div>' +
+        '<label class="remark-toggle"><input type="checkbox" onchange="toggleAWRemark(this)"> Add remark</label>' +
+      '</div>' +
+      '<textarea class="remark-in hidden" placeholder="Remark / notes..." rows="1" oninput="autoResizeTextarea(this)"></textarea>' +
     '</div>' +
     '<select class="ns-status" data-tid="' + tid + '" style="width:120px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;font-family:inherit;background:var(--bg-card);color:var(--text-muted);outline:none">' +
       '<option value="Done">Completed</option><option value="In Progress">In Progress</option><option value="Pending">Pending</option>' +
@@ -2947,9 +3119,11 @@ async function submitAdditionalWork(){
       var desc = (row.querySelector('.npg-desc') || {}).value || '';
       var actual = (row.querySelector('.npg-ei') || {}).value || '';
       var status = (row.querySelector('.npg-status') || {}).value || 'Done';
+      var remarks = (row.querySelector('.remark-in') || {}).value || '';
+      var atts = getAWRowAttachments(row);
       if (!desc.trim() && !actual.trim()) return;
       if (!desc.trim() || !actual.trim()) { missing = true; return; }
-      items.push({ description: desc.trim(), hours_spent: actual.trim(), project_name: pn.trim(), status: status });
+      items.push({ description: desc.trim(), hours_spent: actual.trim(), project_name: pn.trim(), status: status, remarks: remarks.trim(), attachments: atts });
     });
   });
   document.querySelectorAll('#aw-new-area .ns[data-stid]').forEach(function(ns){
@@ -2957,9 +3131,11 @@ async function submitAdditionalWork(){
     var head = (ns.querySelector('.ns-head') || {}).value || '';
     var actual = (ns.querySelector('.ns-ei') || {}).value || '';
     var status = (ns.querySelector('.ns-status') || {}).value || 'Done';
+    var remarks = (ns.querySelector('.remark-in') || {}).value || '';
+    var atts = getAWRowAttachments(ns);
     if (!desc.trim() && !actual.trim() && !head.trim()) return;
     if (!desc.trim() || !actual.trim()) { missing = true; return; }
-    items.push({ description: desc.trim(), hours_spent: actual.trim(), project_name: head.trim(), status: status });
+    items.push({ description: desc.trim(), hours_spent: actual.trim(), project_name: head.trim(), status: status, remarks: remarks.trim(), attachments: atts });
   });
 
   if (missing){ toast('Every task needs a description and actual time taken.', 'err'); return; }
@@ -2974,9 +3150,18 @@ async function submitAdditionalWork(){
       var it = items[j];
       var r = await frappe.call({
         method: 'frappe.client.insert',
-        args: { doc: { doctype: "Additional Work", work_date: date, project_name: it.project_name, hours_spent: it.hours_spent, description: it.description, login_time: login_time, logout_time: logout_time, status: it.status } }
+        args: { doc: { doctype: "Additional Work", work_date: date, project_name: it.project_name, hours_spent: it.hours_spent, description: it.description, remarks: it.remarks || undefined, login_time: login_time, logout_time: logout_time, status: it.status } }
       });
       if (!r.message || !r.message.name) throw new Error('Could not save one of the tasks.');
+      if (it.attachments && it.attachments.length) {
+        var attNames = it.attachments.map(function(a){ return a.name; }).filter(Boolean);
+        if (attNames.length) {
+          await frappe.call({
+            method: 'st_attendance_tracker.api.reparent_additional_work_attachments',
+            args: { additional_work_name: r.message.name, attachment_names: attNames }
+          });
+        }
+      }
     }
     toast('Additional work logged for ' + date + '.', 'ok', 2500);
     document.getElementById('aw-new-area').innerHTML = '';
@@ -3001,7 +3186,13 @@ function saveAWDraft(){
     var pn = (pg.querySelector('input[data-pname]') || {}).value || '';
     var tasks = [];
     pg.querySelectorAll('.npg-row').forEach(function(row){
-      tasks.push({ desc: (row.querySelector('.npg-desc') || {}).value || '', est: (row.querySelector('.npg-ei') || {}).value || '', status: (row.querySelector('.npg-status') || {}).value || 'Done' });
+      tasks.push({
+        desc: (row.querySelector('.npg-desc') || {}).value || '',
+        est: (row.querySelector('.npg-ei') || {}).value || '',
+        status: (row.querySelector('.npg-status') || {}).value || 'Done',
+        remarks: (row.querySelector('.remark-in') || {}).value || '',
+        attachments: getAWRowAttachments(row)
+      });
     });
     draft.items.push({ type: 'project', name: pn, tasks: tasks });
   });
@@ -3011,7 +3202,9 @@ function saveAWDraft(){
       head: (ns.querySelector('.ns-head') || {}).value || '',
       desc: (ns.querySelector('.ns-desc') || {}).value || '',
       est: (ns.querySelector('.ns-ei') || {}).value || '',
-      status: (ns.querySelector('.ns-status') || {}).value || 'Done'
+      status: (ns.querySelector('.ns-status') || {}).value || 'Done',
+      remarks: (ns.querySelector('.remark-in') || {}).value || '',
+      attachments: getAWRowAttachments(ns)
     });
   });
   localStorage.setItem('st_aw_draft', JSON.stringify(draft));
@@ -3036,6 +3229,17 @@ function loadAWDraft(){
           if (d.desc){ last.querySelector('.ns-desc').value = d.desc; autoResizeTextarea(last.querySelector('.ns-desc')); }
           if (d.est) last.querySelector('.ns-ei').value = d.est;
           if (d.status) last.querySelector('.ns-status').value = d.status;
+          if (d.remarks) {
+            var chk = last.querySelector('.remark-toggle input');
+            var rta = last.querySelector('.remark-in');
+            if (chk && rta) { chk.checked = true; rta.classList.remove('hidden'); rta.value = d.remarks; autoResizeTextarea(rta); }
+          }
+          if (d.attachments && d.attachments.length) {
+            var listEl = last.querySelector('.attach-list');
+            if (listEl) {
+              d.attachments.forEach(function(f){ addAWAttachChip(listEl, f); });
+            }
+          }
         }
       } else if (d.type === 'project'){
         addAWPG();
@@ -3051,6 +3255,17 @@ function loadAWDraft(){
               if (t.desc){ lastRow.querySelector('.npg-desc').value = t.desc; autoResizeTextarea(lastRow.querySelector('.npg-desc')); }
               if (t.est) lastRow.querySelector('.npg-ei').value = t.est;
               if (t.status) lastRow.querySelector('.npg-status').value = t.status;
+              if (t.remarks) {
+                var chk = lastRow.querySelector('.remark-toggle input');
+                var rta = lastRow.querySelector('.remark-in');
+                if (chk && rta) { chk.checked = true; rta.classList.remove('hidden'); rta.value = t.remarks; autoResizeTextarea(rta); }
+              }
+              if (t.attachments && t.attachments.length) {
+                var listEl = lastRow.querySelector('.attach-list');
+                if (listEl) {
+                  t.attachments.forEach(function(f){ addAWAttachChip(listEl, f); });
+                }
+              }
             }
           });
         }
@@ -3065,6 +3280,65 @@ function loadAWDraft(){
 document.addEventListener('input', function(e){
   var t = e.target;
   if (t && (t.id === 'aw-date' || (t.closest && t.closest('#aw-new-area')))) saveAWDraft();
+});
+
+document.addEventListener('change', function(e){
+  var t = e.target;
+  if (t.classList && (t.classList.contains('npg-ei') || t.classList.contains('ns-ei'))){
+    var val = t.value.trim();
+    if (val && /^\d+(\.\d+)?$/.test(val)){
+      t.value = val + 'm';
+      saveAWDraft();
+    }
+  }
+});
+
+/* Drag-and-drop file attach for Additional Work */
+document.addEventListener('dragover', function(e){ e.preventDefault(); });
+document.addEventListener('dragenter', function(e){
+  var wrap = e.target.closest && e.target.closest('.attach-wrap');
+  if (wrap) wrap.classList.add('attach-drag');
+});
+document.addEventListener('dragleave', function(e){
+  var wrap = e.target.closest && e.target.closest('.attach-wrap');
+  if (wrap && !wrap.contains(e.relatedTarget)) wrap.classList.remove('attach-drag');
+});
+document.addEventListener('drop', function(e){
+  e.preventDefault();
+  var wrap = e.target.closest && e.target.closest('.attach-wrap');
+  if (!wrap) return;
+  wrap.classList.remove('attach-drag');
+  var files = e.dataTransfer && e.dataTransfer.files;
+  if (!files || !files.length) return;
+  var listEl = wrap.querySelector('.attach-list');
+  uploadAWFiles(files, listEl);
+});
+
+/* Clipboard screenshot paste for Additional Work */
+document.addEventListener('paste', function(e){
+  var items = e.clipboardData && e.clipboardData.items;
+  if (!items || !items.length) return;
+  var files = [];
+  for (var i = 0; i < items.length; i++){
+    if (items[i].type.indexOf('image/') === 0){
+      var blob = items[i].getAsFile();
+      if (!blob) continue;
+      var ext = (blob.type.split('/')[1] || 'png').split('+')[0];
+      files.push(new File([blob], 'screenshot-' + Date.now() + '-' + i + '.' + ext, { type: blob.type }));
+    }
+  }
+  if (!files.length) return;
+  var wrap = null;
+  var rowEl = e.target.closest && e.target.closest('.npg-row, .ns');
+  if (rowEl) wrap = rowEl.querySelector('.attach-wrap');
+  if (!wrap) {
+    toast('Click into a task first, then paste to attach a screenshot.', 'err');
+    return;
+  }
+  e.preventDefault();
+  var listEl = wrap.querySelector('.attach-list');
+  toast('Attaching screenshot…', 'ok', 1200);
+  uploadAWFiles(files, listEl);
 });
 
 document.addEventListener('change', function(e){

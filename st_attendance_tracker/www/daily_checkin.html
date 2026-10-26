@@ -3168,7 +3168,7 @@ body > .container { padding-top: 0 !important; }
     <div class="lock-card-row"><i class="ti ti-clock-check" aria-hidden="true"></i><span>Approval requested. HR has been notified.</span></div>
     {% else %}
     <div class="lock-card-row">
-      <input type="text" maxlength="200" aria-label="Reason for late checkout" placeholder="Reason (optional)…" id="lock-reason-{{ date }}">
+      <input type="text" maxlength="200" aria-label="Reason for late checkout" placeholder="Reason (required)…" id="lock-reason-{{ date }}">
       <button type="button" class="fbtn dk" onclick="requestLateCheckout('{{ date }}', this)">Request HR approval</button>
     </div>
     {% endif %}
@@ -3180,7 +3180,7 @@ body > .container { padding-top: 0 !important; }
     <div class="lock-card-row"><i class="ti ti-clock-check" aria-hidden="true"></i><span>Approval requested. HR has been notified.</span></div>
     {% else %}
     <div class="lock-card-row">
-      <input type="text" maxlength="200" aria-label="Reason for late checkout" placeholder="Reason (optional)…" id="lock-reason-{{ missed_checkout.date }}">
+      <input type="text" maxlength="200" aria-label="Reason for late checkout" placeholder="Reason (required)…" id="lock-reason-{{ missed_checkout.date }}">
       <button type="button" class="fbtn dk" onclick="requestLateCheckout('{{ missed_checkout.date }}', this)">Request HR approval</button>
     </div>
     {% endif %}
@@ -3418,7 +3418,7 @@ body > .container { padding-top: 0 !important; }
     <div class="lock-card-row"><i class="ti ti-clock-check" aria-hidden="true"></i><span>Approval requested. HR has been notified.</span></div>
     {% else %}
     <div class="lock-card-row">
-      <input type="text" maxlength="200" aria-label="Reason for late checkout" placeholder="Reason (optional)…" id="lock-reason-{{ missed_checkout.date }}">
+      <input type="text" maxlength="200" aria-label="Reason for late checkout" placeholder="Reason (required)…" id="lock-reason-{{ missed_checkout.date }}">
       <button type="button" class="fbtn dk" onclick="requestLateCheckout('{{ missed_checkout.date }}', this)">Request HR approval</button>
     </div>
     {% endif %}
@@ -4786,18 +4786,28 @@ document.addEventListener('input', function(e) {
 });
 async function requestLateCheckout(date, btn) {
   var reasonEl = document.getElementById('lock-reason-' + date);
+  var reasonVal = reasonEl ? reasonEl.value.trim() : '';
+  if (!reasonVal) {
+    if (reasonEl) {
+      reasonEl.focus();
+      reasonEl.style.borderColor = '#dc2626';
+    }
+    toast('Please enter a reason for late checkout.', 'err');
+    return;
+  }
   btn.disabled = true;
   try {
     await frappe.call({
       method: 'st_attendance_tracker.api.request_late_checkout_approval',
       type: 'POST',
-      args: { date: date, reason: reasonEl ? reasonEl.value : '' }
+      args: { date: date, reason: reasonVal }
     });
     toast('Request sent to HR', 'ok');
     setTimeout(function(){ location.reload(); }, 800);
   } catch (e) {
     btn.disabled = false;
-    toast('Could not send request. Try again or contact HR.', 'err');
+    var errMsg = (e && e.message) ? e.message : 'Could not send request. Try again or contact HR.';
+    toast(errMsg, 'err');
   }
 }
 // "Repeat next day" only makes sense for a finished task: show it when the status is Done, and drop a
