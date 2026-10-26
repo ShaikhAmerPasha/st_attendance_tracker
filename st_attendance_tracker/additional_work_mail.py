@@ -78,14 +78,27 @@ def send_additional_work_emails(employee_name, work_date, wait=BATCH_WINDOW_SECO
 
         dept_format = frappe.db.get_value("Department", employee.department, "task_summary_email_format") if employee.department else None
 
-        recipients = list(dict.fromkeys(_get_hr_manager_emails() + _get_team_leader_emails(employee.name)))
-        if recipients:
-            html = _render(employee, work_date, entries, work_log, heading=subject, dept_format=dept_format)
-            frappe.sendmail(recipients=recipients, subject=subject, message=html, now=False, sender=sender, reply_to=reply_to, attachments=attachment_specs)
+        team_leaders = _get_team_leader_emails(employee.name)
+        hr_emails = _get_hr_manager_emails()
         own = _get_employee_email(employee.name)
-        if own:
-            html = _render(employee, work_date, entries, work_log, heading="Additional Work Logged", dept_format=dept_format)
-            frappe.sendmail(recipients=[own], subject=subject, message=html, now=False, sender=sender, reply_to=reply_to, attachments=attachment_specs)
+
+        to_recipients = list(dict.fromkeys(([own] if own else []) + team_leaders))
+        cc_recipients = [hr for hr in hr_emails if hr not in to_recipients]
+
+        if to_recipients or cc_recipients:
+            recipients = to_recipients if to_recipients else cc_recipients
+            cc = cc_recipients if to_recipients else []
+            html = _render(employee, work_date, entries, work_log, heading=subject, dept_format=dept_format)
+            frappe.sendmail(
+                recipients=recipients,
+                cc=cc,
+                subject=subject,
+                message=html,
+                now=False,
+                sender=sender,
+                reply_to=reply_to,
+                attachments=attachment_specs,
+            )
     except Exception as e:
         frappe.log_error(f"Additional work email failed for {employee_name} ({work_date}): {e}", "ST Attendance Tracker")
 

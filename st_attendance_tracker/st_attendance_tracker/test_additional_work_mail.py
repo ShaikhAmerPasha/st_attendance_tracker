@@ -59,23 +59,25 @@ class TestAdditionalWorkMail(FrappeTestCase):
     ENTRY = dict(login_time="19:00:00", logout_time="21:00:00", project_name="P", hours_spent=2.0,
                  status="Done", description="Fixed <b>bug</b>", remarks="")
 
-    def test_leaders_and_employee_each_get_one_email(self):
+    def test_combined_email_sent_with_hr_in_cc(self):
         sendmail = self._send([self.ENTRY, {**self.ENTRY, "hours_spent": 1.5}], tl=("tl@test.example.com",))
-        self.assertEqual(sendmail.call_count, 2)
-        first, second = sendmail.call_args_list
-        self.assertEqual(set(first.kwargs["recipients"]), {"hr@test.example.com", "tl@test.example.com"})
-        self.assertEqual(second.kwargs["recipients"], ["emp@test.example.com"])
-        self.assertIn("Additional Work", first.kwargs["subject"])
-        self.assertIn("3h 30m", first.kwargs["message"])
-        self.assertNotIn("<b>bug</b>", first.kwargs["message"])  # user text is escaped
+        self.assertEqual(sendmail.call_count, 1)
+        call = sendmail.call_args
+        self.assertEqual(set(call.kwargs["recipients"]), {"emp@test.example.com", "tl@test.example.com"})
+        self.assertEqual(call.kwargs["cc"], ["hr@test.example.com"])
+        self.assertIn("Additional Work", call.kwargs["subject"])
+        self.assertIn("3h 30m", call.kwargs["message"])
+        self.assertNotIn("<b>bug</b>", call.kwargs["message"])  # user text is escaped
 
     def test_no_entries_or_unknown_employee_sends_nothing(self):
         self.assertEqual(self._send([]).call_count, 0)
         self.assertEqual(self._send([self.ENTRY], employee=False).call_count, 0)
 
     def test_missing_employee_email_still_notifies_leaders(self):
-        sendmail = self._send([self.ENTRY], own=None)
+        sendmail = self._send([self.ENTRY], own=None, tl=("tl@test.example.com",))
         self.assertEqual(sendmail.call_count, 1)
+        self.assertEqual(sendmail.call_args.kwargs["recipients"], ["tl@test.example.com"])
+        self.assertEqual(sendmail.call_args.kwargs["cc"], ["hr@test.example.com"])
 
     # Same layout as the check-out email ------------------------------------------------------
     WORK_LOG = frappe._dict(eod_submitted=1, login_time="09:30:00", logout_time="18:00:00",
@@ -89,12 +91,10 @@ class TestAdditionalWorkMail(FrappeTestCase):
                          "Total Additional Hours", "2h", "Worked, checked out", "Additional Work Summary"):
             self.assertIn(expected, body)
 
-    def test_leader_copy_is_headed_by_the_subject_and_employee_copy_by_the_summary_title(self):
+    def test_heading_is_in_the_email_message(self):
         sendmail = self._send([self.ENTRY], work_log=self.WORK_LOG)
-        first, second = sendmail.call_args_list
-        self.assertIn("Mail Tester - Additional Work - 06-10-2026</div>", first.kwargs["message"])
-        self.assertNotIn("Mail Tester - Additional Work - 06-10-2026</div>", second.kwargs["message"])
-        self.assertIn("Additional Work Logged</div>", second.kwargs["message"])
+        call = sendmail.call_args_list[0]
+        self.assertIn("Mail Tester - Additional Work - 06-10-2026</div>", call.kwargs["message"])
 
     def test_leave_day_has_no_login_logout_rows(self):
         sendmail = self._send([self.ENTRY], work_log=None)

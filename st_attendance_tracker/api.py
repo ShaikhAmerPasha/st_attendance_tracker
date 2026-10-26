@@ -1077,16 +1077,18 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
     tasks: optional list of Daily Task dicts for the relevant date.
     """
     try:
-        recipients = _get_hr_manager_emails()
+        hr_emails = _get_hr_manager_emails()
+        team_leaders = _get_team_leader_emails(employee_name)
+        emp_email = _get_employee_email(employee_name)
 
-        for tl_user in _get_team_leader_emails(employee_name):
-            if tl_user not in recipients:
-                recipients.append(tl_user)
+        to_recipients = list(dict.fromkeys(([emp_email] if emp_email else []) + team_leaders))
+        cc_recipients = [hr for hr in hr_emails if hr not in to_recipients]
 
-        if not recipients:
+        if not to_recipients and not cc_recipients:
             return
 
-        recipients = list(set(recipients))
+        recipients = to_recipients if to_recipients else cc_recipients
+        cc = cc_recipients if to_recipients else []
 
         email_date = tasks[0].get("task_date") if (tasks and tasks[0].get("task_date")) else frappe.utils.today()
         email_date_label = frappe.utils.getdate(email_date).strftime('%d-%m-%Y')
@@ -1132,6 +1134,7 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
         sender, reply_to = _employee_mail_identity(employee_name, employee_display_name)
         frappe.sendmail(
             recipients=recipients,
+            cc=cc,
             subject=subject,
             message=html,
             now=False,
@@ -2046,11 +2049,6 @@ def _send_checkin_notifications(employee_name, date, checkin_action_time):
         employee.name, employee.employee_name, "checkin",
         detail_rows, tasks=all_tasks, department=employee.department,
     )
-    _send_employee_checkin_email(
-        employee.name, employee.employee_name, work_log.login_time, checkin_action_time,
-        work_log.work_location, work_log.half_day_session, work_log.is_late, all_tasks, date,
-        department=employee.department,
-    )
 
 
 def _send_eod_notifications(employee_name, date, checkout_action_time, is_late_checkout):
@@ -2083,12 +2081,6 @@ def _send_eod_notifications(employee_name, date, checkout_action_time, is_late_c
     _notify_hr_and_team_leader(
         employee.name, employee.employee_name, "checkout",
         detail_rows, tasks=all_tasks, department=employee.department,
-    )
-    _send_employee_eod_email(
-        employee.name, employee.employee_name, work_log.logout_time, checkout_action_time,
-        work_log.net_hours, work_log.work_location, work_log.half_day_session, all_tasks, date,
-        is_late_checkout=is_late_checkout, submission_date=today(),
-        department=employee.department,
     )
 
 # ── Check-ins made outside the web page (Hermes Telegram bot) ──────────────────
@@ -2155,10 +2147,6 @@ def _send_external_checkin_notifications(employee_name, log_type, action_time):
             employee.name, employee.employee_name, "checkin",
             detail_rows, tasks=[], department=employee.department,
         )
-        _send_employee_checkin_email(
-            employee.name, employee.employee_name, time_of_day, when,
-            "Telegram bot", None, False, [], date, department=employee.department,
-        )
     else:
         if work_log and work_log.eod_submitted:
             return
@@ -2172,11 +2160,6 @@ def _send_external_checkin_notifications(employee_name, log_type, action_time):
         _notify_hr_and_team_leader(
             employee.name, employee.employee_name, "checkout",
             detail_rows, tasks=[], department=employee.department,
-        )
-        _send_employee_eod_email(
-            employee.name, employee.employee_name, time_of_day, when,
-            None, "Telegram bot", None, [], date,
-            is_late_checkout=False, submission_date=date, department=employee.department,
         )
 
 

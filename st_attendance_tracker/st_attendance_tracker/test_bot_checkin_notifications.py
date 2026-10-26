@@ -66,30 +66,26 @@ class TestBotCheckinNotifications(FrappeTestCase):
         emp = frappe._dict(name=EMPLOYEE, employee_name="Bot Tester", department="D")
         with patch.object(frappe.db, "get_value", return_value=emp), \
                 patch.object(api, "_get_work_log", return_value=work_log), \
-                patch.object(api, "_notify_hr_and_team_leader") as notify, \
-                patch.object(api, "_send_employee_checkin_email") as emp_in, \
-                patch.object(api, "_send_employee_eod_email") as emp_out:
+                patch.object(api, "_notify_hr_and_team_leader") as notify:
             api._send_external_checkin_notifications(EMPLOYEE, log_type, "2026-10-06 10:35:00")
-        return notify, emp_in, emp_out
+        return notify
 
-    def test_job_check_in_sends_hr_and_employee(self):
-        notify, emp_in, emp_out = self._run_job("IN")
+    def test_job_check_in_sends_notification(self):
+        notify = self._run_job("IN")
         self.assertEqual(notify.call_args.args[2], "checkin")
-        self.assertEqual(emp_in.call_count, 1)
-        self.assertEqual(emp_out.call_count, 0)
+        self.assertEqual(notify.call_count, 1)
         self.assertIn(("Checked in via", "Telegram bot"), notify.call_args.args[3])
 
-    def test_job_check_out_sends_hr_and_employee(self):
-        notify, emp_in, emp_out = self._run_job("OUT")
+    def test_job_check_out_sends_notification(self):
+        notify = self._run_job("OUT")
         self.assertEqual(notify.call_args.args[2], "checkout")
-        self.assertEqual(emp_out.call_count, 1)
-        self.assertEqual(emp_in.call_count, 0)
+        self.assertEqual(notify.call_count, 1)
 
     def test_job_skips_when_web_already_emailed(self):
-        notify, emp_in, _ = self._run_job("IN", work_log=frappe._dict(morning_submitted=1, eod_submitted=0))
-        self.assertEqual((notify.call_count, emp_in.call_count), (0, 0))
-        notify, _, emp_out = self._run_job("OUT", work_log=frappe._dict(morning_submitted=1, eod_submitted=1))
-        self.assertEqual((notify.call_count, emp_out.call_count), (0, 0))
+        notify = self._run_job("IN", work_log=frappe._dict(morning_submitted=1, eod_submitted=0))
+        self.assertEqual(notify.call_count, 0)
+        notify = self._run_job("OUT", work_log=frappe._dict(morning_submitted=1, eod_submitted=1))
+        self.assertEqual(notify.call_count, 0)
 
     def test_job_unknown_employee_is_silent(self):
         with patch.object(frappe.db, "get_value", return_value=None), \
