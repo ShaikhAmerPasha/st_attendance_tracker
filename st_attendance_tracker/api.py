@@ -787,40 +787,17 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
     """
     html_rows.append(header_html)
 
-    lunch_shown = False
     for group_idx, pname in enumerate(sorted_group_names):
         palette = palettes[group_idx % len(palettes)]
         ptasks = groups[pname]
 
         if group_idx > 0:
-            # Dynamic placement of Lunch separator row
-            if lunch_from and lunch_to and not lunch_shown:
-                show_lunch = False
-                if len(sorted_group_names) <= 2 and group_idx == 1:
-                    show_lunch = True
-                elif len(sorted_group_names) > 2 and group_idx == 2:
-                    show_lunch = True
-
-                if show_lunch:
-                    lunch_html = f"""
-                    <tr style="height:12px;line-height:12px"><td colspan="4" style="border:none;background-color:transparent;height:12px;padding:0;margin:0"></td></tr>
-                    <tr>
-                      <td colspan="4" style="border:none;background-color:transparent;font-size:13px;color:#4b5563;font-style:italic;padding:12px 4px;font-family:'Segoe UI', Arial, sans-serif">
-                        lunch: {lunch_from} - {lunch_to}
-                      </td>
-                    </tr>
-                    <tr style="height:12px;line-height:12px"><td colspan="4" style="border:none;background-color:transparent;height:12px;padding:0;margin:0"></td></tr>
-                    """
-                    html_rows.append(lunch_html)
-                    lunch_shown = True
-
-            if not (lunch_shown and group_idx == 2):
-                sep_html = """
-                <tr style="height:12px;line-height:12px">
-                  <td colspan="4" style="border:none;background-color:transparent;height:12px;padding:0;margin:0"></td>
-                </tr>
-                """
-                html_rows.append(sep_html)
+            sep_html = """
+            <tr style="height:12px;line-height:12px">
+              <td colspan="4" style="border:none;background-color:transparent;height:12px;padding:0;margin:0"></td>
+            </tr>
+            """
+            html_rows.append(sep_html)
 
         for task_idx, t in enumerate(ptasks):
             client_text = html.escape(pname) if task_idx == 0 else ""
@@ -856,7 +833,8 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
 
             remark_html = ""
             if is_checkout and t.get("remarks"):
-                remark_html = f'<div style="font-size:11.5px;color:#64748b;font-style:italic;margin-top:4px">Remark: {html.escape(t.get("remarks"))}</div>'
+                formatted_remark = html.escape(t.get("remarks")).replace('\n', '<br>')
+                remark_html = f'<div style="font-size:11.5px;color:#64748b;font-style:italic;margin-top:4px">Remark: {formatted_remark}</div>'
             remark_html += _attachment_names_html(t)
 
             row_html = f"""
@@ -868,17 +846,6 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
             </tr>
             """
             html_rows.append(row_html)
-
-    if lunch_from and lunch_to and not lunch_shown:
-        lunch_html = f"""
-        <tr style="height:12px;line-height:12px"><td colspan="4" style="border:none;background-color:transparent;height:12px;padding:0;margin:0"></td></tr>
-        <tr>
-          <td colspan="4" style="border:none;background-color:transparent;font-size:13px;color:#4b5563;font-style:italic;padding:12px 4px;font-family:'Segoe UI', Arial, sans-serif">
-            lunch: {lunch_from} - {lunch_to}
-          </td>
-        </tr>
-        """
-        html_rows.append(lunch_html)
 
     html_rows.append("  </tbody>\n</table>")
     return "".join(html_rows)
@@ -923,16 +890,6 @@ def _render_grouped_task_summary(tasks, is_checkout=False, lunch_from=None, lunc
     TASK_LINE = f"{FONT};font-size:14px;color:#334155;margin:0;padding:0;white-space:pre-wrap"
     # Subtle metadata line (time, status, labels, remarks).
     META_LINE = f"{FONT};font-size:12px;color:#64748b;margin:2px 0 0 18px;padding:0"
-    # Lunch break separator.
-    LUNCH = f"{FONT};font-size:13px;color:#64748b;font-style:italic;margin:4px 0 14px 0;padding:0"
-
-    # ── Build lunch HTML (inserted between project blocks) ─────────────
-    lunch_html = ""
-    if lunch_from and lunch_to:
-        lunch_html = (
-            f'<p style="{LUNCH}">Lunch: {html.escape(lunch_from)} – '
-            f'{html.escape(lunch_to)}</p>'
-        )
 
     # ── Render each project group ──────────────────────────────────────
     group_blocks = []
@@ -975,7 +932,8 @@ def _render_grouped_task_summary(tasks, is_checkout=False, lunch_from=None, lunc
 
             # ── Remark ─────────────────────────────────────────────────
             if is_checkout and t.get("remarks"):
-                meta_parts.append(f"Remark: {html.escape(t.get('remarks'))}")
+                formatted_remark = html.escape(t.get('remarks')).replace('\n', '<br>')
+                meta_parts.append(f"Remark: {formatted_remark}")
 
             # ── Attachments ────────────────────────────────────────────
             att_names = [html.escape(f["file_name"]) for f in (t.get("attachments") or [])]
@@ -1014,21 +972,6 @@ def _render_grouped_task_summary(tasks, is_checkout=False, lunch_from=None, lunc
             f'</div>'
         )
         group_blocks.append(project_block)
-
-        # Same placement rule as the tabular layout: lunch appears after the
-        # first group for a 2-group day, after the second for 3+ groups.
-        if lunch_html:
-            show_lunch = (
-                (len(sorted_group_names) <= 2 and group_idx == 0) or
-                (len(sorted_group_names) > 2 and group_idx == 1)
-            )
-            if show_lunch:
-                group_blocks.append(lunch_html)
-                lunch_html = ""
-
-    # Append lunch if it hasn't been placed yet (single-group edge case).
-    if lunch_html:
-        group_blocks.append(lunch_html)
 
     return f'<div style="{WRAP}">{"".join(group_blocks)}</div>'
 
@@ -2066,12 +2009,17 @@ def _send_eod_notifications(employee_name, date, checkout_action_time, is_late_c
     total_actual_hours = sum(float(t.get("actual_time") or 0.0) for t in all_tasks)
     working_hours_str = _format_hours(total_actual_hours) or "0h"
 
+    lunch_from_hm = _to_ampm(work_log.lunch_from) if work_log.lunch_from else None
+    lunch_to_hm = _to_ampm(work_log.lunch_to) if work_log.lunch_to else None
+    lunch_break = f"{lunch_from_hm} – {lunch_to_hm}" if lunch_from_hm and lunch_to_hm else None
+
     detail_rows = [
         ("Employee", employee.employee_name),
         ("Date", _format_email_date(date)),
         ("Login Time", _to_ampm(work_log.login_time) if work_log.login_time else None),
         ("Logout Time", _to_ampm(work_log.logout_time)),
         ("Checked-Out At", _format_action_timestamp(checkout_action_time)),
+        ("Lunch Break", lunch_break),
         ("Work Location", work_log.work_location),
         ("Net Working Hours", work_log.net_hours),
         ("Total Task Hours", working_hours_str),
