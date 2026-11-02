@@ -25,6 +25,7 @@ Fixes:
 import frappe
 import datetime
 import html
+import os
 import re
 from html import escape as html_escape
 import json
@@ -380,7 +381,29 @@ def _get_hr_manager_emails():
 
 # ── Checkin helper ─────────────────────────────────────────────────────────────
 
-def _make_checkin(employee, log_type, time_value=None, on_date=None):
+CHECKIN_DEVICE_ID = "ST Daily Checkin"
+LUNCH_DEVICE_ID = "ST Daily Checkin Lunch"
+
+
+def _make_lunch_checkins(employee, lunch_from, lunch_to, on_date):
+    """Record lunch as an OUT at lunch start and an IN at lunch end, so HRMS's
+    "Every Valid Check-in and Check-out" working-hours calculation leaves lunch out.
+    No-op without a valid lunch window or when this day's lunch rows already exist
+    (checkout can be re-run after HR reopens a log)."""
+    if not (lunch_from and lunch_to) or time_to_minutes(lunch_to) <= time_to_minutes(lunch_from):
+        return
+    day = getdate(on_date)
+    if frappe.db.exists("Employee Checkin", {
+        "employee": employee,
+        "device_id": LUNCH_DEVICE_ID,
+        "time": ["between", [f"{day} 00:00:00", f"{day} 23:59:59"]],
+    }):
+        return
+    _make_checkin(employee, "OUT", lunch_from, on_date=on_date, device_id=LUNCH_DEVICE_ID)
+    _make_checkin(employee, "IN", lunch_to, on_date=on_date, device_id=LUNCH_DEVICE_ID)
+
+
+def _make_checkin(employee, log_type, time_value=None, on_date=None, device_id=CHECKIN_DEVICE_ID):
     """on_date: the work date the log belongs to. A late checkout is recorded days after
     the fact, so its OUT must land on the work date, not on today."""
     try:
@@ -396,8 +419,8 @@ def _make_checkin(employee, log_type, time_value=None, on_date=None):
             checkin.time = datetime.datetime.combine(getdate(on_date or today()), t)
         else:
             checkin.time = now_datetime()
-        checkin.device_id = "ST Daily Checkin"
-        
+        checkin.device_id = device_id
+
         # Integrate with active HRMS Shift Assignment
         try:
             from hrms.hr.doctype.shift_assignment.shift_assignment import get_employee_shift
@@ -696,6 +719,7 @@ def _send_employee_eod_email(employee_name, employee_display_name, logout_time,
             sender=sender,
             reply_to=reply_to,
             attachments=_task_attachment_specs(tasks),
+            inline_images=_task_inline_images(tasks),
         )
     except Exception as e:
         frappe.log_error(
@@ -734,17 +758,57 @@ def _employee_mail_identity(employee_name, employee_display_name):
     return frappe.utils.formataddr((employee_display_name, account_email)), _get_employee_email(employee_name)
 
 
+EMAIL_INLINE_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+
+
+def _inline_image_key(file_row):
+    """Unique `embed=` key for an image file, or None when it is not an image.
+    Keyed by File name so two tasks attaching 'image.png' don't collide."""
+    ext = os.path.splitext(file_row.get("file_name") or "")[1].lower()
+    return f"{file_row['name']}{ext}" if ext in EMAIL_INLINE_IMAGE_EXTENSIONS else None
+
+
 def _task_attachment_specs(tasks):
-    """frappe.sendmail(attachments=...) entries for every file across these
-    tasks, so the email carries the actual files, not just a mention of them."""
-    return [{"fid": f["name"]} for t in (tasks or []) for f in (t.get("attachments") or [])]
+    """frappe.sendmail(attachments=...) entries for the non-image files across
+    these tasks. Images are shown inline instead (see _task_inline_images)."""
+    return [
+        {"fid": f["name"]}
+        for t in (tasks or []) for f in (t.get("attachments") or [])
+        if not _inline_image_key(f)
+    ]
 
 
-def _attachment_names_html(task):
-    """Small '📎 filename, filename' line so the reader can tell which
-    files (already MIME-attached to the email by the caller) belong to
-    which task."""
-    names = [html.escape(f["file_name"]) for f in (task.get("attachments") or [])]
+def _task_inline_images(tasks):
+    """frappe.sendmail(inline_images=...) entries for every image across these tasks."""
+    images = []
+    for t in tasks or []:
+        for f in t.get("attachments") or []:
+            key = _inline_image_key(f)
+            if not key:
+                continue
+            content = frappe.get_doc("File", f["name"]).get_content()
+            if content:
+                images.append({"filename": key, "filecontent": content})
+    return images
+
+
+def _task_images_html(task):
+    """<img embed=...> tags that frappe.sendmail swaps for cid: inline images."""
+    tags = [
+        f'<img embed="{_inline_image_key(f)}" alt="{html.escape(f["file_name"])}" '
+        'style="display:block;max-width:100%;height:auto;margin-top:8px;border:1px solid #e2e8f0;border-radius:4px">'
+        for f in (task.get("attachments") or []) if _inline_image_key(f)
+    ]
+    return "".join(tags)
+
+
+def _attachment_names_html(task, is_checkout=False):
+    """Small '📎 filename, filename' line for files the reader gets as real
+    attachments. At checkout, images are shown inline instead and are left out."""
+    names = [
+        html.escape(f["file_name"]) for f in (task.get("attachments") or [])
+        if not (is_checkout and _inline_image_key(f))
+    ]
     if not names:
         return ""
     return f'<div style="font-size:11.5px;color:#64748b;margin-top:4px">📎 {", ".join(names)}</div>'
@@ -835,7 +899,9 @@ def _render_screenshot_task_table(tasks, is_checkout=False, lunch_from=None, lun
             if is_checkout and t.get("remarks"):
                 formatted_remark = html.escape(t.get("remarks")).replace('\n', '<br>')
                 remark_html = f'<div style="font-size:11.5px;color:#64748b;font-style:italic;margin-top:4px">Remark: {formatted_remark}</div>'
-            remark_html += _attachment_names_html(t)
+            remark_html += _attachment_names_html(t, is_checkout)
+            if is_checkout:
+                remark_html += _task_images_html(t)
 
             row_html = f"""
             <tr>
@@ -936,7 +1002,10 @@ def _render_grouped_task_summary(tasks, is_checkout=False, lunch_from=None, lunc
                 meta_parts.append(f"Remark: {formatted_remark}")
 
             # ── Attachments ────────────────────────────────────────────
-            att_names = [html.escape(f["file_name"]) for f in (t.get("attachments") or [])]
+            att_names = [
+                html.escape(f["file_name"]) for f in (t.get("attachments") or [])
+                if not (is_checkout and _inline_image_key(f))
+            ]
             if att_names:
                 meta_parts.append(f'📎 {", ".join(att_names)}')
 
@@ -956,6 +1025,9 @@ def _render_grouped_task_summary(tasks, is_checkout=False, lunch_from=None, lunc
                     f'{" · ".join(meta_parts)}'
                     f'</p>'
                 )
+
+            if is_checkout:
+                task_html += f'<div style="margin:2px 0 0 18px">{_task_images_html(t)}</div>'
 
             lines.append(task_html)
 
@@ -1084,6 +1156,7 @@ def _notify_hr_and_team_leader(employee_name, employee_display_name, event, deta
             sender=sender,
             reply_to=reply_to,
             attachments=attachment_specs,
+            inline_images=_task_inline_images(tasks) if event == "checkout" else [],
         )
     except Exception as e:
         frappe.log_error(
@@ -2046,7 +2119,7 @@ def notify_external_checkin(doc, method=None):
     """Employee Checkin after_insert: email for check-ins made by the bot."""
     if frappe.flags.in_test or frappe.flags.in_import or frappe.flags.in_migrate:
         return
-    if doc.device_id == "ST Daily Checkin" or doc.log_type not in ("IN", "OUT"):
+    if doc.device_id in (CHECKIN_DEVICE_ID, LUNCH_DEVICE_ID) or doc.log_type not in ("IN", "OUT"):
         return
     if BOT_AGENT_ROLE not in frappe.get_roles(doc.owner or frappe.session.user):
         return

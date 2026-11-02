@@ -70,7 +70,8 @@ class DailyWorkLog(Document):
 
     def _trigger_eod_automation(self):
         from st_attendance_tracker.api import (
-            _cascade_series_done, _make_checkin, _rollover_pending_tasks, _send_eod_notifications
+            _cascade_series_done, _make_checkin, _make_lunch_checkins, _rollover_pending_tasks,
+            _send_eod_notifications
         )
         
         # Cascade done tasks
@@ -78,6 +79,9 @@ class DailyWorkLog(Document):
         for series_id in newly_done_series:
             _cascade_series_done(series_id, self.date)
             
+        # Lunch goes in before the final OUT so no auto-attendance run sees a partial set
+        _make_lunch_checkins(self.employee, self.lunch_from, self.lunch_to, self.date)
+
         # Check out
         _make_checkin(self.employee, "OUT", self.logout_time, on_date=self.date)
         

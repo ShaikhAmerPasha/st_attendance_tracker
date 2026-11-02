@@ -615,7 +615,7 @@
     var date, text, requested;
     if (BOOT.checkout_locked) {
       date = BOOT.active_date; requested = BOOT.checkout_unlock_requested;
-      text = 'Checkout closed at ' + esc(BOOT.checkout_cutoff_label) + ' for <b>' + esc(dayLabel(date)) + '</b>. Get late checkout approval from HR.';
+      text = 'Checkout closed at ' + esc(BOOT.checkout_cutoff_label) + ' for <b>' + esc(dayLabel(date)) + '</b>. Get late checkout approval by calling Muzammil Sir.';
     } else if (BOOT.missed_checkout) {
       date = BOOT.missed_checkout.date; requested = BOOT.missed_checkout.requested;
       text = 'You did not check out on <b>' + esc(dayLabel(date)) + '</b>. Get late checkout approval from HR.' + (BOOT.checkin_blocked ? ' You cannot check in until that checkout is completed.' : '');
